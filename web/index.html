@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>RodasFriendZone Bingo</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #6d39a8;
+    color: white;
+}
+
+body {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.app {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 14px;
+    min-height: 100vh;
+}
+
+/* HEADER */
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.logo {
+    font-size: 20px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.pills {
+    display: flex;
+    gap: 5px;
+}
+
+.pill {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 7px 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* VIEWS */
+
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+/* TOP BAR */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.back {
+    border: 0;
+    background: transparent;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 5px 0;
+}
+
+.refresh {
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.16);
+    color: white;
+    font-size: 19px;
+}
+
+/* TIMER */
+
+.timerBox {
+    text-align: center;
+    margin: 4px 0 16px;
+}
+
+.timerLabel {
+    font-size: 12px;
+    opacity: .8;
+    margin-bottom: 4px;
+}
+
+.timer {
+    font-size: 42px;
+    line-height: 1;
+    font-weight: 900;
+}
+
+.timer.warning {
+    color: #ffd43b;
+}
+
+/* INFO */
+
+.info {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.infoCard {
+    background: rgba(255,255,255,0.10);
+    border-radius: 13px;
+    padding: 9px 5px;
+    text-align: center;
+}
+
+.infoValue {
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.infoLabel {
+    font-size: 10px;
+    opacity: .72;
+    margin-top: 2px;
+}
+
+/* CARTELA */
+
+.sectionTitle {
+    font-size: 16px;
+    font-weight: 900;
+    margin: 12px 0 8px;
+}
+
+.sectionSub {
+    font-size: 11px;
+    opacity: .75;
+    margin-bottom: 10px;
+}
+
+/* 1-100 GRID */
+
+.cartelaGrid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 5px;
+    width: 100%;
+}
+
+.cartela {
+    border: 0;
+    aspect-ratio: 1 / 1;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 900;
+    color: white;
+    background: #19d66b;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.12);
+    cursor: pointer;
+}
+
+.cartela.available {
+    background: #19d66b;
+}
+
+.cartela.taken {
+    background: #ef3e51;
+}
+
+.cartela.selected {
+    background: #f6c945;
+    color: #3f2b00;
+    box-shadow: 0 0 0 3px white;
+}
+
+.cartela:disabled {
+    opacity: 1;
+}
+
+/* LEGEND */
+
+.legend {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 13px 0;
+    font-size: 10px;
+}
+
+.legendItem {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 4px;
+}
+
+.dot.green {
+    background: #19d66b;
+}
+
+.dot.red {
+    background: #ef3e51;
+}
+
+.dot.yellow {
+    background: #f6c945;
+}
+
+/* BUTTONS */
+
+.actions {
+    display: flex;
+    gap: 9px;
+    margin-top: 12px;
+}
+
+.btn {
+    flex: 1;
+    border: 0;
+    border-radius: 13px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.btn.primary {
+    background: white;
+    color: #6633a0;
+}
+
+.btn.secondary {
+    background: rgba(255,255,255,.14);
+    color: white;
+}
+
+.btn:disabled {
+    opacity: .45;
+}
+
+/* GAME */
+
+.gameHeader {
+    text-align: center;
+    margin: 8px 0 14px;
+}
+
+.gameTitle {
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.gameSub {
+    font-size: 12px;
+    opacity: .75;
+    margin-top: 4px;
+}
+
+/* CALLED NUMBERS */
+
+.calledBox {
+    background: rgba(0,0,0,.12);
+    border-radius: 15px;
+    padding: 12px;
+    margin-bottom: 14px;
+}
+
+.calledTitle {
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.currentNumber {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.calledNumbers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+}
+
+.calledBall {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #77728a;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.calledBall.current {
+    background: #19d66b;
+    color: white;
+}
+
+.calledBall.recent {
+    background: #ef3e51;
+}
+
+.calledBall.old {
+    background: #77728a;
+}
+
+/* BINGO CARD */
+
+.bingoCard {
+    background: white;
+    border-radius: 15px;
+    padding: 7px;
+    color: #222;
+}
+
+.bingoHeader {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.bingoHeader div {
+    text-align: center;
+    background: #6d39a8;
+    color: white;
+    border-radius: 7px;
+    padding: 9px 2px;
+    font-weight: 900;
+    font-size: 15px;
+}
+
+.bingoRows {
+    display: grid;
+    gap: 4px;
+}
+
+.bingoRow {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+}
+
+.bingoCell {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: #ececf0;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.bingoCell.marked {
+    background: #19d66b;
+    color: white;
+}
+
+.bingoCell.free {
+    background: #19d66b;
+    color: white;
+    font-size: 10px;
+    letter-spacing: .5px;
+}
+
+/* WINNER */
+
+.winner {
+    display: none;
+    background: #19d66b;
+    color: white;
+    border-radius: 15px;
+    padding: 15px;
+    text-align: center;
+    margin-top: 12px;
+}
+
+.winner.show {
+    display: block;
+}
+
+.winnerTitle {
+    font-size: 23px;
+    font-weight: 900;
+}
+
+.winnerText {
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+/* MESSAGE */
+
+.message {
+    position: fixed;
+    left: 50%;
+    bottom: 25px;
+    transform: translateX(-50%) translateY(20px);
+    width: calc(100% - 35px);
+    max-width: 500px;
+    background: #222;
+    color: white;
+    padding: 13px 15px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    opacity: 0;
+    pointer-events: none;
+    transition: .25s;
+    z-index: 100;
+}
+
+.message.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* MOBILE */
+
+@media (max-width: 390px) {
+
+    .app {
+        padding: 10px;
+    }
+
+    .logo {
+        font-size: 17px;
+    }
+
+    .pill {
+        padding: 6px 7px;
+        font-size: 9px;
+    }
+
+    .cartelaGrid {
+        gap: 4px;
+    }
+
+    .cartela {
+        border-radius: 7px;
+        font-size: 10px;
+    }
+
+    .bingoCell {
+        font-size: 13px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- HEADER -->
+
+    <div class="header">
+        <div class="logo">RodasFriendZone</div>
+
+        <div class="pills">
+            <div class="pill">Wallet: <span id="wallet">1,000</span></div>
+            <div class="pill">Players: <span id="players">0</span></div>
+            <div class="pill">Game: <span id="gameNumber">1</span></div>
+        </div>
+    </div>
+
+
+    <!-- CARTELA SELECTION VIEW -->
+
+    <div id="selectionView" class="view active">
+
+        <div class="topbar">
+            <button class="back" onclick="goBack()">← Back to Rooms</button>
+            <button class="refresh" onclick="refreshState()">↻</button>
+        </div>
+
+        <div class="timerBox">
+            <div class="timerLabel">Cartela selection closes in</div>
+            <div id="timer" class="timer">30</div>
+        </div>
+
+        <div class="info">
+            <div class="infoCard">
+                <div id="selectedCartela" class="infoValue">—</div>
+                <div class="infoLabel">Your Cartela</div>
+            </div>
+
+            <div class="infoCard">
+                <div id="takenCount" class="infoValue">0</div>
+                <div class="infoLabel">Taken</div>
+            </div>
+
+            <div class="infoCard">
+                <div id="availableCount" class="infoValue">100</div>
+                <div class="infoLabel">Available</div>
+            </div>
+        </div>
+
+        <div class="sectionTitle">Choose your Cartela</div>
+
+        <div class="sectionSub">
+            Select one Cartela from 1–100. Green = available, red = taken.
+        </div>
+
+        <div id="cartelaGrid" class="cartelaGrid"></div>
+
+        <div class="legend">
+            <div class="legendItem">
+                <span class="dot green"></span>
+                Available
+            </div>
+
+            <div class="legendItem">
+                <span class="dot red"></span>
+                Taken
+            </div>
+
+            <div class="legendItem">
+                <span class="dot yellow"></span>
+                Yours
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn secondary" onclick="leaveGame()">
+                Leave
+            </button>
+
+            <button id="proceedButton"
+                    class="btn primary"
+                    onclick="proceed()"
+                    disabled>
+                Proceed
+            </button>
+        </div>
+
+    </div>
+
+
+    <!-- BINGO GAME VIEW -->
+
+    <div id="gameView" class="view">
+
+        <div class="topbar">
+            <button class="back" onclick="goBack()">← Back</button>
+            <button class="refresh" onclick="refreshState()">↻</button>
+        </div>
+
+        <div class="gameHeader">
+            <div class="gameTitle">BINGO</div>
+            <div class="gameSub">
+                Cartela <span id="gameCartela">—</span>
+            </div>
+        </div>
+
+        <div class="calledBox">
+
+            <div class="calledTitle">
+                Current number
+            </div>
+
+            <div id="currentNumber" class="currentNumber">
+                —
+            </div>
+
+            <div id="calledNumbers" class="calledNumbers"></div>
+
+        </div>
+
+        <div id="bingoCard" class="bingoCard">
+
+            <div class="bingoHeader">
+                <div>B</div>
+                <div>I</div>
+                <div>N</div>
+                <div>G</div>
+                <div>O</div>
+            </div>
+
+            <div id="bingoRows" class="bingoRows"></div>
+
+        </div>
+
+        <div id="winner" class="winner">
+
+            <div class="winnerTitle">
+                BINGO!
+            </div>
+
+            <div class="winnerText" id="winnerText">
+                You have a winning card.
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div id="message" class="message"></div>
+
+
+<script>
+
+const tg = window.Telegram && window.Telegram.WebApp
+    ? window.Telegram.WebApp
+    : null;
+
+if (tg) {
+    tg.ready();
+    tg.expand();
+}
+
+
+/* -----------------------------
+   STATE
+----------------------------- */
+
+let state = {
+    phase: "selection",
+    timer: 30,
+    game: 1,
+    players: 0,
+    taken: [],
+    selected: null,
+    cartela: null,
+    called: [],
+    current: null,
+    card: null,
+    winner: null
+};
+
+let localMode = false;
+let localTimer = 30;
+let localSelected = null;
+let localCalled = [];
+let localCurrent = null;
+let localGame = 1;
+
+
+/* -----------------------------
+   DEMO BINGO CARDS
+----------------------------- */
+
+function generateCard(seed) {
+
+    let numbers = [];
+
+    for (let i = 1; i <= 75; i++) {
+        numbers.push(i);
+    }
+
+    /*
+      Simple deterministic shuffle.
+      This makes different Cartelas produce
+      different cards while keeping the same
+      card for the same Cartela.
+    */
+
+    let x = seed * 7919 + 12345;
+
+    for (let i = numbers.length - 1; i > 0; i--) {
+
+        x = (x * 9301 + 49297) % 233280;
+
+        const j = Math.floor((x / 233280) * (i + 1));
+
+        [numbers[i], numbers[j]] =
+            [numbers[j], numbers[i]];
+    }
+
+    const card = [];
+
+    for (let col = 0; col < 5; col++) {
+
+        let start = col * 15;
+        let column = numbers.slice(start, start + 15);
+
+        column.sort((a, b) => a - b);
+
+        card.push(column.slice(0, 5));
+    }
+
+    /*
+      Return rows instead of columns.
+    */
+
+    const rows = [];
+
+    for (let row = 0; row < 5; row++) {
+
+        rows.push([
+            card[0][row],
+            card[1][row],
+            card[2][row],
+            card[3][row],
+            card[4][row]
+        ]);
+    }
+
+    rows[2][2] = 0;
+
+    return rows;
+}
+
+
+/* -----------------------------
+   BUILD CARTELA GRID
+----------------------------- */
+
+function buildCartelaGrid() {
+
+    const grid = document.getElementById("cartelaGrid");
+
+    grid.innerHTML = "";
+
+    for (let i = 1; i <= 100; i++) {
+
+        const button = document.createElement("button");
+
+        button.className = "cartela available";
+        button.textContent = i;
+        button.id = "cartela-" + i;
+
+        button.onclick = () => selectCartela(i);
+
+        grid.appendChild(button);
+    }
+
+    renderCartelas();
+}
+
+
+/* -----------------------------
+   RENDER CARTELAS
+----------------------------- */
+
+function renderCartelas() {
+
+    const taken = Array.isArray(state.taken)
+        ? state.taken
+        : [];
+
+    for (let i = 1; i <= 100; i++) {
+
+        const button =
+            document.getElementById("cartela-" + i);
+
+        if (!button) continue;
+
+        button.classList.remove(
+            "available",
+            "taken",
+            "selected"
+        );
+
+        if (taken.includes(i)) {
+
+            button.classList.add("taken");
+
+            button.disabled =
+                state.selected !== i;
+
+        } else {
+
+            button.classList.add("available");
+
+            button.disabled = false;
+        }
+
+        if (state.selected === i) {
+
+            button.classList.remove("taken");
+
+            button.classList.add("selected");
+
+            button.disabled = false;
+        }
+    }
+
+    document.getElementById("takenCount")
+        .textContent = taken.length;
+
+    document.getElementById("availableCount")
+        .textContent = 100 - taken.length;
+
+    document.getElementById("selectedCartela")
+        .textContent = state.selected || "—";
+
+    document.getElementById("proceedButton")
+        .disabled = !state.selected;
+}
+
+
+/* -----------------------------
+   SELECT CARTELA
+----------------------------- */
+
+async function selectCartela(number) {
+
+    if (state.phase !== "selection") {
+        showMessage("Cartela selection is closed.");
+        return;
+    }
+
+    /*
+      If the Cartela is already taken,
+      show the requested message.
+    */
+
+    if (
+        Array.isArray(state.taken) &&
+        state.taken.includes(number) &&
+        state.selected !== number
+    ) {
+
+        showMessage(
+            "Cartela " + number +
+            " is already taken. Choose another one."
+        );
+
+        return;
+    }
+
+
+    /* LOCAL DEMO */
+
+    if (localMode) {
+
+        if (
+            localSelected &&
+            localSelected !== number
+        ) {
+
+            state.taken =
+                state.taken.filter(
+                    x => x !== localSelected
+                );
+        }
+
+        localSelected = number;
+
+        state.selected = number;
+
+        if (!state.taken.includes(number)) {
+            state.taken.push(number);
+        }
+
+        renderCartelas();
+
+        showMessage(
+            "Cartela " + number + " selected."
+        );
+
+        return;
+    }
+
+
+    /* SERVER */
+
+    try {
+
+        const response = await fetch(
+            "/api/select",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    cartela: number,
+                    user_id: getUserId()
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+            showMessage(
+                data.error ||
+                data.message ||
+                "Could not select Cartela."
+            );
+
+            return;
+        }
+
+        applyServerState(data);
+
+        showMessage(
+            "Cartela " + number + " selected."
+        );
+
+    } catch (error) {
+
+        showMessage(
+            "Connection error. Please try again."
+        );
+    }
+}
+
+
+/* -----------------------------
+   PROCEED
+----------------------------- */
+
+function proceed() {
+
+    if (!state.selected) {
+
+        showMessage(
+            "Please select a Cartela first."
+        );
+
+        return;
+    }
+
+    if (state.phase === "game") {
+        showGame();
+        return;
+    }
+
+    /*
+      In the real server the selection phase
+      ends automatically when the timer reaches 0.
+      This button is useful as a local/demo
+      transition.
+    */
+
+    if (localMode) {
+
+        startLocalGame();
+
+    } else {
+
+        showMessage(
+            "Wait for Cartela selection to close."
+        );
+    }
+}
+
+
+/* -----------------------------
+   LOCAL GAME
+----------------------------- */
+
+function startLocalGame() {
+
+    state.phase = "game";
+
+    state.cartela = localSelected;
+
+    state.card =
+        generateCard(localSelected || 1);
+
+    state.called = [];
+
+    state.current = null;
+
+    localCalled = [];
+
+    localCurrent = null;
+
+    showGame();
+
+    /*
+      Demonstration number caller.
+      One number every 5 seconds.
+    */
+
+    setTimeout(localDrawNumber, 2500);
+}
+
+
+/* -----------------------------
+   LOCAL DRAW
+----------------------------- */
+
+function localDrawNumber() {
+
+    if (state.phase !== "game") {
+        return;
+    }
+
+    const available = [];
+
+    for (let i = 1; i <= 75; i++) {
+
+        if (!localCalled.includes(i)) {
+            available.push(i);
+        }
+    }
+
+    if (!available.length) {
+        return;
+    }
+
+    const number =
+        available[
+            Math.floor(
+                Math.random() * available.length
+            )
+        ];
+
+    localCalled.push(number);
+
+    localCurrent = number;
+
+    state.called = localCalled.slice();
+
+    state.current = number;
+
+    renderGame();
+
+    if (checkBingo()) {
+
+        state.winner = true;
+
+        document
+            .getElementById("winner")
+            .classList.add("show");
+
+        document
+            .getElementById("winnerText")
+            .textContent =
+            "Cartela " +
+            state.cartela +
+            " has Bingo!";
+    }
+
+    setTimeout(localDrawNumber, 5000);
+}
+
+
+/* -----------------------------
+   SHOW GAME
+----------------------------- */
+
+function showGame() {
+
+    document
+        .getElementById("selectionView")
+        .classList.remove("active");
+
+    document
+        .getElementById("gameView")
+        .classList.add("active");
+
+    renderGame();
+}
+
+
+/* -----------------------------
+   RENDER GAME
+----------------------------- */
+
+function renderGame() {
+
+    document.getElementById("gameCartela")
+        .textContent =
+        state.cartela || state.selected || "—";
+
+    document.getElementById("currentNumber")
+        .textContent =
+        state.current || "—";
+
+
+    const calledContainer =
+        document.getElementById("calledNumbers");
+
+    calledContainer.innerHTML = "";
+
+    const called =
+        Array.isArray(state.called)
+            ? state.called
+            : [];
+
+    const recentStart =
+        Math.max(0, called.length - 5);
+
+    called.forEach((number, index) => {
+
+        const ball =
+            document.createElement("div");
+
+        ball.className = "calledBall";
+
+        if (index === called.length - 1) {
+            ball.classList.add("current");
+        }
+        else if (index >= recentStart) {
+            ball.classList.add("recent");
+        }
+        else {
+            ball.classList.add("old");
+        }
+
+        ball.textContent = number;
+
+        calledContainer.appendChild(ball);
+    });
+
+
+    renderBingoCard();
+}
+
+
+/* -----------------------------
+   RENDER BINGO CARD
+----------------------------- */
+
+function renderBingoCard() {
+
+    const rows =
+        document.getElementById("bingoRows");
+
+    rows.innerHTML = "";
+
+    if (!state.card) {
+
+        state.card =
+            generateCard(
+                state.cartela ||
+                state.selected ||
+                1
+            );
+    }
+
+
+    for (let r = 0; r < 5; r++) {
+
+        const row =
+            document.createElement("div");
+
+        row.className = "bingoRow";
+
+        for (let c = 0; c < 5; c++) {
+
+            const cell =
+                document.createElement("div");
+
+            cell.className = "bingoCell";
+
+            const value =
+                state.card[r][c];
+
+            if (r === 2 && c === 2) {
+
+                cell.classList.add("free");
+
+                cell.textContent = "FREE";
+
+                cell.classList.add("marked");
+
+            } else {
+
+                cell.textContent = value;
+
+                if (
+                    Array.isArray(state.called) &&
+                    state.called.includes(value)
+                ) {
+
+                    cell.classList.add("marked");
+                }
+            }
+
+            row.appendChild(cell);
+        }
+
+        rows.appendChild(row);
+    }
+}
+
+
+/* -----------------------------
+   BINGO CHECK
+----------------------------- */
+
+function checkBingo() {
+
+    if (!state.card) {
+        return false;
+    }
+
+    const marked = [];
+
+    for (let r = 0; r < 5; r++) {
+
+        marked[r] = [];
+
+        for (let c = 0; c < 5; c++) {
+
+            const value =
+                state.card[r][c];
+
+            marked[r][c] =
+                value === 0 ||
+                state.called.includes(value);
+        }
+    }
+
+
+    /* Rows */
+
+    for (let r = 0; r < 5; r++) {
+
+        if (
+            marked[r].every(Boolean)
+        ) {
+            return true;
+        }
+    }
+
+
+    /* Columns */
+
+    for (let c = 0; c < 5; c++) {
+
+        let complete = true;
+
+        for (let r = 0; r < 5; r++) {
+
+            if (!marked[r][c]) {
+                complete = false;
+                break;
+            }
+        }
+
+        if (complete) {
+            return true;
+        }
+    }
+
+
+    /* Main diagonal */
+
+    let diagonal1 = true;
+
+    for (let i = 0; i < 5; i++) {
+
+        if (!marked[i][i]) {
+            diagonal1 = false;
+            break;
+        }
+    }
+
+    if (diagonal1) {
+        return true;
+    }
+
+
+    /* Other diagonal */
+
+    let diagonal2 = true;
+
+    for (let i = 0; i < 5; i++) {
+
+        if (!marked[i][4 - i]) {
+            diagonal2 = false;
+            break;
+        }
+    }
+
+    if (diagonal2) {
+        return true;
+    }
+
+    return false;
+}
+
+
+/* -----------------------------
+   LEAVE
+----------------------------- */
+
+async function leaveGame() {
+
+    if (localMode) {
+
+        if (localSelected) {
+
+            state.taken =
+                state.taken.filter(
+                    x => x !== localSelected
+                );
+        }
+
+        localSelected = null;
+
+        state.selected = null;
+
+        renderCartelas();
+
+        showMessage(
+            "You left the game."
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const response = await fetch(
+            "/api/leave",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    user_id: getUserId()
+                })
+            }
+        );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+
+            showMessage(
+                data.error ||
+                "Could not leave."
+            );
+
+            return;
+        }
+
+        applyServerState(data);
+
+        showMessage(
+            "You left the game."
+        );
+
+    } catch (error) {
+
+        showMessage(
+            "Connection error."
+        );
+    }
+}
+
+
+/* -----------------------------
+   BACK
+----------------------------- */
+
+function goBack() {
+
+    if (tg) {
+
+        try {
+            tg.close();
+            return;
+        } catch (e) {}
+    }
+
+    document
+        .getElementById("gameView")
+        .classList.remove("active");
+
+    document
+        .getElementById("selectionView")
+        .classList.add("active");
+}
+
+
+/* -----------------------------
+   REFRESH
+----------------------------- */
+
+async function refreshState() {
+
+    if (localMode) {
+
+        renderCartelas();
+        renderGame();
+
+        showMessage("Refreshed.");
+
+        return;
+    }
+
+    await loadState();
+
+    showMessage("Refreshed.");
+}
+
+
+/* -----------------------------
+   LOAD SERVER STATE
+----------------------------- */
+
+async function loadState() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/state?user_id=" +
+                encodeURIComponent(getUserId())
+            );
+
+        if (!response.ok) {
+            throw new Error("State error");
+        }
+
+        const data =
+            await response.json();
+
+        applyServerState(data);
+
+    } catch (error) {
+
+        /*
+          If the server is temporarily unavailable,
+          keep the UI visible instead of breaking.
+        */
+
+        console.log(error);
+    }
+}
+
+
+/* -----------------------------
+   APPLY SERVER STATE
+----------------------------- */
+
+function applyServerState(data) {
+
+    if (!data || typeof data !== "object") {
+        return;
+    }
+
+    state.phase =
+        data.phase ||
+        state.phase;
+
+    state.timer =
+        Number.isFinite(Number(data.timer))
+            ? Number(data.timer)
+            : state.timer;
+
+    state.game =
+        data.game ||
+        state.game;
+
+    state.players =
+        data.players ??
+        state.players;
+
+    state.taken =
+        Array.isArray(data.taken)
+            ? data.taken
+            : state.taken;
+
+    state.selected =
+        data.selected ??
+        data.cartela ??
+        state.selected;
+
+    state.cartela =
+        data.cartela ??
+        state.cartela;
+
+    state.called =
+        Array.isArray(data.called)
+            ? data.called
+            : state.called;
+
+    state.current =
+        data.current ??
+        state.current;
+
+    if (Array.isArray(data.card)) {
+        state.card = data.card;
+    }
+
+    state.winner =
+        data.winner ??
+        state.winner;
+
+
+    document.getElementById("wallet")
+        .textContent =
+        data.wallet ??
+        "1,000";
+
+    document.getElementById("players")
+        .textContent =
+        state.players;
+
+    document.getElementById("gameNumber")
+        .textContent =
+        state.game;
+
+    document.getElementById("timer")
+        .textContent =
+        state.timer;
+
+
+    if (state.timer <= 5) {
+
+        document
+            .getElementById("timer")
+            .classList.add("warning");
+
+    } else {
+
+        document
+            .getElementById("timer")
+            .classList.remove("warning");
+    }
+
+
+    if (state.phase === "selection") {
+
+        document
+            .getElementById("selectionView")
+            .classList.add("active");
+
+        document
+            .getElementById("gameView")
+            .classList.remove("active");
+
+        renderCartelas();
+
+    } else {
+
+        document
+            .getElementById("selectionView")
+            .classList.remove("active");
+
+        document
+            .getElementById("gameView")
+            .classList.add("active");
+
+        renderGame();
+    }
+}
+
+
+/* -----------------------------
+   TELEGRAM USER
+----------------------------- */
+
+function getUserId() {
+
+    if (
+        tg &&
+        tg.initDataUnsafe &&
+        tg.initDataUnsafe.user
+    ) {
+
+        return String(
+            tg.initDataUnsafe.user.id
+        );
+    }
+
+    /*
+      Demo user when opened directly
+      outside Telegram.
+    */
+
+    return "demo-user";
+}
+
+
+/* -----------------------------
+   MESSAGE
+----------------------------- */
+
+let messageTimer = null;
+
+function showMessage(text) {
+
+    const message =
+        document.getElementById("message");
+
+    message.textContent = text;
+
+    message.classList.add("show");
+
+    clearTimeout(messageTimer);
+
+    messageTimer =
+        setTimeout(() => {
+
+            message.classList.remove("show");
+
+        }, 2500);
+}
+
+
+/* -----------------------------
+   LOCAL DEMO TIMER
+----------------------------- */
+
+function localSelectionTick() {
+
+    if (!localMode) {
+        return;
+    }
+
+    if (state.phase !== "selection") {
+        return;
+    }
+
+    if (localTimer <= 0) {
+
+        if (localSelected) {
+
+            startLocalGame();
+
+        } else {
+
+            localTimer = 30;
+
+            state.timer = 30;
+        }
+
+        return;
+    }
+
+    localTimer--;
+
+    state.timer = localTimer;
+
+    document.getElementById("timer")
+        .textContent = localTimer;
+
+    if (localTimer <= 5) {
+
+        document
+            .getElementById("timer")
+            .classList.add("warning");
+
+    } else {
+
+        document
+            .getElementById("timer")
+            .classList.remove("warning");
+    }
+}
+
+
+/* -----------------------------
+   INITIALIZE
+----------------------------- */
+
+function initialize() {
+
+    buildCartelaGrid();
+
+    /*
+      If opened directly as a normal web page,
+      use demo mode.
+
+      When opened through the server/Mini App,
+      use the real API.
+    */
+
+    localMode =
+        location.protocol === "file:";
+
+    if (localMode) {
+
+        state.phase = "selection";
+
+        state.timer = 30;
+
+        state.game = localGame;
+
+        state.players = 1;
+
+        state.taken = [];
+
+        state.selected = null;
+
+        document.getElementById("players")
+            .textContent = "1";
+
+        setInterval(
+            localSelectionTick,
+            1000
+        );
+
+    } else {
+
+        loadState();
+
+        /*
+          Keep UI synchronized with server.
+        */
+
+        setInterval(
+            loadState,
+            1000
+        );
+    }
+}
+
+
+initialize();
+
+</script>
+
+</body>
+</html>
