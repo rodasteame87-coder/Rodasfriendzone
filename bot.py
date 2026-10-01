@@ -3,11 +3,10 @@ import asyncio
 import logging
 import random
 import time
-from pathlib import Path
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.types import (
     Message,
     InlineKeyboardButton,
@@ -20,14 +19,13 @@ from aiogram.types import (
 from config import BOT_TOKEN
 
 
-# =========================================================
+# =========================
 # SETTINGS
-# =========================================================
+# =========================
 
 PORT = int(os.getenv("PORT", "10000"))
 
 WEBHOOK_PATH = "/telegram/webhook"
-
 WEBHOOK_SECRET = os.getenv(
     "WEBHOOK_SECRET",
     "RodasFriendZone_927461_secret"
@@ -39,192 +37,133 @@ RENDER_EXTERNAL_URL = os.getenv(
 ).rstrip("/")
 
 SELECTION_SECONDS = 30
+GAME_START_SECONDS = 30
 DRAW_INTERVAL_SECONDS = 5
 GAME_OVER_SECONDS = 5
 
+BET_AMOUNT = 100
 
-# =========================================================
+
+# =========================
 # LOGGING
-# =========================================================
+# =========================
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    format="%(asctime)s | %(levelname)s | %(message)s"
 )
 
 logger = logging.getLogger("RodasFriendZone")
 
 
-# =========================================================
-# FILES
-# =========================================================
+# =========================
+# WEB FOLDER
+# =========================
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-if (BASE_DIR / "web").is_dir():
-    WEB_DIR = BASE_DIR / "web"
-elif (BASE_DIR / "Web").is_dir():
-    WEB_DIR = BASE_DIR / "Web"
-else:
-    WEB_DIR = BASE_DIR / "web"
+WEB_FOLDER = os.path.join(BASE_DIR, "web")
 
-INDEX_FILE = WEB_DIR / "index.html"
-
-logger.info("BASE DIR: %s", BASE_DIR)
-logger.info("WEB DIR: %s", WEB_DIR)
-logger.info("INDEX FILE: %s", INDEX_FILE)
-logger.info("INDEX EXISTS: %s", INDEX_FILE.exists())
+if not os.path.isdir(WEB_FOLDER):
+    WEB_FOLDER = os.path.join(BASE_DIR, "Web")
 
 
-# =========================================================
-# TELEGRAM
-# =========================================================
+# =========================
+# BOT
+# =========================
 
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
 
-# =========================================================
-# TELEGRAM MENU
-# =========================================================
+# =========================
+# BALANCES
+# =========================
 
-async def setup_telegram_menu():
-
-    commands = [
-        BotCommand(
-            command="start",
-            description="Start RodasFriendZone"
-        ),
-        BotCommand(
-            command="play",
-            description="Play Bingo"
-        ),
-        BotCommand(
-            command="deposit",
-            description="Deposit"
-        ),
-        BotCommand(
-            command="balance",
-            description="Check balance"
-        ),
-        BotCommand(
-            command="withdraw",
-            description="Withdraw"
-        ),
-        BotCommand(
-            command="transfer",
-            description="Transfer"
-        ),
-        BotCommand(
-            command="instruction",
-            description="How to play"
-        ),
-        BotCommand(
-            command="invite",
-            description="Invite friends"
-        ),
-        BotCommand(
-            command="support",
-            description="Contact support"
-        ),
-    ]
-
-    await bot.set_my_commands(commands)
-
-    logger.info("Telegram menu commands configured successfully.")
+balances = {}
 
 
-# =========================================================
+def get_balance(user_id):
+    return balances.setdefault(user_id, 1000)
+
+
+# =========================
 # BINGO CARDS
-# =========================================================
+# =========================
 
-def generate_bingo_card():
-    """
-    Standard 75-ball Bingo card.
+def generate_card():
+    columns = []
 
-    B = 1-15
-    I = 16-30
-    N = 31-45
-    G = 46-60
-    O = 61-75
-
-    Center is FREE.
-    """
-
-    columns = [
-        random.sample(range(1, 16), 5),
-        random.sample(range(16, 31), 5),
-        random.sample(range(31, 46), 5),
-        random.sample(range(46, 61), 5),
-        random.sample(range(61, 76), 5),
+    ranges = [
+        range(1, 16),    # B
+        range(16, 31),   # I
+        range(31, 46),   # N
+        range(46, 61),   # G
+        range(61, 76),   # O
     ]
+
+    for r in ranges:
+        columns.append(random.sample(list(r), 5))
 
     card = []
 
     for row in range(5):
+        card.append([
+            columns[col][row]
+            for col in range(5)
+        ])
 
-        current_row = []
-
-        for column in range(5):
-
-            if row == 2 and column == 2:
-                current_row.append(0)
-            else:
-                current_row.append(
-                    columns[column][row]
-                )
-
-        card.append(current_row)
+    card[2][2] = "FREE"
 
     return card
 
 
-# Every Cartela 1-100 gets its own card.
 CARTELA_CARDS = {
-    cartela: generate_bingo_card()
-    for cartela in range(1, 101)
+    number: generate_card()
+    for number in range(1, 101)
 }
 
 
-# =========================================================
+# =========================
 # BINGO CHECK
-# =========================================================
+# =========================
 
-def has_bingo(card, drawn_numbers):
+def has_bingo(card, marked_numbers):
 
-    drawn = set(drawn_numbers)
+    marked = set(marked_numbers)
 
-    def marked(value):
-        return value == 0 or value in drawn
+    # FREE is always marked
+    marked.add("FREE")
 
     # Rows
-    for row in range(5):
-
+    for row in card:
         if all(
-            marked(card[row][column])
-            for column in range(5)
+            cell == "FREE" or cell in marked
+            for cell in row
         ):
             return True
 
     # Columns
-    for column in range(5):
-
+    for col in range(5):
         if all(
-            marked(card[row][column])
+            card[row][col] == "FREE"
+            or card[row][col] in marked
             for row in range(5)
         ):
             return True
 
     # Main diagonal
     if all(
-        marked(card[i][i])
+        card[i][i] == "FREE"
+        or card[i][i] in marked
         for i in range(5)
     ):
         return True
 
     # Opposite diagonal
     if all(
-        marked(card[i][4 - i])
+        card[i][4 - i] == "FREE"
+        or card[i][4 - i] in marked
         for i in range(5)
     ):
         return True
@@ -232,25 +171,43 @@ def has_bingo(card, drawn_numbers):
     return False
 
 
-# =========================================================
-# GAME STATE
-# =========================================================
+# =========================
+# GAME
+# =========================
 
 class BingoGame:
 
     def __init__(self):
-
-        self.phase = "selection"
+        self.lock = asyncio.Lock()
 
         self.game_number = 0
 
-        self.selection_end = 0
+        # selection timer
+        self.selection_end = None
 
-        self.taken_cartelas = {}
+        # second 30 second timer
+        self.game_start_end = None
 
-        self.player_cartelas = {}
+        # True after numbers begin
+        self.playing = False
 
+        # True after winner
+        self.finished = False
+
+        # user_id -> cartela
         self.players = {}
+
+        # users who pressed Proceed
+        self.ready_users = set()
+
+        # user_id -> set of manually marked numbers
+        self.manual_marks = {}
+
+        # user_id -> auto on/off
+        self.auto_marking = {}
+
+        # user_id -> numbers automatically marked
+        self.auto_marks = {}
 
         self.drawn_numbers = []
 
@@ -260,89 +217,120 @@ class BingoGame:
 
         self.prize = 0
 
-        self.lock = asyncio.Lock()
-
 
 game = BingoGame()
 
 
-# =========================================================
-# VIRTUAL DEMO BALANCES
-# =========================================================
-
-balances = {}
-
-
-def get_balance(user_id):
-
-    if user_id not in balances:
-        balances[user_id] = 1000
-
-    return balances[user_id]
-
-
-# =========================================================
+# =========================
 # USER ID
-# =========================================================
+# =========================
 
 def get_user_id(request):
 
-    user_id = request.headers.get("X-User-ID")
-
-    if user_id:
-        return str(user_id)
-
-    return "demo-user"
+    return (
+        request.headers.get("X-User-ID")
+        or "demo-user"
+    )
 
 
-# =========================================================
-# SELECTION TIMER
-# =========================================================
+# =========================
+# TIME HELPERS
+# =========================
 
 def selection_remaining():
 
-    if game.phase != "selection":
+    if game.selection_end is None:
         return 0
 
-    remaining = game.selection_end - time.time()
+    return max(
+        0,
+        int(game.selection_end - time.time())
+    )
 
-    return max(0, int(remaining))
+
+def game_start_remaining():
+
+    if game.game_start_end is None:
+        return 0
+
+    return max(
+        0,
+        int(game.game_start_end - time.time())
+    )
 
 
-# =========================================================
-# CURRENT GAME STATE
-# =========================================================
+# =========================
+# CURRENT USER MARKS
+# =========================
+
+def get_user_marks(user_id):
+
+    if game.auto_marking.get(user_id, True):
+
+        return set(game.auto_marks.get(user_id, set()))
+
+    return set(game.manual_marks.get(user_id, set()))
+
+
+# =========================
+# STATE
+# =========================
 
 def get_state(user_id):
 
-    cartela = game.player_cartelas.get(user_id)
+    if game.finished:
 
-    card = None
+        phase = "finished"
 
-    if cartela is not None:
-        card = CARTELA_CARDS.get(cartela)
+    elif game.playing:
 
-    remaining = selection_remaining()
+        phase = "playing"
+
+    elif game.game_start_end is not None:
+
+        # This user has entered the game
+        # while the second 30 sec countdown runs.
+        if user_id in game.ready_users:
+            phase = "starting"
+        else:
+            phase = "selection"
+
+    else:
+
+        phase = "selection"
+
+    cartela = game.players.get(user_id)
+
+    card = CARTELA_CARDS.get(cartela)
+
+    auto = game.auto_marking.get(user_id, True)
+
+    marks = get_user_marks(user_id)
 
     return {
-
-        "ok": True,
-
-        "phase": game.phase,
+        "phase": phase,
 
         "game": game.game_number,
 
-        "players": len(game.player_cartelas),
+        "players": len(game.players),
 
         "wallet": get_balance(user_id),
 
-        "timer": remaining,
+        "bet": BET_AMOUNT,
 
-        "selection_remaining": remaining,
+        "prize": game.prize,
 
-        "taken": list(game.taken_cartelas.keys()),
+        "selection_remaining": selection_remaining(),
 
-        "taken_cartelas": list(game.taken_cartelas.keys()),
+        "timer": selection_remaining(),
+
+        "game_start_remaining": game_start_remaining(),
+
+        "start_timer": game_start_remaining(),
+
+        "taken": list(game.players.values()),
+
+        "taken_cartelas": list(game.players.values()),
 
         "selected": cartela,
 
@@ -360,64 +348,272 @@ def get_state(user_id):
 
         "current_number": game.current_number,
 
+        "call_count": len(game.drawn_numbers),
+
         "winner": game.winner,
 
-        "prize": game.prize,
+        "auto_marking": auto,
+
+        "auto": auto,
+
+        "marked": list(marks),
+
+        "ready": user_id in game.ready_users,
     }
 
 
-# =========================================================
-# MINI APP HOME
-# =========================================================
+# =========================
+# NEW SELECTION
+# =========================
 
-async def index(request):
+async def start_selection():
 
-    logger.info(
-        "MINI APP REQUEST: %s",
-        request.path
-    )
+    async with game.lock:
 
-    if not INDEX_FILE.exists():
+        game.game_number += 1
 
-        return web.Response(
-            status=500,
-            content_type="text/plain",
-            text=(
-                "RODASFRIENDZONE MINI APP ERROR\n\n"
-                "index.html was not found.\n\n"
-                f"Expected: {INDEX_FILE}\n"
-            )
+        game.selection_end = (
+            time.time() + SELECTION_SECONDS
         )
 
-    return web.FileResponse(INDEX_FILE)
+        game.game_start_end = None
+
+        game.playing = False
+        game.finished = False
+
+        game.players.clear()
+        game.ready_users.clear()
+
+        game.manual_marks.clear()
+        game.auto_marks.clear()
+        game.auto_marking.clear()
+
+        game.drawn_numbers.clear()
+
+        game.current_number = None
+
+        game.winner = None
+
+        game.prize = 0
+
+        logger.info(
+            "Game %s selection started",
+            game.game_number
+        )
 
 
-# =========================================================
-# HEALTH
-# =========================================================
+# =========================
+# START GAME
+# =========================
 
-async def health(request):
+async def begin_game():
 
-    return web.json_response({
+    async with game.lock:
 
-        "status": "ok",
+        if game.playing:
+            return
 
-        "application": "RodasFriendZone",
+        if not game.players:
+            return
 
-        "mini_app": INDEX_FILE.exists(),
+        game.playing = True
+        game.finished = False
 
-        "phase": game.phase,
+        game.prize = (
+            len(game.players) * BET_AMOUNT
+        )
 
-        "game": game.game_number,
+        logger.info(
+            "Game %s STARTED with %s players",
+            game.game_number,
+            len(game.players)
+        )
 
-        "players": len(game.player_cartelas),
 
-    })
+# =========================
+# DRAW NUMBER
+# =========================
+
+async def draw_number():
+
+    async with game.lock:
+
+        if not game.playing:
+            return
+
+        if game.finished:
+            return
+
+        available = [
+            n for n in range(1, 76)
+            if n not in game.drawn_numbers
+        ]
+
+        if not available:
+            return
+
+        number = random.choice(available)
+
+        game.drawn_numbers.append(number)
+
+        game.current_number = number
+
+        # AUTO MARKING
+        for user_id, cartela in game.players.items():
+
+            if game.auto_marking.get(
+                user_id,
+                True
+            ):
+
+                game.auto_marks.setdefault(
+                    user_id,
+                    set()
+                ).add(number)
+
+                card = CARTELA_CARDS[cartela]
+
+                marks = game.auto_marks[user_id]
+
+                # Automatic Bingo
+                if has_bingo(
+                    card,
+                    marks
+                ):
+
+                    game.winner = {
+                        "user_id": user_id,
+                        "cartela": cartela,
+                        "number": number,
+                        "automatic": True,
+                    }
+
+                    balances[user_id] = (
+                        get_balance(user_id)
+                        + game.prize
+                    )
+
+                    game.finished = True
+                    game.playing = False
+
+                    logger.info(
+                        "AUTO BINGO: %s",
+                        user_id
+                    )
+
+                    return
+
+        logger.info(
+            "Called number: %s",
+            number
+        )
 
 
-# =========================================================
-# API: STATE
-# =========================================================
+# =========================
+# GAME LOOP
+# =========================
+
+async def game_loop():
+
+    await start_selection()
+
+    while True:
+
+        try:
+
+            # -------------------------
+            # SELECTION
+            # -------------------------
+
+            while selection_remaining() > 0:
+
+                await asyncio.sleep(0.5)
+
+            # -------------------------
+            # SELECTION FINISHED
+            # -------------------------
+
+            async with game.lock:
+
+                if game.game_start_end is None:
+
+                    if game.players:
+
+                        game.game_start_end = (
+                            time.time()
+                            + GAME_START_SECONDS
+                        )
+
+                        # Everyone who selected
+                        # gets into the game.
+                        game.ready_users.update(
+                            game.players.keys()
+                        )
+
+                    else:
+
+                        game.selection_end = (
+                            time.time()
+                            + SELECTION_SECONDS
+                        )
+
+                        continue
+
+            # -------------------------
+            # GAME START COUNTDOWN
+            # -------------------------
+
+            while game_start_remaining() > 0:
+
+                await asyncio.sleep(0.5)
+
+            # -------------------------
+            # START CALLING
+            # -------------------------
+
+            await begin_game()
+
+            # -------------------------
+            # DRAWING
+            # -------------------------
+
+            while game.playing:
+
+                await draw_number()
+
+                if not game.playing:
+                    break
+
+                await asyncio.sleep(
+                    DRAW_INTERVAL_SECONDS
+                )
+
+            # -------------------------
+            # GAME OVER
+            # -------------------------
+
+            await asyncio.sleep(
+                GAME_OVER_SECONDS
+            )
+
+            await start_selection()
+
+        except asyncio.CancelledError:
+
+            raise
+
+        except Exception:
+
+            logger.exception(
+                "Game loop error"
+            )
+
+            await asyncio.sleep(2)
+
+
+# =========================
+# API STATE
+# =========================
 
 async def api_state(request):
 
@@ -428,9 +624,9 @@ async def api_state(request):
     )
 
 
-# =========================================================
-# API: SELECT CARTELA
-# =========================================================
+# =========================
+# SELECT CARTELA
+# =========================
 
 async def api_select(request):
 
@@ -438,34 +634,29 @@ async def api_select(request):
 
     try:
         data = await request.json()
-    except Exception:
-        return web.json_response(
-            {
-                "ok": False,
-                "error": "Invalid request."
-            },
-            status=400
+
+        cartela = int(
+            data.get("cartela")
         )
 
-    try:
-        cartela = int(data.get("cartela"))
     except Exception:
+
         return web.json_response(
             {
                 "ok": False,
-                "error": "Invalid Cartela."
+                "error": "Invalid Cartela"
             },
             status=400
         )
 
     async with game.lock:
 
-        if game.phase != "selection":
+        if game.playing or game.finished:
 
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Cartela selection is closed."
+                    "error": "Game already started"
                 },
                 status=400
             )
@@ -475,66 +666,344 @@ async def api_select(request):
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Selection time has ended."
+                    "error": "Selection time finished"
                 },
                 status=400
             )
 
-        if not 1 <= cartela <= 100:
+        if cartela < 1 or cartela > 100:
 
             return web.json_response(
                 {
                     "ok": False,
-                    "error":
-                        "Cartela must be between 1 and 100."
+                    "error": "Cartela must be 1-100"
                 },
                 status=400
             )
 
-        if user_id in game.player_cartelas:
+        # Already selected
+        if user_id in game.players:
 
             return web.json_response(
                 {
                     "ok": False,
-                    "error":
-                        "You already selected a Cartela."
+                    "error": "You already selected a Cartela"
                 },
                 status=400
             )
 
-        if cartela in game.taken_cartelas:
+        # Taken by someone else
+        if cartela in game.players.values():
 
             return web.json_response(
                 {
                     "ok": False,
-                    "error":
-                        f"Cartela {cartela} is already taken. "
-                        "Choose another one."
+                    "error": "Cartela already taken"
                 },
                 status=400
             )
 
-        game.taken_cartelas[cartela] = user_id
-        game.player_cartelas[user_id] = cartela
+        game.players[user_id] = cartela
 
-        logger.info(
-            "USER %s SELECTED CARTELA %s",
-            user_id,
-            cartela
+        game.manual_marks[user_id] = set()
+
+        game.auto_marks[user_id] = set()
+
+        game.auto_marking[user_id] = True
+
+        return web.json_response(
+            {
+                "ok": True,
+                "cartela": cartela
+            }
         )
 
-        if len(game.taken_cartelas) >= 100:
 
-            await start_playing_locked()
+# =========================
+# PROCEED
+# =========================
 
-    return web.json_response(
-        get_state(user_id)
-    )
+async def api_proceed(request):
+
+    user_id = get_user_id(request)
+
+    async with game.lock:
+
+        if user_id not in game.players:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "Choose a Cartela first"
+                },
+                status=400
+            )
+
+        game.ready_users.add(user_id)
+
+        # Start the second 30-second countdown
+        # the first time somebody proceeds.
+        if game.game_start_end is None:
+
+            game.game_start_end = (
+                time.time()
+                + GAME_START_SECONDS
+            )
+
+            logger.info(
+                "Game-start countdown started"
+            )
+
+        return web.json_response(
+            {
+                "ok": True,
+                "start_timer":
+                    game_start_remaining()
+            }
+        )
 
 
-# =========================================================
-# API: LEAVE
-# =========================================================
+# =========================
+# AUTO TOGGLE
+# =========================
+
+async def api_toggle_auto(request):
+
+    user_id = get_user_id(request)
+
+    try:
+
+        data = await request.json()
+
+        enabled = bool(
+            data.get("enabled")
+        )
+
+    except Exception:
+
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "Invalid setting"
+            },
+            status=400
+        )
+
+    async with game.lock:
+
+        if user_id not in game.players:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "Choose a Cartela first"
+                },
+                status=400
+            )
+
+        game.auto_marking[user_id] = enabled
+
+        return web.json_response(
+            {
+                "ok": True,
+                "auto_marking": enabled
+            }
+        )
+
+
+# =========================
+# MANUAL MARK
+# =========================
+
+async def api_mark(request):
+
+    user_id = get_user_id(request)
+
+    try:
+
+        data = await request.json()
+
+        number = int(
+            data.get("number")
+        )
+
+    except Exception:
+
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "Invalid number"
+            },
+            status=400
+        )
+
+    async with game.lock:
+
+        if game.auto_marking.get(
+            user_id,
+            True
+        ):
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "Turn Auto Marking off first"
+                },
+                status=400
+            )
+
+        if number not in game.drawn_numbers:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "That number has not been called"
+                },
+                status=400
+            )
+
+        cartela = game.players.get(user_id)
+
+        if not cartela:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "No Cartela selected"
+                },
+                status=400
+            )
+
+        card = CARTELA_CARDS[cartela]
+
+        # Make sure number is actually on card
+        exists = any(
+            number in row
+            for row in card
+        )
+
+        if not exists:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "Number is not on your card"
+                },
+                status=400
+            )
+
+        game.manual_marks.setdefault(
+            user_id,
+            set()
+        ).add(number)
+
+        return web.json_response(
+            {
+                "ok": True,
+                "marked":
+                    list(game.manual_marks[user_id])
+            }
+        )
+
+
+# =========================
+# BINGO WIN
+# =========================
+
+async def api_claim_bingo(request):
+
+    user_id = get_user_id(request)
+
+    async with game.lock:
+
+        if not game.playing:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "The game is not currently running"
+                },
+                status=400
+            )
+
+        if game.winner:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "Someone already won"
+                },
+                status=400
+            )
+
+        cartela = game.players.get(user_id)
+
+        if not cartela:
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "You do not have a Cartela"
+                },
+                status=400
+            )
+
+        card = CARTELA_CARDS[cartela]
+
+        marks = get_user_marks(user_id)
+
+        if not has_bingo(
+            card,
+            marks
+        ):
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error":
+                        "BINGO is not valid yet"
+                },
+                status=400
+            )
+
+        game.winner = {
+            "user_id": user_id,
+            "cartela": cartela,
+            "number": game.current_number,
+            "automatic": False,
+        }
+
+        balances[user_id] = (
+            get_balance(user_id)
+            + game.prize
+        )
+
+        game.finished = True
+        game.playing = False
+
+        logger.info(
+            "MANUAL BINGO: %s",
+            user_id
+        )
+
+        return web.json_response(
+            {
+                "ok": True,
+                "winner": game.winner,
+                "prize": game.prize
+            }
+        )
+
+
+# =========================
+# LEAVE
+# =========================
 
 async def api_leave(request):
 
@@ -542,307 +1011,54 @@ async def api_leave(request):
 
     async with game.lock:
 
-        if game.phase != "selection":
+        if game.playing:
 
             return web.json_response(
                 {
                     "ok": False,
                     "error":
-                        "You cannot leave during the game."
+                        "You cannot leave during the game"
                 },
                 status=400
             )
 
-        cartela = game.player_cartelas.pop(
+        game.players.pop(
             user_id,
             None
         )
 
-        if cartela is not None:
-
-            game.taken_cartelas.pop(
-                cartela,
-                None
-            )
-
-            logger.info(
-                "USER %s RELEASED CARTELA %s",
-                user_id,
-                cartela
-            )
-
-    return web.json_response(
-        get_state(user_id)
-    )
-
-
-# =========================================================
-# START NEW SELECTION
-# =========================================================
-
-async def start_selection():
-
-    async with game.lock:
-
-        game.phase = "selection"
-
-        game.selection_end = (
-            time.time()
-            + SELECTION_SECONDS
+        game.ready_users.discard(
+            user_id
         )
 
-        game.taken_cartelas.clear()
-
-        game.player_cartelas.clear()
-
-        game.players.clear()
-
-        game.drawn_numbers.clear()
-
-        game.current_number = None
-
-        game.winner = None
-
-        game.prize = 0
-
-        game.game_number += 1
-
-        logger.info(
-            "========================================"
+        game.manual_marks.pop(
+            user_id,
+            None
         )
 
-        logger.info(
-            "GAME %s: 30-SECOND CARTELA SELECTION",
-            game.game_number
+        game.auto_marks.pop(
+            user_id,
+            None
         )
 
-        logger.info(
-            "========================================"
+        game.auto_marking.pop(
+            user_id,
+            None
+        )
+
+        return web.json_response(
+            {
+                "ok": True
+            }
         )
 
 
-# =========================================================
-# START PLAYING
-# =========================================================
-
-async def start_playing_locked():
-
-    if game.phase != "selection":
-        return
-
-    if not game.player_cartelas:
-        return
-
-    game.phase = "playing"
-
-    game.players = {}
-
-    for user_id, cartela in game.player_cartelas.items():
-
-        game.players[user_id] = CARTELA_CARDS[cartela]
-
-    game.drawn_numbers = []
-
-    game.current_number = None
-
-    game.winner = None
-
-    game.prize = 0
-
-    logger.info(
-        "========================================"
-    )
-
-    logger.info(
-        "GAME %s STARTED | PLAYERS: %s",
-        game.game_number,
-        len(game.players)
-    )
-
-    logger.info(
-        "========================================"
-    )
-
-
-# =========================================================
-# PRIZE CALCULATION
-# =========================================================
-
-def calculate_prize():
-
-    player_count = len(game.players)
-
-    if player_count <= 0:
-        return 0
-
-    virtual_entry = 100
-
-    return player_count * virtual_entry
-
-
-# =========================================================
-# GAME LOOP
-# =========================================================
-
-async def game_loop():
-
-    await start_selection()
-
-    while True:
-
-        if game.phase == "selection":
-
-            remaining = selection_remaining()
-
-            if remaining <= 0:
-
-                async with game.lock:
-
-                    if game.player_cartelas:
-
-                        await start_playing_locked()
-
-                    else:
-
-                        game.selection_end = (
-                            time.time()
-                            + SELECTION_SECONDS
-                        )
-
-                        logger.info(
-                            "NO PLAYERS - NEW SELECTION STARTED"
-                        )
-
-            else:
-
-                await asyncio.sleep(0.2)
-
-        elif game.phase == "playing":
-
-            await asyncio.sleep(
-                DRAW_INTERVAL_SECONDS
-            )
-
-            await draw_number()
-
-        elif game.phase == "finished":
-
-            await asyncio.sleep(
-                GAME_OVER_SECONDS
-            )
-
-            await start_selection()
-
-        else:
-
-            await asyncio.sleep(0.5)
-
-
-# =========================================================
-# DRAW NUMBER
-# =========================================================
-
-async def draw_number():
-
-    async with game.lock:
-
-        if game.phase != "playing":
-            return
-
-        available = [
-            number
-            for number in range(1, 76)
-            if number not in game.drawn_numbers
-        ]
-
-        if not available:
-
-            game.phase = "finished"
-
-            logger.info(
-                "ALL 75 NUMBERS CALLED"
-            )
-
-            return
-
-        number = random.choice(available)
-
-        game.drawn_numbers.append(number)
-
-        game.current_number = number
-
-        logger.info(
-            "GAME %s | NUMBER CALLED: %s",
-            game.game_number,
-            number
-        )
-
-        for user_id, card in game.players.items():
-
-            if has_bingo(
-                card,
-                game.drawn_numbers
-            ):
-
-                cartela = game.player_cartelas.get(
-                    user_id
-                )
-
-                game.winner = {
-                    "user_id": user_id,
-                    "cartela": cartela,
-                    "number": number
-                }
-
-                game.prize = calculate_prize()
-
-                balances[user_id] = (
-                    get_balance(user_id)
-                    + game.prize
-                )
-
-                game.phase = "finished"
-
-                logger.info(
-                    "========================================"
-                )
-
-                logger.info(
-                    "BINGO WINNER"
-                )
-
-                logger.info(
-                    "USER: %s",
-                    user_id
-                )
-
-                logger.info(
-                    "CARTELA: %s",
-                    cartela
-                )
-
-                logger.info(
-                    "NUMBER: %s",
-                    number
-                )
-
-                logger.info(
-                    "PRIZE: %s DEMO",
-                    game.prize
-                )
-
-                logger.info(
-                    "========================================"
-                )
-
-                break
-
-
-# =========================================================
-# PLAY BINGO BUTTON
-# =========================================================
-
-def bingo_keyboard():
+# =========================
+# TELEGRAM COMMANDS
+# =========================
+
+@dp.message(CommandStart())
+async def start(message: Message):
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -857,158 +1073,115 @@ def bingo_keyboard():
         ]
     )
 
-    return keyboard
-
-
-# =========================================================
-# /START
-# =========================================================
-
-@dp.message(CommandStart())
-async def start(message: Message):
-
     await message.answer(
-        "🎱 Welcome to RodasFriendZone!\n\n"
-        "Choose an option from the Menu below "
-        "or press PLAY BINGO to enter the game.",
-        reply_markup=bingo_keyboard()
+        "🎱 Welcome to Rodas Friend Zone Bingo!\n\n"
+        "Choose PLAY BINGO to open the game.",
+        reply_markup=keyboard
     )
 
 
-# =========================================================
-# /PLAY
-# =========================================================
+async def play_command(message: Message):
 
-@dp.message(Command("play"))
-async def play(message: Message):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎯 PLAY BINGO",
+                    web_app=WebAppInfo(
+                        url=RENDER_EXTERNAL_URL + "/"
+                    )
+                )
+            ]
+        ]
+    )
 
     await message.answer(
-        "🎱 RodasFriendZone Bingo\n\n"
-        "Tap the button below to open the game.",
-        reply_markup=bingo_keyboard()
+        "🎯 Open Rodas Friend Zone Bingo:",
+        reply_markup=keyboard
     )
 
 
-# =========================================================
-# /DEPOSIT
-# =========================================================
-
-@dp.message(Command("deposit"))
-async def deposit(message: Message):
-
-    await message.answer(
-        "💰 DEPOSIT\n\n"
-        "Deposit instructions will be available here."
-    )
-
-
-# =========================================================
-# /BALANCE
-# =========================================================
-
-@dp.message(Command("balance"))
-async def balance(message: Message):
+async def balance_command(message: Message):
 
     user_id = str(message.from_user.id)
 
-    amount = get_balance(user_id)
-
     await message.answer(
-        f"💰 Your balance: {amount:,}"
+        f"💰 Balance: {get_balance(user_id)}"
     )
 
 
-# =========================================================
-# /WITHDRAW
-# =========================================================
-
-@dp.message(Command("withdraw"))
-async def withdraw(message: Message):
+async def instruction_command(message: Message):
 
     await message.answer(
-        "💸 WITHDRAW\n\n"
-        "Withdrawal options will be available here."
+        "🎱 HOW TO PLAY\n\n"
+        "1. Choose one Cartela from 1-100.\n"
+        "2. Press Proceed.\n"
+        "3. Wait for the 30-second game countdown.\n"
+        "4. Numbers will then be called automatically.\n"
+        "5. With Auto Marking ON, your card marks automatically.\n"
+        "6. With Auto Marking OFF, touch called numbers yourself.\n"
+        "7. Press BINGO WIN when you have a valid Bingo."
     )
 
 
-# =========================================================
-# /TRANSFER
-# =========================================================
-
-@dp.message(Command("transfer"))
-async def transfer(message: Message):
+async def support_command(message: Message):
 
     await message.answer(
-        "🔄 TRANSFER\n\n"
-        "Transfer options will be available here."
+        "🆘 Rodas Friend Zone Support"
     )
 
 
-# =========================================================
-# /INSTRUCTION
-# =========================================================
+# =========================
+# COMMAND REGISTRATION
+# =========================
 
-@dp.message(Command("instruction"))
-async def instruction(message: Message):
+async def setup_commands():
 
-    await message.answer(
-        "📖 HOW TO PLAY\n\n"
-        "1. Open PLAY BINGO.\n"
-        "2. Choose an available Cartela.\n"
-        "3. Wait for the selection period to finish.\n"
-        "4. Bingo numbers will be called automatically.\n"
-        "5. Complete a winning line to get Bingo."
+    await bot.set_my_commands(
+        [
+            BotCommand(
+                command="start",
+                description="Start"
+            ),
+            BotCommand(
+                command="play",
+                description="Play Bingo"
+            ),
+            BotCommand(
+                command="deposit",
+                description="Deposit"
+            ),
+            BotCommand(
+                command="balance",
+                description="Balance"
+            ),
+            BotCommand(
+                command="withdraw",
+                description="Withdraw"
+            ),
+            BotCommand(
+                command="transfer",
+                description="Transfer"
+            ),
+            BotCommand(
+                command="instruction",
+                description="How to play"
+            ),
+            BotCommand(
+                command="invite",
+                description="Invite"
+            ),
+            BotCommand(
+                command="support",
+                description="Support"
+            ),
+        ]
     )
 
 
-# =========================================================
-# /INVITE
-# =========================================================
-
-@dp.message(Command("invite"))
-async def invite(message: Message):
-
-    bot_info = await bot.get_me()
-
-    username = bot_info.username
-
-    if username:
-
-        invite_link = (
-            f"https://t.me/{username}?start="
-            f"ref_{message.from_user.id}"
-        )
-
-        await message.answer(
-            "👥 INVITE FRIENDS\n\n"
-            "Share your referral link:\n\n"
-            f"{invite_link}"
-        )
-
-    else:
-
-        await message.answer(
-            "👥 Your invite link is not available yet."
-        )
-
-
-# =========================================================
-# /SUPPORT
-# =========================================================
-
-@dp.message(Command("support"))
-async def support(message: Message):
-
-    await message.answer(
-        "🆘 SUPPORT\n\n"
-        "Please contact RodasFriendZone support "
-        "for assistance."
-    )
-
-
-# =========================================================
-# TELEGRAM WEBHOOK
-# =========================================================
+# =========================
+# WEBHOOK
+# =========================
 
 async def telegram_webhook(request):
 
@@ -1038,92 +1211,62 @@ async def telegram_webhook(request):
             text="OK"
         )
 
-    except Exception as error:
+    except Exception:
 
         logger.exception(
-            "Webhook error: %s",
-            error
+            "Telegram webhook error"
         )
 
         return web.Response(
             status=500,
-            text="Webhook error"
+            text="ERROR"
         )
 
 
-# =========================================================
-# START SERVER
-# =========================================================
+# =========================
+# HEALTH
+# =========================
+
+async def health(request):
+
+    return web.json_response(
+        {
+            "ok": True,
+            "service":
+                "RodasFriendZone"
+        }
+    )
+
+
+# =========================
+# APP
+# =========================
 
 async def main():
 
-    logger.info(
-        "========================================"
-    )
-
-    logger.info(
-        "RODASFRIENDZONE STARTING"
-    )
-
-    logger.info(
-        "PORT: %s",
-        PORT
-    )
-
-    logger.info(
-        "RENDER URL: %s",
-        RENDER_EXTERNAL_URL
-    )
-
-    logger.info(
-        "INDEX: %s",
-        INDEX_FILE
-    )
-
-    logger.info(
-        "INDEX EXISTS: %s",
-        INDEX_FILE.exists()
-    )
-
-    logger.info(
-        "========================================"
-    )
-
-    # -----------------------------------------------------
-    # TELEGRAM MENU
-    # -----------------------------------------------------
-
-    await setup_telegram_menu()
-
-    # -----------------------------------------------------
-    # TELEGRAM WEBHOOK
-    # -----------------------------------------------------
-
-    webhook_url = (
-        RENDER_EXTERNAL_URL
-        + WEBHOOK_PATH
-    )
-
-    await bot.set_webhook(
-        url=webhook_url,
-        secret_token=WEBHOOK_SECRET,
+    await bot.delete_webhook(
         drop_pending_updates=True
     )
 
-    logger.info(
-        "Telegram webhook configured: %s",
-        webhook_url
-    )
+    await setup_commands()
 
-    # -----------------------------------------------------
-    # WEB SERVER
-    # -----------------------------------------------------
+    await start_selection()
+
+    game_task = asyncio.create_task(
+        game_loop()
+    )
 
     app = web.Application()
 
     app.router.add_get(
         "/",
-        index
+        lambda request:
+            web.FileResponse(
+                os.path.join(
+                    WEB_FOLDER,
+                    "index.html"
+                )
+            )
     )
 
     app.router.add_get(
@@ -1139,6 +1282,26 @@ async def main():
     app.router.add_post(
         "/api/select",
         api_select
+    )
+
+    app.router.add_post(
+        "/api/proceed",
+        api_proceed
+    )
+
+    app.router.add_post(
+        "/api/toggle-auto",
+        api_toggle_auto
+    )
+
+    app.router.add_post(
+        "/api/mark",
+        api_mark
+    )
+
+    app.router.add_post(
+        "/api/claim-bingo",
+        api_claim_bingo
     )
 
     app.router.add_post(
@@ -1163,32 +1326,40 @@ async def main():
 
     await site.start()
 
+    webhook_url = (
+        RENDER_EXTERNAL_URL
+        + WEBHOOK_PATH
+    )
+
+    await bot.set_webhook(
+        webhook_url,
+        secret_token=WEBHOOK_SECRET
+    )
+
     logger.info(
-        "SERVER LIVE ON PORT %s",
+        "Rodas Friend Zone running on port %s",
         PORT
     )
 
-    # -----------------------------------------------------
-    # BINGO ENGINE
-    # -----------------------------------------------------
-
-    asyncio.create_task(
-        game_loop()
-    )
-
     logger.info(
-        "BINGO GAME ENGINE STARTED"
+        "Webhook: %s",
+        webhook_url
     )
 
-    # Keep server alive.
-    while True:
+    try:
 
-        await asyncio.sleep(3600)
+        while True:
 
+            await asyncio.sleep(3600)
 
-# =========================================================
-# RUN
-# =========================================================
+    finally:
+
+        game_task.cancel()
+
+        await bot.delete_webhook()
+
+        await bot.session.close()
+
 
 if __name__ == "__main__":
 
