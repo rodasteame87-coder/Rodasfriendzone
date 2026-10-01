@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 
 from aiohttp import web
@@ -32,6 +33,12 @@ WEBHOOK_SECRET = os.getenv(
 
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
+SELECTION_SECONDS = 30
+
+# Time between balls.
+# We can change this later.
+DRAW_INTERVAL_SECONDS = 5
+
 
 # =========================
 # LOGGING
@@ -52,17 +59,93 @@ dp = Dispatcher()
 
 
 # =========================
-# GAME STATE
+# BINGO CARD
+# =========================
+
+def generate_bingo_card():
+    """
+    Standard 75-ball Bingo card.
+
+    B = 1-15
+    I = 16-30
+    N = 31-45
+    G = 46-60
+    O = 61-75
+
+    Center N3 is FREE.
+    """
+
+    columns = [
+        random.sample(range(1, 16), 5),
+        random.sample(range(16, 31), 5),
+        random.sample(range(31, 46), 5),
+        random.sample(range(46, 61), 5),
+        random.sample(range(61, 76), 5),
+    ]
+
+    card = []
+
+    for row in range(5):
+
+        current_row = []
+
+        for column in range(5):
+
+            if row == 2 and column == 2:
+                current_row.append("FREE")
+            else:
+                current_row.append(
+                    columns[column][row]
+                )
+
+        card.append(current_row)
+
+    return card
+
+
+# =========================
+# CARTELA CARDS
+# =========================
+
+# Each Cartela 1-100 gets its own card.
+# Cards are generated once when the server starts.
+cartela_cards = {
+    cartela: generate_bingo_card()
+    for cartela in range(1, 101)
+}
+
+
+# =========================
+# GAME PLAYER
+# =========================
+
+class Player:
+
+    def __init__(self, user_id, cartela):
+
+        self.user_id = user_id
+
+        self.cartela = cartela
+
+        self.card = cartela_cards[cartela]
+
+        # FREE is already marked.
+        self.marked = {
+            (2, 2)
+        }
+
+
+# =========================
+# GAME ROOM
 # =========================
 
 class BingoRoom:
 
     def __init__(self):
 
-        # waiting = before first game
-        # selection = 30 second Cartela selection
-        # playing = Bingo game running
-        self.state = "waiting"
+        # selection
+        # playing
+        self.state = "selection"
 
         self.game_number = 0
 
@@ -72,11 +155,23 @@ class BingoRoom:
         # Telegram user ID -> Cartela
         self.player_cartelas = {}
 
-        # Players participating in current game
-        self.players = set()
+        # Telegram user ID -> Player object
+        self.players = {}
 
-        # When 30 second selection ends
+        # Numbers drawn in current game
+        self.drawn_numbers = []
+
+        # Numbers still available
+        self.remaining_numbers = list(
+            range(1, 76)
+        )
+
+        # Selection deadline
         self.selection_end = None
+
+        # Lock prevents two operations changing
+        # game state at exactly the same time.
+        self.lock = asyncio.Lock()
 
 
 room = BingoRoom()
@@ -89,13 +184,17 @@ room = BingoRoom()
 def cartela_board():
 
     rows = []
+
     row = []
 
     for number in range(1, 101):
 
         if number in room.taken_cartelas:
+
             text = f"🔴 {number}"
+
         else:
+
             text = f"🟢 {number}"
 
         row.append(
@@ -127,25 +226,7 @@ def cartela_board():
 
 
 # =========================
-# MAIN MENU
-# =========================
-
-def main_menu():
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🎯 PLAY BINGO",
-                    callback_data="play"
-                )
-            ]
-        ]
-    )
-
-
-# =========================
-# SELECTION MESSAGE
+# SELECTION TEXT
 # =========================
 
 def selection_text():
@@ -164,7 +245,7 @@ def selection_text():
 
     else:
 
-        remaining = 30
+        remaining = SELECTION_SECONDS
 
     taken = len(room.taken_cartelas)
 
@@ -180,11 +261,150 @@ def selection_text():
 
 
 # =========================
+# BINGO CARD DISPLAY
+# =========================
+
+def card_text(player):
+
+    lines = []
+
+    lines.append(
+        f"📋 CARTELA {player.cartela}"
+    )
+
+    lines.append(
+        "🅱️   🇮   🇳   🇬   🅾️"
+    )
+
+    for row in range(5):
+
+        cells = []
+
+        for column in range(5):
+
+            value = player.card[row][column]
+
+            if value == "FREE":
+
+                cells.append("⭐")
+
+            elif (
+                row,
+                column
+            ) in player.marked:
+
+                cells.append(
+                    f"🟢{value}"
+                )
+
+            else:
+
+                cells.append(
+                    f"⬜{value}"
+                )
+
+        lines.append(
+            "  ".join(
+                f"{cell:>5}"
+                for cell in cells
+            )
+        )
+
+    return "\n".join(lines)
+
+
+# =========================
+# WIN CHECK
+# =========================
+
+def has_bingo(player):
+
+    # Rows
+    for row in range(5):
+
+        if all(
+            (row, column)
+            in player.marked
+            for column in range(5)
+        ):
+
+            return True
+
+    # Columns
+    for column in range(5):
+
+        if all(
+            (row, column)
+            in player.marked
+            for row in range(5)
+        ):
+
+            return True
+
+    # Main diagonal
+    if all(
+        (i, i)
+        in player.marked
+        for i in range(5)
+    ):
+
+        return True
+
+    # Other diagonal
+    if all(
+        (i, 4 - i)
+        in player.marked
+        for i in range(5)
+    ):
+
+        return True
+
+    return False
+
+
+# =========================
+# MARK DRAWN NUMBER
+# =========================
+
+def mark_number(player, number):
+
+    for row in range(5):
+
+        for column in range(5):
+
+            if player.card[row][column] == number:
+
+                player.marked.add(
+                    (row, column)
+                )
+
+
+# =========================
+# MAIN MENU
+# =========================
+
+def main_menu():
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎯 PLAY BINGO",
+                    callback_data="play"
+                )
+            ]
+        ]
+    )
+
+
+# =========================
 # START
 # =========================
 
 @dp.message(CommandStart())
 async def start(message: Message):
+
+    user_id = message.from_user.id
 
     if room.state == "playing":
 
@@ -204,17 +424,9 @@ async def start(message: Message):
 
         return
 
-    await message.answer(
-        "🎱 RODAS FRIEND ZONE\n\n"
-        "Welcome!\n\n"
-        "The next Cartela selection will begin "
-        "automatically when a Bingo game ends.",
-        reply_markup=main_menu()
-    )
-
 
 # =========================
-# PLAY BUTTON
+# PLAY
 # =========================
 
 @dp.callback_query(F.data == "play")
@@ -222,7 +434,6 @@ async def play(callback: CallbackQuery):
 
     user_id = callback.from_user.id
 
-    # GAME IS CURRENTLY PLAYING
     if room.state == "playing":
 
         await callback.answer(
@@ -233,10 +444,8 @@ async def play(callback: CallbackQuery):
 
         return
 
-    # SELECTION IS OPEN
     if room.state == "selection":
 
-        # Already selected
         if user_id in room.player_cartelas:
 
             cartela = room.player_cartelas[user_id]
@@ -257,12 +466,6 @@ async def play(callback: CallbackQuery):
 
         return
 
-    # BEFORE FIRST GAME
-    await callback.answer(
-        "⏳ Please wait for the next Cartela selection.",
-        show_alert=True
-    )
-
 
 # =========================
 # CHOOSE CARTELA
@@ -273,52 +476,60 @@ async def choose_cartela(callback: CallbackQuery):
 
     user_id = callback.from_user.id
 
-    # Game started while user was looking at old message
-    if room.state != "selection":
+    async with room.lock:
 
-        await callback.answer(
-            "🔴 GAME ALREADY IN PLAY\n"
-            "Please wait for the next game.",
-            show_alert=True
+        if room.state != "selection":
+
+            await callback.answer(
+                "🔴 GAME ALREADY IN PLAY\n\n"
+                "Please wait for the next game.",
+                show_alert=True
+            )
+
+            return
+
+        if user_id in room.player_cartelas:
+
+            current = room.player_cartelas[user_id]
+
+            await callback.answer(
+                f"You already selected Cartela {current}.",
+                show_alert=True
+            )
+
+            return
+
+        cartela = int(
+            callback.data.split(":")[1]
         )
 
-        return
+        if cartela < 1 or cartela > 100:
 
-    # User already owns a Cartela
-    if user_id in room.player_cartelas:
+            await callback.answer(
+                "Invalid Cartela.",
+                show_alert=True
+            )
 
-        current = room.player_cartelas[user_id]
+            return
 
-        await callback.answer(
-            f"You already have Cartela {current}.",
-            show_alert=True
-        )
+        if cartela in room.taken_cartelas:
 
-        return
+            await callback.answer(
+                f"Cartela {cartela} is already taken.\n"
+                "Choose another one.",
+                show_alert=True
+            )
 
-    cartela = int(
-        callback.data.split(":")[1]
-    )
+            return
 
-    # Someone else already took it
-    if cartela in room.taken_cartelas:
+        # Reserve Cartela
+        room.taken_cartelas[cartela] = user_id
 
-        await callback.answer(
-            f"Cartela {cartela} is already taken.\n"
-            "Choose another one.",
-            show_alert=True
-        )
-
-        return
-
-    # Take Cartela
-    room.taken_cartelas[cartela] = user_id
-
-    room.player_cartelas[user_id] = cartela
+        room.player_cartelas[user_id] = cartela
 
     await callback.message.edit_text(
         selection_text()
-        + f"\n\n✅ You selected Cartela {cartela}.",
+        + f"\n\n✅ Your Cartela: {cartela}",
         reply_markup=cartela_board()
     )
 
@@ -326,14 +537,9 @@ async def choose_cartela(callback: CallbackQuery):
         f"Cartela {cartela} selected!"
     )
 
-    # If all 100 are taken, start immediately
-    if len(room.taken_cartelas) >= 100:
-
-        await finish_selection()
-
 
 # =========================
-# REFRESH CARTELA BOARD
+# REFRESH
 # =========================
 
 @dp.callback_query(F.data == "cartela_refresh")
@@ -357,16 +563,65 @@ async def refresh_cartela(callback: CallbackQuery):
 
 
 # =========================
-# LEAVE CARTELA
+# LEAVE
 # =========================
 
-def leave_button():
+@dp.callback_query(F.data == "leave_cartela")
+async def leave_cartela(callback: CallbackQuery):
+
+    user_id = callback.from_user.id
+
+    async with room.lock:
+
+        if room.state != "selection":
+
+            await callback.answer(
+                "The selection period has ended.",
+                show_alert=True
+            )
+
+            return
+
+        if user_id not in room.player_cartelas:
+
+            await callback.answer(
+                "You don't have a Cartela.",
+                show_alert=True
+            )
+
+            return
+
+        cartela = room.player_cartelas[user_id]
+
+        del room.player_cartelas[user_id]
+
+        room.taken_cartelas.pop(
+            cartela,
+            None
+        )
+
+    await callback.message.edit_text(
+        "🚪 You left your Cartela.\n\n"
+        "You can choose another available Cartela.",
+        reply_markup=cartela_board()
+    )
+
+    await callback.answer(
+        f"Cartela {cartela} is available again."
+    )
+
+
+# =========================
+# PLAYER MENU
+# =========================
+
+def player_menu():
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🚪 LEAVE CARTELA",
+                    text="🚪 LEAVE",
                     callback_data="leave_cartela"
                 )
             ]
@@ -374,80 +629,125 @@ def leave_button():
     )
 
 
-@dp.callback_query(F.data == "leave_cartela")
-async def leave_cartela(callback: CallbackQuery):
+# =========================
+# START SELECTION
+# =========================
 
-    user_id = callback.from_user.id
+async def start_selection():
 
-    if room.state != "selection":
+    async with room.lock:
 
-        await callback.answer(
-            "The selection period has ended.",
-            show_alert=True
+        room.state = "selection"
+
+        room.selection_end = (
+            datetime.now()
+            + timedelta(
+                seconds=SELECTION_SECONDS
+            )
         )
 
-        return
+        room.taken_cartelas.clear()
 
-    if user_id not in room.player_cartelas:
+        room.player_cartelas.clear()
 
-        await callback.answer(
-            "You don't have a Cartela.",
-            show_alert=True
+        logger.info(
+            "30-second Cartela selection started."
         )
 
-        return
+    # Countdown loop
+    while True:
 
-    cartela = room.player_cartelas[user_id]
+        await asyncio.sleep(1)
 
-    # Release Cartela
-    del room.player_cartelas[user_id]
+        async with room.lock:
 
-    if cartela in room.taken_cartelas:
+            if room.state != "selection":
 
-        del room.taken_cartelas[cartela]
+                return
 
-    await callback.message.edit_text(
-        "🚪 You left the Cartela.\n\n"
-        "You can choose another available Cartela "
-        "while the selection period is still open.",
-        reply_markup=cartela_board()
-    )
+            remaining = int(
+                (
+                    room.selection_end
+                    - datetime.now()
+                ).total_seconds()
+            )
 
-    await callback.answer(
-        f"Cartela {cartela} released."
-    )
+            if remaining <= 0:
+
+                break
+
+    await finish_selection()
 
 
 # =========================
-# FINISH 30 SECOND SELECTION
+# FINISH SELECTION
 # =========================
 
 async def finish_selection():
 
-    if room.state != "selection":
+    async with room.lock:
+
+        if room.state != "selection":
+
+            return
+
+        # Nobody joined
+        if not room.player_cartelas:
+
+            logger.info(
+                "No players selected Cartelas."
+            )
+
+            # Start another selection period
+            # because there are no players.
+            room.selection_end = (
+                datetime.now()
+                + timedelta(
+                    seconds=SELECTION_SECONDS
+                )
+            )
+
+            restart = True
+
+        else:
+
+            restart = False
+
+            room.state = "playing"
+
+            room.game_number += 1
+
+            room.drawn_numbers = []
+
+            room.remaining_numbers = list(
+                range(1, 76)
+            )
+
+            room.players = {}
+
+            for user_id, cartela in (
+                room.player_cartelas.items()
+            ):
+
+                room.players[user_id] = Player(
+                    user_id,
+                    cartela
+                )
+
+            logger.info(
+                f"Game #{room.game_number} "
+                f"started with "
+                f"{len(room.players)} players."
+            )
+
+    if restart:
+
+        await start_selection()
 
         return
 
-    room.state = "playing"
-
-    room.game_number += 1
-
-    room.selection_end = None
-
-    # Save current players
-    room.players = set(
-        room.player_cartelas.keys()
-    )
-
-    logger.info(
-        f"Game {room.game_number} started "
-        f"with {len(room.players)} players."
-    )
-
-    # Notify players
-    for user_id in room.players:
-
-        cartela = room.player_cartelas[user_id]
+    # Tell everyone game has started
+    for user_id, player in room.players.items():
 
         try:
 
@@ -455,118 +755,245 @@ async def finish_selection():
                 user_id,
                 "🎱 BINGO GAME STARTED!\n\n"
                 f"🎮 Game #{room.game_number}\n"
-                f"📋 Your Cartela: {cartela}\n\n"
-                "Your Cartela is now locked into this game.\n\n"
-                "🎯 The Bingo drawing system will be added next."
+                f"📋 Cartela: {player.cartela}\n\n"
+                "🏆 Win condition:\n"
+                "Complete any ROW, COLUMN, or DIAGONAL.\n\n"
+                + card_text(player),
             )
 
         except Exception:
 
             logger.exception(
-                f"Could not message user {user_id}"
+                f"Could not send game start to {user_id}"
             )
 
-    # DEMO GAME
-    # This is temporary.
-    # Later this will be replaced by
-    # the real 1-75 Bingo drawing engine.
+    # Start drawing
+    await draw_balls()
 
-    await asyncio.sleep(20)
 
-    await end_game()
+# =========================
+# DRAW BINGO BALLS
+# =========================
+
+async def draw_balls():
+
+    while True:
+
+        async with room.lock:
+
+            if room.state != "playing":
+
+                return
+
+            if not room.remaining_numbers:
+
+                logger.info(
+                    "All 75 Bingo balls were drawn."
+                )
+
+                winner = None
+
+                break
+
+            number = random.choice(
+                room.remaining_numbers
+            )
+
+            room.remaining_numbers.remove(
+                number
+            )
+
+            room.drawn_numbers.append(
+                number
+            )
+
+            # Mark the number on every card
+            for player in room.players.values():
+
+                mark_number(
+                    player,
+                    number
+                )
+
+                if has_bingo(player):
+
+                    winner = player
+
+                    break
+
+            else:
+
+                winner = None
+
+        # Announce drawn number
+        letter = get_bingo_letter(number)
+
+        for user_id in room.players:
+
+            try:
+
+                await bot.send_message(
+                    user_id,
+                    f"🎱 BALL DRAWN\n\n"
+                    f"🔵 {letter} {number}\n\n"
+                    f"📊 Balls drawn: "
+                    f"{len(room.drawn_numbers)}/75"
+                )
+
+            except Exception:
+
+                logger.exception(
+                    f"Could not notify {user_id}"
+                )
+
+        # Someone won
+        if winner:
+
+            await announce_winner(
+                winner,
+                number
+            )
+
+            return
+
+        await asyncio.sleep(
+            DRAW_INTERVAL_SECONDS
+        )
+
+
+    # No winner after all 75 balls
+    await end_game(
+        winner=None
+    )
+
+
+# =========================
+# BINGO LETTER
+# =========================
+
+def get_bingo_letter(number):
+
+    if 1 <= number <= 15:
+        return "B"
+
+    if 16 <= number <= 30:
+        return "I"
+
+    if 31 <= number <= 45:
+        return "N"
+
+    if 46 <= number <= 60:
+        return "G"
+
+    if 61 <= number <= 75:
+        return "O"
+
+    return ""
+
+
+# =========================
+# WINNER
+# =========================
+
+async def announce_winner(
+    winner,
+    winning_number
+):
+
+    logger.info(
+        f"Winner: user={winner.user_id}, "
+        f"cartela={winner.cartela}"
+    )
+
+    for user_id in room.players:
+
+        try:
+
+            if user_id == winner.user_id:
+
+                message = (
+                    "🏆🎉 BINGO! 🎉🏆\n\n"
+                    "YOU WIN!\n\n"
+                    f"📋 Cartela: {winner.cartela}\n"
+                    f"🎱 Winning ball: "
+                    f"{get_bingo_letter(winning_number)} "
+                    f"{winning_number}\n\n"
+                    "✅ Complete row, column, "
+                    "or diagonal."
+                )
+
+            else:
+
+                message = (
+                    "🏁 BINGO GAME OVER\n\n"
+                    f"🏆 Winner: Cartela "
+                    f"{winner.cartela}\n\n"
+                    f"🎱 Winning ball: "
+                    f"{get_bingo_letter(winning_number)} "
+                    f"{winning_number}"
+                )
+
+            await bot.send_message(
+                user_id,
+                message
+            )
+
+        except Exception:
+
+            logger.exception(
+                f"Could not notify {user_id}"
+            )
+
+    await end_game(
+        winner=winner
+    )
 
 
 # =========================
 # END GAME
 # =========================
 
-async def end_game():
+async def end_game(winner=None):
 
-    if room.state != "playing":
+    async with room.lock:
 
-        return
+        if room.state != "playing":
 
-    logger.info(
-        f"Game {room.game_number} ended."
-    )
+            return
 
-    # Notify players
-    for user_id in room.players:
-
-        try:
-
-            await bot.send_message(
-                user_id,
-                "🏁 BINGO GAME ENDED!\n\n"
-                "The next Cartela selection will "
-                "start automatically."
-            )
-
-        except Exception:
-
-            logger.exception(
-                f"Could not notify user {user_id}"
-            )
-
-    # Clear old Cartelas
-    room.taken_cartelas.clear()
-
-    room.player_cartelas.clear()
-
-    room.players.clear()
-
-    # START NEXT 30 SECOND SELECTION
-    await start_selection()
-
-
-# =========================
-# START 30 SECOND SELECTION
-# =========================
-
-async def start_selection():
-
-    room.state = "selection"
-
-    room.selection_end = (
-        datetime.now()
-        + timedelta(seconds=30)
-    )
-
-    logger.info(
-        "30 second Cartela selection started."
-    )
-
-    # Countdown
-    while room.state == "selection":
-
-        remaining = int(
-            (
-                room.selection_end
-                - datetime.now()
-            ).total_seconds()
+        logger.info(
+            f"Game #{room.game_number} ended."
         )
 
-        if remaining <= 0:
+        room.state = "ending"
 
-            break
+        current_players = list(
+            room.players.values()
+        )
 
-        await asyncio.sleep(1)
+    # Short pause after winner announcement
+    await asyncio.sleep(3)
 
-    # Timer finished
-    if room.state == "selection":
+    # Reset current game
+    async with room.lock:
 
-        await finish_selection()
+        room.players.clear()
 
+        room.taken_cartelas.clear()
 
-# =========================
-# ADMIN/DEMO START
-# =========================
+        room.player_cartelas.clear()
 
-async def start_first_selection():
+        room.drawn_numbers.clear()
 
-    # Start the very first 30 second period
-    # because there is no previous game yet.
+        room.remaining_numbers = list(
+            range(1, 76)
+        )
 
+        room.selection_end = None
+
+    # IMPORTANT:
+    # Only NOW does the next 30-second
+    # Cartela selection begin.
     await start_selection()
 
 
@@ -687,9 +1114,9 @@ async def main():
         f"RodasFriendZone running on port {PORT}"
     )
 
-    # Start the first Cartela selection
+    # First-ever selection period.
     asyncio.create_task(
-        start_first_selection()
+        start_selection()
     )
 
     while True:
