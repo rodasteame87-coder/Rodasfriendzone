@@ -7,13 +7,14 @@ from pathlib import Path
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import (
     Message,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     WebAppInfo,
     Update,
+    BotCommand,
 )
 
 from config import BOT_TOKEN
@@ -84,6 +85,56 @@ dp = Dispatcher()
 
 
 # =========================================================
+# TELEGRAM MENU
+# =========================================================
+
+async def setup_telegram_menu():
+
+    commands = [
+        BotCommand(
+            command="start",
+            description="Start RodasFriendZone"
+        ),
+        BotCommand(
+            command="play",
+            description="Play Bingo"
+        ),
+        BotCommand(
+            command="deposit",
+            description="Deposit"
+        ),
+        BotCommand(
+            command="balance",
+            description="Check balance"
+        ),
+        BotCommand(
+            command="withdraw",
+            description="Withdraw"
+        ),
+        BotCommand(
+            command="transfer",
+            description="Transfer"
+        ),
+        BotCommand(
+            command="instruction",
+            description="How to play"
+        ),
+        BotCommand(
+            command="invite",
+            description="Invite friends"
+        ),
+        BotCommand(
+            command="support",
+            description="Contact support"
+        ),
+    ]
+
+    await bot.set_my_commands(commands)
+
+    logger.info("Telegram menu commands configured successfully.")
+
+
+# =========================================================
 # BINGO CARDS
 # =========================================================
 
@@ -117,7 +168,7 @@ def generate_bingo_card():
         for column in range(5):
 
             if row == 2 and column == 2:
-                current_row.append(0)  # FREE
+                current_row.append(0)
             else:
                 current_row.append(
                     columns[column][row]
@@ -140,15 +191,6 @@ CARTELA_CARDS = {
 # =========================================================
 
 def has_bingo(card, drawn_numbers):
-    """
-    Win condition:
-    - complete row
-    - complete column
-    - main diagonal
-    - opposite diagonal
-
-    FREE is automatically marked.
-    """
 
     drawn = set(drawn_numbers)
 
@@ -202,28 +244,20 @@ class BingoGame:
 
         self.game_number = 0
 
-        # Exact end time of the 30-second selection.
         self.selection_end = 0
 
-        # cartela -> user_id
         self.taken_cartelas = {}
 
-        # user_id -> cartela
         self.player_cartelas = {}
 
-        # user_id -> bingo card
         self.players = {}
 
-        # Numbers already called: 1-75
         self.drawn_numbers = []
 
-        # Last/current number
         self.current_number = None
 
-        # Winner information
         self.winner = None
 
-        # Winner's prize
         self.prize = 0
 
         self.lock = asyncio.Lock()
@@ -240,6 +274,7 @@ balances = {}
 
 
 def get_balance(user_id):
+
     if user_id not in balances:
         balances[user_id] = 1000
 
@@ -251,6 +286,7 @@ def get_balance(user_id):
 # =========================================================
 
 def get_user_id(request):
+
     user_id = request.headers.get("X-User-ID")
 
     if user_id:
@@ -264,6 +300,7 @@ def get_user_id(request):
 # =========================================================
 
 def selection_remaining():
+
     if game.phase != "selection":
         return 0
 
@@ -291,48 +328,40 @@ def get_state(user_id):
 
         "ok": True,
 
-        # Phase
         "phase": game.phase,
 
-        # Game number
         "game": game.game_number,
 
-        # Player count
         "players": len(game.player_cartelas),
 
-        # Virtual wallet
         "wallet": get_balance(user_id),
 
-        # IMPORTANT:
-        # These names match index.html.
         "timer": remaining,
 
         "selection_remaining": remaining,
 
-        # Cartelas
         "taken": list(game.taken_cartelas.keys()),
+
         "taken_cartelas": list(game.taken_cartelas.keys()),
 
-        # Current user's Cartela
         "selected": cartela,
+
         "my_cartela": cartela,
+
         "cartela": cartela,
 
-        # Bingo card
         "card": card,
 
-        # Called numbers
         "called": list(game.drawn_numbers),
+
         "drawn_numbers": list(game.drawn_numbers),
 
-        # Current number
         "current": game.current_number,
+
         "current_number": game.current_number,
 
-        # Winner
         "winner": game.winner,
 
-        # Prize
         "prize": game.prize,
     }
 
@@ -431,7 +460,6 @@ async def api_select(request):
 
     async with game.lock:
 
-        # No new players during Bingo.
         if game.phase != "selection":
 
             return web.json_response(
@@ -442,7 +470,6 @@ async def api_select(request):
                 status=400
             )
 
-        # Timer is controlled by server.
         if selection_remaining() <= 0:
 
             return web.json_response(
@@ -464,7 +491,6 @@ async def api_select(request):
                 status=400
             )
 
-        # One Cartela per player.
         if user_id in game.player_cartelas:
 
             return web.json_response(
@@ -476,7 +502,6 @@ async def api_select(request):
                 status=400
             )
 
-        # Cartela already taken.
         if cartela in game.taken_cartelas:
 
             return web.json_response(
@@ -489,7 +514,6 @@ async def api_select(request):
                 status=400
             )
 
-        # Reserve Cartela.
         game.taken_cartelas[cartela] = user_id
         game.player_cartelas[user_id] = cartela
 
@@ -499,8 +523,6 @@ async def api_select(request):
             cartela
         )
 
-        # If all 100 Cartelas are taken,
-        # selection ends immediately.
         if len(game.taken_cartelas) >= 100:
 
             await start_playing_locked()
@@ -520,8 +542,6 @@ async def api_leave(request):
 
     async with game.lock:
 
-        # During Bingo, players cannot leave
-        # in the middle of the game.
         if game.phase != "selection":
 
             return web.json_response(
@@ -566,9 +586,6 @@ async def start_selection():
 
         game.phase = "selection"
 
-        # IMPORTANT:
-        # This starts ONCE for the new game.
-        # Players joining/leaving do not reset it.
         game.selection_end = (
             time.time()
             + SELECTION_SECONDS
@@ -653,14 +670,6 @@ async def start_playing_locked():
 
 def calculate_prize():
 
-    """
-    Demo prize calculation.
-
-    For now this is virtual only.
-    Each player contributes a virtual
-    100-unit entry amount.
-    """
-
     player_count = len(game.players)
 
     if player_count <= 0:
@@ -689,19 +698,12 @@ async def game_loop():
 
                 async with game.lock:
 
-                    # The timer has reached zero.
-                    # It must NOT restart because players
-                    # joined or left.
-
                     if game.player_cartelas:
 
                         await start_playing_locked()
 
                     else:
 
-                        # Nobody selected.
-                        # Start a completely new 30-sec
-                        # selection period.
                         game.selection_end = (
                             time.time()
                             + SELECTION_SECONDS
@@ -717,7 +719,6 @@ async def game_loop():
 
         elif game.phase == "playing":
 
-            # Wait exactly 5 seconds between calls.
             await asyncio.sleep(
                 DRAW_INTERVAL_SECONDS
             )
@@ -726,7 +727,6 @@ async def game_loop():
 
         elif game.phase == "finished":
 
-            # Keep the winning/game-over state visible.
             await asyncio.sleep(
                 GAME_OVER_SECONDS
             )
@@ -755,7 +755,6 @@ async def draw_number():
             if number not in game.drawn_numbers
         ]
 
-        # All 75 numbers have been called.
         if not available:
 
             game.phase = "finished"
@@ -766,7 +765,6 @@ async def draw_number():
 
             return
 
-        # Pick random unused number.
         number = random.choice(available)
 
         game.drawn_numbers.append(number)
@@ -779,7 +777,6 @@ async def draw_number():
             number
         )
 
-        # Check every player's card.
         for user_id, card in game.players.items():
 
             if has_bingo(
@@ -799,7 +796,6 @@ async def draw_number():
 
                 game.prize = calculate_prize()
 
-                # Give virtual prize.
                 balances[user_id] = (
                     get_balance(user_id)
                     + game.prize
@@ -843,11 +839,10 @@ async def draw_number():
 
 
 # =========================================================
-# TELEGRAM /START
+# PLAY BINGO BUTTON
 # =========================================================
 
-@dp.message(CommandStart())
-async def start(message: Message):
+def bingo_keyboard():
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -862,10 +857,152 @@ async def start(message: Message):
         ]
     )
 
+    return keyboard
+
+
+# =========================================================
+# /START
+# =========================================================
+
+@dp.message(CommandStart())
+async def start(message: Message):
+
     await message.answer(
-        "🎱 Welcome to RodasFriendZone Bingo!\n\n"
-        "Choose PLAY BINGO to open the game.",
-        reply_markup=keyboard
+        "🎱 Welcome to RodasFriendZone!\n\n"
+        "Choose an option from the Menu below "
+        "or press PLAY BINGO to enter the game.",
+        reply_markup=bingo_keyboard()
+    )
+
+
+# =========================================================
+# /PLAY
+# =========================================================
+
+@dp.message(Command("play"))
+async def play(message: Message):
+
+    await message.answer(
+        "🎱 RodasFriendZone Bingo\n\n"
+        "Tap the button below to open the game.",
+        reply_markup=bingo_keyboard()
+    )
+
+
+# =========================================================
+# /DEPOSIT
+# =========================================================
+
+@dp.message(Command("deposit"))
+async def deposit(message: Message):
+
+    await message.answer(
+        "💰 DEPOSIT\n\n"
+        "Deposit instructions will be available here."
+    )
+
+
+# =========================================================
+# /BALANCE
+# =========================================================
+
+@dp.message(Command("balance"))
+async def balance(message: Message):
+
+    user_id = str(message.from_user.id)
+
+    amount = get_balance(user_id)
+
+    await message.answer(
+        f"💰 Your balance: {amount:,}"
+    )
+
+
+# =========================================================
+# /WITHDRAW
+# =========================================================
+
+@dp.message(Command("withdraw"))
+async def withdraw(message: Message):
+
+    await message.answer(
+        "💸 WITHDRAW\n\n"
+        "Withdrawal options will be available here."
+    )
+
+
+# =========================================================
+# /TRANSFER
+# =========================================================
+
+@dp.message(Command("transfer"))
+async def transfer(message: Message):
+
+    await message.answer(
+        "🔄 TRANSFER\n\n"
+        "Transfer options will be available here."
+    )
+
+
+# =========================================================
+# /INSTRUCTION
+# =========================================================
+
+@dp.message(Command("instruction"))
+async def instruction(message: Message):
+
+    await message.answer(
+        "📖 HOW TO PLAY\n\n"
+        "1. Open PLAY BINGO.\n"
+        "2. Choose an available Cartela.\n"
+        "3. Wait for the selection period to finish.\n"
+        "4. Bingo numbers will be called automatically.\n"
+        "5. Complete a winning line to get Bingo."
+    )
+
+
+# =========================================================
+# /INVITE
+# =========================================================
+
+@dp.message(Command("invite"))
+async def invite(message: Message):
+
+    bot_info = await bot.get_me()
+
+    username = bot_info.username
+
+    if username:
+
+        invite_link = (
+            f"https://t.me/{username}?start="
+            f"ref_{message.from_user.id}"
+        )
+
+        await message.answer(
+            "👥 INVITE FRIENDS\n\n"
+            "Share your referral link:\n\n"
+            f"{invite_link}"
+        )
+
+    else:
+
+        await message.answer(
+            "👥 Your invite link is not available yet."
+        )
+
+
+# =========================================================
+# /SUPPORT
+# =========================================================
+
+@dp.message(Command("support"))
+async def support(message: Message):
+
+    await message.answer(
+        "🆘 SUPPORT\n\n"
+        "Please contact RodasFriendZone support "
+        "for assistance."
     )
 
 
@@ -953,6 +1090,12 @@ async def main():
     )
 
     # -----------------------------------------------------
+    # TELEGRAM MENU
+    # -----------------------------------------------------
+
+    await setup_telegram_menu()
+
+    # -----------------------------------------------------
     # TELEGRAM WEBHOOK
     # -----------------------------------------------------
 
@@ -978,19 +1121,16 @@ async def main():
 
     app = web.Application()
 
-    # Mini App
     app.router.add_get(
         "/",
         index
     )
 
-    # Health
     app.router.add_get(
         "/health",
         health
     )
 
-    # Mini App APIs
     app.router.add_get(
         "/api/state",
         api_state
@@ -1006,7 +1146,6 @@ async def main():
         api_leave
     )
 
-    # Telegram
     app.router.add_post(
         WEBHOOK_PATH,
         telegram_webhook
