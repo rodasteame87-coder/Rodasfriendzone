@@ -19,14 +19,13 @@
     -webkit-tap-highlight-color:transparent;
 }
 
-html,
-body{
+html,body{
     margin:0;
     padding:0;
     min-height:100%;
     font-family:Arial,Helvetica,sans-serif;
     background:#dff5ff;
-    color:#123b50;
+    color:#17465b;
 }
 
 body{
@@ -35,7 +34,6 @@ body{
 
 button{
     font-family:inherit;
-    cursor:pointer;
 }
 
 .app{
@@ -43,15 +41,15 @@ button{
     max-width:520px;
     min-height:100vh;
     margin:auto;
-    padding:12px 11px 28px;
+    padding:9px 7px 24px;
 
     background:
         radial-gradient(
             circle at 50% -10%,
             #ffffff 0,
             #eafaff 25%,
-            #d8f3ff 62%,
-            #c7ecfa 100%
+            #d8f3ff 65%,
+            #c8edf9 100%
         );
 }
 
@@ -62,607 +60,619 @@ button{
 
 .top{
     display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:8px;
+    grid-template-columns:repeat(4,1fr);
+    gap:5px;
 }
 
-.pill{
-    border:1px solid rgba(42,145,184,.18);
-    border-radius:18px;
-    padding:8px 4px;
+.info-box{
+    min-width:0;
+    padding:7px 3px 8px;
 
-    background:rgba(255,255,255,.88);
+    border-radius:11px;
 
-    color:#174b63;
+    background:#fffef1;
 
-    font-size:10px;
-    font-weight:800;
+    border:1px solid #cfe6ec;
+
+    text-align:center;
 
     box-shadow:
-        0 5px 15px rgba(40,120,150,.10);
+        0 3px 8px rgba(40,120,150,.10);
 }
 
-.pill b{
+.info-label{
     display:block;
+
+    color:#8a257e;
+
+    font-size:10px;
+    font-weight:900;
+
+    white-space:nowrap;
+}
+
+.info-value{
+    display:block;
+
     margin-top:3px;
+
+    color:#111827;
+
     font-size:15px;
-    color:#087ca9;
-}
-
-
-/* =========================================================
-   SELECTION HEADER
-   ========================================================= */
-
-.title{
-    text-align:center;
-    margin-top:15px;
-
-    color:#075e82;
-
-    font-size:23px;
     font-weight:900;
-    letter-spacing:.2px;
-}
-
-.sub{
-    text-align:center;
-    margin-top:4px;
-
-    color:#568196;
-
-    font-size:12px;
-    font-weight:600;
 }
 
 
 /* =========================================================
-   TIMER
+   PLAYING AREA
    ========================================================= */
 
-.timer{
-    width:82px;
-    height:82px;
-
-    margin:13px auto;
-
-    border-radius:50%;
-
-    border:4px solid #57c5eb;
-
-    background:#ffffff;
-
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-
-    box-shadow:
-        0 6px 20px rgba(31,137,176,.16);
-}
-
-.timer strong{
-    font-size:27px;
-    line-height:1;
-    color:#087ca9;
-}
-
-.timer small{
-    margin-top:4px;
-
-    color:#6994a6;
-
-    font-size:8px;
-    font-weight:800;
-    letter-spacing:.7px;
-}
-
-
-/* =========================================================
-   CARTELA PANEL
-   ========================================================= */
-
-.panel{
-    background:rgba(255,255,255,.72);
-
-    border:1px solid rgba(73,171,207,.20);
-
-    border-radius:20px;
-
-    padding:10px;
-
-    box-shadow:
-        0 10px 30px rgba(42,132,165,.12);
-}
-
-
-/* =========================================================
-   CARTELA GRID
-   ========================================================= */
-
-.grid{
+.game-layout{
     display:grid;
-    grid-template-columns:repeat(10,1fr);
-    gap:5px;
-}
 
-.num{
-    width:100%;
-    aspect-ratio:1;
+    grid-template-columns:42% 58%;
 
-    border:1px solid #b7ddea;
-    border-radius:8px;
+    gap:7px;
 
-    background:#ffffff;
-
-    color:#17617d;
-
-    font-weight:900;
-    font-size:12px;
-
-    box-shadow:
-        0 2px 4px rgba(33,113,140,.07);
-
-    transition:
-        transform .08s ease,
-        background .12s ease,
-        border-color .12s ease;
-}
-
-.num:active{
-    transform:scale(.91);
-}
-
-
-/* AVAILABLE */
-
-.num.available{
-    background:#ffffff;
-    color:#17617d;
-}
-
-
-/* TAKEN */
-
-.num.taken{
-    background:#ef666b;
-    border-color:#df4c53;
-    color:#ffffff;
-}
-
-
-/* SELECTED */
-
-.num.selected{
-    background:#159fd0;
-    border-color:#087ca9;
-
-    color:#ffffff;
-
-    outline:3px solid rgba(21,159,208,.24);
-    outline-offset:1px;
-
-    box-shadow:
-        0 4px 10px rgba(21,159,208,.25);
+    margin-top:7px;
 }
 
 
 /* =========================================================
-   LEGEND
+   LEFT 75 NUMBER BOARD
    ========================================================= */
 
-.legend{
-    display:flex;
-    justify-content:center;
-    align-items:center;
+.call-board{
+    min-width:0;
 
-    gap:12px;
+    padding:3px;
 
-    margin-top:11px;
+    background:rgba(255,255,255,.20);
 
-    color:#557e8f;
+    border:1px solid rgba(95,172,199,.18);
 
-    font-size:9px;
-    font-weight:700;
+    border-radius:7px;
 }
 
-.legend span{
-    display:flex;
-    align-items:center;
-}
-
-.dot{
-    width:8px;
-    height:8px;
-
-    display:inline-block;
-
-    border-radius:50%;
-
-    margin-right:4px;
-}
-
-
-/* =========================================================
-   ACTION BUTTONS
-   ========================================================= */
-
-.actions{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-
-    gap:8px;
-
-    margin-top:12px;
-}
-
-.action,
-.proceed{
-    border:0;
-
-    border-radius:14px;
-
-    padding:13px;
-
-    font-weight:900;
-    font-size:12px;
-}
-
-.action{
-    background:#ffffff;
-
-    color:#16789f;
-
-    border:1px solid #b5ddea;
-
-    box-shadow:
-        0 4px 10px rgba(38,126,155,.08);
-}
-
-.action:active{
-    transform:scale(.98);
-}
-
-
-/* PROCEED */
-
-.proceed{
-    width:100%;
-
-    margin-top:8px;
-
-    background:
-        linear-gradient(
-            135deg,
-            #16a8da,
-            #087ca9
-        );
-
-    color:#ffffff;
-
-    box-shadow:
-        0 6px 15px rgba(8,124,169,.22);
-}
-
-.proceed:active{
-    transform:scale(.98);
-}
-
-
-/* STATUS */
-
-.status{
-    min-height:20px;
-
-    margin-top:9px;
-
-    text-align:center;
-
-    color:#4c788b;
-
-    font-size:12px;
-    font-weight:600;
-}
-
-
-/* =========================================================
-   BINGO GAME SCREEN
-   ========================================================= */
-
-.game-header{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-
-    margin-top:15px;
-
-    gap:8px;
-}
-
-.game-label{
-    font-size:13px;
-    color:#568196;
-    font-weight:800;
-}
-
-.cartela-badge{
-    padding:7px 11px;
-
-    border-radius:20px;
-
-    background:#ffffff;
-
-    color:#087ca9;
-
-    border:1px solid #b8dfea;
-
-    font-size:11px;
-    font-weight:900;
-}
-
-
-/* =========================================================
-   CURRENT NUMBER
-   ========================================================= */
-
-.current-box{
-    margin-top:13px;
-
-    padding:15px;
-
-    border-radius:20px;
-
-    text-align:center;
-
-    background:#ffffff;
-
-    border:1px solid #b9e1ed;
-
-    box-shadow:
-        0 10px 28px rgba(31,137,176,.12);
-}
-
-.current-title{
-    color:#6791a2;
-
-    font-size:10px;
-    font-weight:800;
-
-    letter-spacing:1px;
-}
-
-.current-number{
-    width:76px;
-    height:76px;
-
-    margin:8px auto 0;
-
-    border-radius:50%;
-
-    display:flex;
-    align-items:center;
-    justify-content:center;
-
-    background:#159fd0;
-
-    color:#ffffff;
-
-    font-size:31px;
-    font-weight:900;
-
-    box-shadow:
-        0 5px 0 rgba(0,0,0,.08),
-        0 10px 25px rgba(21,159,208,.20);
-}
-
-
-/* =========================================================
-   CALLED NUMBERS
-   ========================================================= */
-
-.called-panel{
-    margin-top:11px;
-
-    padding:11px;
-
-    border-radius:17px;
-
-    background:#ffffff;
-
-    border:1px solid #c0e2ec;
-}
-
-.called-title{
-    text-align:center;
-
-    color:#5d8798;
-
-    font-size:10px;
-    font-weight:800;
-
-    margin-bottom:8px;
-
-    letter-spacing:.7px;
-}
-
-.called-list{
-    display:flex;
-    flex-wrap:wrap;
-
-    justify-content:center;
-
-    gap:5px;
-
-    max-height:94px;
-
-    overflow-y:auto;
-}
-
-.called-number{
-    min-width:31px;
-    height:29px;
-
-    padding:0 7px;
-
-    border-radius:8px;
-
-    display:flex;
-    align-items:center;
-    justify-content:center;
-
-    background:#e7f8fd;
-
-    color:#087ca9;
-
-    font-size:11px;
-    font-weight:900;
-}
-
-.empty-called{
-    color:#7194a2;
-
-    font-size:11px;
-
-    padding:7px;
-}
-
-
-/* =========================================================
-   BINGO CARD
-   ========================================================= */
-
-.bingo-card{
-    margin-top:14px;
-
-    padding:10px;
-
-    border-radius:21px;
-
-    background:#ffffff;
-
-    box-shadow:
-        0 12px 35px rgba(20,100,130,.15),
-        inset 0 0 0 1px rgba(0,0,0,.03);
-}
-
-.bingo-head{
+.call-head{
     display:grid;
 
     grid-template-columns:repeat(5,1fr);
 
-    gap:5px;
+    gap:3px;
 
-    margin-bottom:5px;
+    margin-bottom:4px;
 }
 
-.bingo-head div{
+.call-head div{
     height:38px;
 
     display:flex;
     align-items:center;
     justify-content:center;
 
-    border-radius:10px;
+    border-radius:6px;
 
-    background:#159fd0;
+    color:#fff;
 
-    color:#ffffff;
-
-    font-size:18px;
+    font-size:17px;
     font-weight:900;
 }
 
-.bingo-grid{
+
+/* B I N G O header colors */
+
+.call-head .b{
+    background:#11952f;
+}
+
+.call-head .i{
+    background:#f58b28;
+}
+
+.call-head .n{
+    background:#132fe0;
+}
+
+.call-head .g{
+    background:#ed1118;
+}
+
+.call-head .o{
+    background:#86127d;
+}
+
+
+.call-grid{
     display:grid;
 
     grid-template-columns:repeat(5,1fr);
 
-    gap:5px;
+    gap:3px;
 }
 
-.bingo-cell{
-    position:relative;
-
-    min-height:57px;
-
-    border-radius:11px;
+.call-number{
+    height:46px;
 
     display:flex;
     align-items:center;
     justify-content:center;
 
-    background:#ffffff;
+    border-radius:7px;
 
-    color:#18495b;
+    background:#c9c9e5;
 
-    border:2px solid #d7edf3;
+    border:1px solid rgba(255,255,255,.85);
+
+    color:#ffffff;
+
+    font-size:15px;
+    font-weight:900;
+
+    transition:
+        background .15s ease,
+        transform .1s ease;
+}
+
+
+/* called numbers */
+
+.call-number.called{
+    color:#fff;
+}
+
+
+/* Current number gets stronger highlight */
+
+.call-number.current{
+    background:#10a83d !important;
+
+    box-shadow:
+        0 0 0 2px rgba(255,255,255,.8);
+
+    transform:scale(1.02);
+}
+
+
+/* Number color based on BINGO column */
+
+.call-number.b-called{
+    background:#28a93d;
+}
+
+.call-number.i-called{
+    background:#f58b28;
+}
+
+.call-number.n-called{
+    background:#152fe0;
+}
+
+.call-number.g-called{
+    background:#ed1118;
+}
+
+.call-number.o-called{
+    background:#86127d;
+}
+
+
+/* =========================================================
+   RIGHT SIDE
+   ========================================================= */
+
+.right-side{
+    min-width:0;
+}
+
+
+/* =========================================================
+   CURRENT CALL
+   ========================================================= */
+
+.current-call{
+    min-height:75px;
+
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+
+    padding:8px 10px 8px 14px;
+
+    border-radius:40px;
+
+    background:#8a007f;
+
+    color:#ffffff;
+
+    box-shadow:
+        0 5px 15px rgba(105,0,100,.16);
+}
+
+.current-call-title{
+    font-size:20px;
+    font-weight:900;
+}
+
+.current-ball{
+    width:60px;
+    height:60px;
+
+    flex-shrink:0;
+
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    background:#ff8a00;
+
+    color:#fff;
 
     font-size:17px;
     font-weight:900;
 
     box-shadow:
-        0 2px 4px rgba(0,0,0,.05);
-}
-
-.bingo-cell.marked{
-    background:#28b978;
-
-    color:#ffffff;
-
-    border-color:#20a668;
-}
-
-.bingo-cell.current-mark{
-    background:#4ec7ed;
-
-    color:#073f55;
-
-    border-color:#27afd8;
-
-    box-shadow:
-        0 0 0 3px rgba(78,199,237,.25),
-        0 3px 7px rgba(0,0,0,.10);
-}
-
-.bingo-cell.free{
-    background:#159fd0;
-
-    color:#ffffff;
-
-    border-color:#159fd0;
-
-    font-size:11px;
-
-    letter-spacing:.4px;
-}
-
-.bingo-cell.winner-cell{
-    background:#ffd84d;
-
-    color:#315064;
-
-    border-color:#f1bd00;
-
-    box-shadow:
-        0 0 0 3px rgba(255,216,77,.35),
-        0 4px 9px rgba(0,0,0,.14);
+        inset 0 -3px 0 rgba(0,0,0,.08);
 }
 
 
 /* =========================================================
-   GAME STATUS
+   RECENT CALLS
    ========================================================= */
 
-.game-status{
-    margin-top:11px;
+.recent-box{
+    margin-top:10px;
+
+    min-height:74px;
+
+    padding:8px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border-radius:13px;
+
+    background:rgba(255,255,255,.62);
+
+    border:1px solid rgba(255,255,255,.9);
+}
+
+.recent-list{
+    display:flex;
+
+    justify-content:center;
+    align-items:center;
+
+    gap:7px;
+
+    flex-wrap:wrap;
+}
+
+.recent-ball{
+    width:49px;
+    height:49px;
+
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    color:#fff;
+
+    font-size:12px;
+    font-weight:900;
+}
+
+.recent-ball.b{
+    background:#1233df;
+}
+
+.recent-ball.i{
+    background:#f58b28;
+}
+
+.recent-ball.n{
+    background:#1233df;
+}
+
+.recent-ball.g{
+    background:#ed1118;
+}
+
+.recent-ball.o{
+    background:#86127d;
+}
+
+
+/* =========================================================
+   AUTO
+   ========================================================= */
+
+.auto-box{
+    height:47px;
+
+    margin-top:10px;
+
+    padding:6px 10px;
+
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+
+    gap:10px;
+
+    border-radius:11px;
+
+    background:rgba(255,255,255,.52);
+
+    border:1px solid rgba(255,255,255,.85);
+
+    color:#333;
+
+    font-size:14px;
+    font-weight:900;
+}
+
+.auto-switch{
+    width:61px;
+    height:30px;
+
+    position:relative;
+
+    border-radius:20px;
+
+    background:#49b75d;
+}
+
+.auto-switch::after{
+    content:"";
+
+    position:absolute;
+
+    top:4px;
+    right:4px;
+
+    width:22px;
+    height:22px;
+
+    border-radius:50%;
+
+    background:#ffffff;
+
+    box-shadow:0 1px 3px rgba(0,0,0,.20);
+}
+
+
+/* =========================================================
+   MESSAGE AREA
+   ========================================================= */
+
+.waiting-area{
+    min-height:225px;
+
+    margin-top:10px;
+
+    padding:18px 10px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
 
     text-align:center;
 
-    color:#5c8697;
+    background:rgba(218,199,250,.55);
+
+    border:1px solid rgba(255,255,255,.35);
+
+    border-radius:3px;
+}
+
+.waiting-message{
+    color:#74127b;
+
+    font-size:19px;
+    font-weight:900;
+
+    line-height:1.35;
+}
+
+
+/* =========================================================
+   CHOSEN CARTELA
+   ========================================================= */
+
+.chosen-box{
+    margin-top:10px;
+
+    padding:10px;
+
+    border-radius:14px;
+
+    background:#ffffff;
+
+    border:1px solid #b9dfeb;
+
+    text-align:center;
+
+    box-shadow:
+        0 5px 15px rgba(30,120,150,.10);
+}
+
+.chosen-label{
+    color:#62899a;
+
+    font-size:10px;
+    font-weight:900;
+
+    letter-spacing:.5px;
+}
+
+.chosen-number{
+    margin-top:3px;
+
+    color:#087ca9;
+
+    font-size:20px;
+    font-weight:900;
+}
+
+
+/* =========================================================
+   PLAYER BINGO CARD
+   ========================================================= */
+
+.player-card{
+    margin-top:8px;
+
+    padding:7px;
+
+    border-radius:14px;
+
+    background:#ffffff;
+
+    border:1px solid #b9dfeb;
+}
+
+.player-card-head{
+    display:grid;
+
+    grid-template-columns:repeat(5,1fr);
+
+    gap:3px;
+
+    margin-bottom:3px;
+}
+
+.player-card-head div{
+    height:25px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border-radius:5px;
+
+    background:#159fd0;
+
+    color:#ffffff;
+
+    font-size:12px;
+    font-weight:900;
+}
+
+.player-card-grid{
+    display:grid;
+
+    grid-template-columns:repeat(5,1fr);
+
+    gap:3px;
+}
+
+.player-cell{
+    min-height:39px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border-radius:6px;
+
+    background:#f0f9fc;
+
+    border:1px solid #d2e9ef;
+
+    color:#18495b;
+
+    font-size:13px;
+    font-weight:900;
+}
+
+.player-cell.marked{
+    background:#29b978;
+
+    border-color:#20a567;
+
+    color:#ffffff;
+}
+
+.player-cell.current{
+    background:#4ec7ed;
+
+    color:#06445a;
+
+    box-shadow:
+        0 0 0 2px rgba(78,199,237,.25);
+}
+
+.player-cell.free{
+    background:#159fd0;
+
+    border-color:#159fd0;
+
+    color:#fff;
+
+    font-size:9px;
+}
+
+
+/* =========================================================
+   BOTTOM BUTTONS
+   ========================================================= */
+
+.bottom-actions{
+    display:grid;
+
+    grid-template-columns:1fr 1fr;
+
+    gap:7px;
+
+    margin-top:9px;
+}
+
+.bottom-button{
+    border:0;
+
+    border-radius:12px;
+
+    padding:12px 8px;
+
+    background:#ffffff;
+
+    border:1px solid #afd9e7;
+
+    color:#087ca9;
+
+    font-size:12px;
+    font-weight:900;
+
+    box-shadow:
+        0 4px 10px rgba(30,120,150,.08);
+}
+
+.bottom-button:active{
+    transform:scale(.98);
+}
+
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+.game-status{
+    min-height:18px;
+
+    margin-top:8px;
+
+    text-align:center;
+
+    color:#5d8798;
 
     font-size:11px;
-
-    min-height:18px;
+    font-weight:700;
 }
 
 
@@ -671,24 +681,24 @@ button{
    ========================================================= */
 
 .game-over{
-    margin-top:15px;
+    margin-top:20px;
 
-    padding:22px 14px;
+    padding:25px 15px;
 
-    border-radius:22px;
+    border-radius:20px;
 
     background:#ffffff;
 
-    border:1px solid #bfe2ec;
+    border:1px solid #b9dfeb;
 
     text-align:center;
 
     box-shadow:
-        0 10px 30px rgba(31,137,176,.12);
+        0 10px 30px rgba(30,120,150,.12);
 }
 
 .trophy{
-    font-size:42px;
+    font-size:45px;
 }
 
 .game-over h2{
@@ -696,7 +706,7 @@ button{
 
     color:#087ca9;
 
-    font-size:24px;
+    font-size:25px;
 }
 
 .game-over p{
@@ -737,30 +747,103 @@ button{
    SMALL PHONES
    ========================================================= */
 
-@media(max-width:360px){
+@media(max-width:380px){
 
     .app{
-        padding-left:8px;
-        padding-right:8px;
+        padding-left:5px;
+        padding-right:5px;
     }
 
-    .grid{
-        gap:4px;
+    .game-layout{
+        grid-template-columns:42% 58%;
+        gap:5px;
     }
 
-    .num{
-        font-size:10px;
-        border-radius:7px;
+    .call-head{
+        gap:2px;
     }
 
-    .bingo-cell{
-        min-height:51px;
+    .call-grid{
+        gap:2px;
+    }
+
+    .call-number{
+        height:43px;
+        font-size:13px;
+        border-radius:6px;
+    }
+
+    .call-head div{
+        height:34px;
         font-size:15px;
     }
 
-    .bingo-head div{
-        height:34px;
+    .current-call{
+        padding-left:10px;
+    }
+
+    .current-call-title{
         font-size:16px;
+    }
+
+    .current-ball{
+        width:52px;
+        height:52px;
+        font-size:14px;
+    }
+
+    .recent-ball{
+        width:42px;
+        height:42px;
+        font-size:10px;
+    }
+
+    .waiting-area{
+        min-height:190px;
+    }
+
+    .waiting-message{
+        font-size:16px;
+    }
+
+    .player-cell{
+        min-height:34px;
+        font-size:11px;
+    }
+
+}
+
+
+/* VERY SMALL PHONES */
+
+@media(max-width:330px){
+
+    .info-label{
+        font-size:8px;
+    }
+
+    .info-value{
+        font-size:13px;
+    }
+
+    .call-number{
+        height:39px;
+        font-size:11px;
+    }
+
+    .call-head div{
+        height:31px;
+        font-size:13px;
+    }
+
+    .current-call-title{
+        font-size:14px;
+    }
+
+    .current-ball{
+        width:47px;
+        height:47px;
+        font-size:12px;
     }
 
 }
@@ -774,202 +857,94 @@ button{
 <main class="app">
 
 
+<!-- =====================================================
+     TOP INFORMATION
+     ===================================================== -->
+
+<div class="top">
+
+    <div class="info-box">
+        <span class="info-label">Players</span>
+        <span id="players" class="info-value">0</span>
+    </div>
+
+    <div class="info-box">
+        <span class="info-label">Derash</span>
+        <span id="derash" class="info-value">0</span>
+    </div>
+
+    <div class="info-box">
+        <span class="info-label">Bet</span>
+        <span id="bet" class="info-value">100</span>
+    </div>
+
+    <div class="info-box">
+        <span class="info-label">Call Count</span>
+        <span id="callCount" class="info-value">0</span>
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     GAME AREA
+     ===================================================== -->
+
+<section id="gameView">
+
+
+<div class="game-layout">
+
+
     <!-- =================================================
-         TOP INFORMATION
+         LEFT: 1-75 CALLING BOARD
          ================================================= -->
 
-    <div class="top">
+    <div class="call-board">
 
-        <button class="pill">
-            💰 WALLET
-            <b id="wallet">1,000</b>
-        </button>
+        <div class="call-head">
+            <div class="b">B</div>
+            <div class="i">I</div>
+            <div class="n">N</div>
+            <div class="g">G</div>
+            <div class="o">O</div>
+        </div>
 
-        <button class="pill">
-            👥 PLAYERS
-            <b id="players">0</b>
-        </button>
-
-        <button class="pill">
-            🎮 GAME
-            <b id="game">1</b>
-        </button>
+        <div id="callGrid" class="call-grid"></div>
 
     </div>
 
 
     <!-- =================================================
-         CARTELA SELECTION
+         RIGHT SIDE
          ================================================= -->
 
-    <section id="selectionView">
-
-        <div class="title">
-            Choose Your Cartela
-        </div>
-
-        <div class="sub">
-            Select one available Cartela
-        </div>
+    <div class="right-side">
 
 
-        <!-- TIMER -->
+        <!-- CURRENT CALL -->
 
-        <div class="timer">
+        <div class="current-call">
 
-            <strong id="t">
-                30
-            </strong>
-
-            <small>
-                SECONDS
-            </small>
-
-        </div>
-
-
-        <!-- CARTELA GRID -->
-
-        <section class="panel">
-
-            <div id="grid" class="grid"></div>
-
-
-            <div class="legend">
-
-                <span>
-                    <i
-                        class="dot"
-                        style="background:#ffffff;border:1px solid #b7ddea"
-                    ></i>
-                    Available
-                </span>
-
-                <span>
-                    <i
-                        class="dot"
-                        style="background:#ef666b"
-                    ></i>
-                    Taken
-                </span>
-
-                <span>
-                    <i
-                        class="dot"
-                        style="background:#159fd0"
-                    ></i>
-                    Selected
-                </span>
-
+            <div class="current-call-title">
+                Current Call
             </div>
 
-        </section>
-
-
-        <!-- ACTION BUTTONS -->
-
-        <div class="actions">
-
-            <button
-                class="action"
-                onclick="backToRooms()"
-            >
-                ← Back to Rooms
-            </button>
-
-            <button
-                class="action"
-                onclick="loadState()"
-            >
-                ↻ Refresh
-            </button>
-
-        </div>
-
-
-        <button
-            class="proceed"
-            onclick="proceed()"
-        >
-            PROCEED
-        </button>
-
-
-        <div
-            id="s"
-            class="status"
-        >
-            No Cartela selected
-        </div>
-
-    </section>
-
-
-    <!-- =================================================
-         BINGO GAME
-         ================================================= -->
-
-    <section
-        id="gameView"
-        class="hidden"
-    >
-
-        <div class="title">
-            Bingo Game
-        </div>
-
-        <div class="sub">
-            Your card is ready
-        </div>
-
-
-        <div class="game-header">
-
-            <div class="game-label">
-                🔵 Live Game
-            </div>
-
-            <div class="cartela-badge">
-                🎫 Cartela
-                <span id="myCartela">-</span>
-            </div>
-
-        </div>
-
-
-        <!-- CURRENT NUMBER -->
-
-        <div class="current-box">
-
-            <div class="current-title">
-                CURRENT NUMBER
-            </div>
-
-            <div
-                id="currentNumber"
-                class="current-number"
-            >
+            <div id="currentBall" class="current-ball">
                 —
             </div>
 
         </div>
 
 
-        <!-- CALLED NUMBERS -->
+        <!-- RECENT CALLS -->
 
-        <div class="called-panel">
+        <div class="recent-box">
 
-            <div class="called-title">
-                CALLED NUMBERS
-            </div>
+            <div id="recentList" class="recent-list">
 
-            <div
-                id="calledList"
-                class="called-list"
-            >
-
-                <div class="empty-called">
-                    Waiting for the first number...
+                <div class="recent-ball n">
+                    —
                 </div>
 
             </div>
@@ -977,81 +952,144 @@ button{
         </div>
 
 
-        <!-- BINGO CARD -->
+        <!-- AUTO -->
 
-        <div class="bingo-card">
+        <div class="auto-box">
 
-            <div class="bingo-head">
+            <span>
+                Auto
+            </span>
 
+            <div class="auto-switch"></div>
+
+        </div>
+
+
+        <!-- WAITING / GAME MESSAGE -->
+
+        <div class="waiting-area">
+
+            <div id="waitingMessage" class="waiting-message">
+                Waiting for the game...
+            </div>
+
+        </div>
+
+
+        <!-- CHOSEN CARTELA -->
+
+        <div class="chosen-box">
+
+            <div class="chosen-label">
+                CHOSEN CARTELA
+            </div>
+
+            <div id="chosenCartela" class="chosen-number">
+                —
+            </div>
+
+        </div>
+
+
+        <!-- PLAYER CARD -->
+
+        <div class="player-card">
+
+            <div class="player-card-head">
                 <div>B</div>
                 <div>I</div>
                 <div>N</div>
                 <div>G</div>
                 <div>O</div>
-
             </div>
 
-            <div
-                id="bingoGrid"
-                class="bingo-grid"
-            ></div>
+            <div id="playerCardGrid" class="player-card-grid"></div>
 
         </div>
 
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     BUTTONS
+     ===================================================== -->
+
+<div class="bottom-actions">
+
+    <button
+        class="bottom-button"
+        onclick="backToRooms()"
+    >
+        ← Leave
+    </button>
+
+    <button
+        class="bottom-button"
+        onclick="loadState()"
+    >
+        ↻ Refresh
+    </button>
+
+</div>
+
+
+<div
+    id="gameStatus"
+    class="game-status"
+>
+    Numbers are called automatically.
+</div>
+
+
+</section>
+
+
+<!-- =====================================================
+     GAME OVER
+     ===================================================== -->
+
+<section
+    id="gameOverView"
+    class="hidden"
+>
+
+    <div class="game-over">
+
+        <div class="trophy">
+            🏆
+        </div>
+
+        <h2 id="winnerTitle">
+            Game Over
+        </h2>
+
+        <p id="winnerText">
+            The Bingo game has ended.
+        </p>
 
         <div
-            id="gameStatus"
-            class="game-status"
+            id="prize"
+            class="prize hidden"
         >
-            Numbers are called automatically.
+            Prize: 0
         </div>
 
-    </section>
+        <p>
+            Preparing the next game...
+        </p>
 
+    </div>
 
-    <!-- =================================================
-         GAME OVER
-         ================================================= -->
+</section>
 
-    <section
-        id="gameOverView"
-        class="hidden"
-    >
-
-        <div class="game-over">
-
-            <div class="trophy">
-                🏆
-            </div>
-
-            <h2 id="winnerTitle">
-                Game Over
-            </h2>
-
-            <p id="winnerText">
-                The game has ended.
-            </p>
-
-            <div
-                id="prize"
-                class="prize hidden"
-            >
-                Prize: 0
-            </div>
-
-            <p>
-                Preparing the next Cartela selection...
-            </p>
-
-        </div>
-
-    </section>
 
 </main>
 
 
 <script>
-
 
 /* =========================================================
    TELEGRAM
@@ -1063,7 +1101,6 @@ const tg =
         ? window.Telegram.WebApp
         : null;
 
-
 if(tg){
 
     tg.ready();
@@ -1074,7 +1111,7 @@ if(tg){
 
 
 /* =========================================================
-   DEFAULT STATE
+   STATE
    ========================================================= */
 
 let state = {
@@ -1108,54 +1145,48 @@ let state = {
 };
 
 
-let localSelected = null;
-
-
 /* =========================================================
    ELEMENTS
    ========================================================= */
 
-const grid =
-    document.getElementById("grid");
-
-const timerElement =
-    document.getElementById("t");
-
-const statusElement =
-    document.getElementById("s");
-
-const walletElement =
-    document.getElementById("wallet");
-
 const playersElement =
     document.getElementById("players");
 
-const gameElement =
-    document.getElementById("game");
+const derashElement =
+    document.getElementById("derash");
 
-const selectionView =
-    document.getElementById("selectionView");
+const betElement =
+    document.getElementById("bet");
+
+const callCountElement =
+    document.getElementById("callCount");
+
+const callGrid =
+    document.getElementById("callGrid");
+
+const currentBall =
+    document.getElementById("currentBall");
+
+const recentList =
+    document.getElementById("recentList");
+
+const chosenCartela =
+    document.getElementById("chosenCartela");
+
+const playerCardGrid =
+    document.getElementById("playerCardGrid");
+
+const gameStatus =
+    document.getElementById("gameStatus");
+
+const waitingMessage =
+    document.getElementById("waitingMessage");
 
 const gameView =
     document.getElementById("gameView");
 
 const gameOverView =
     document.getElementById("gameOverView");
-
-const bingoGrid =
-    document.getElementById("bingoGrid");
-
-const currentNumber =
-    document.getElementById("currentNumber");
-
-const calledList =
-    document.getElementById("calledList");
-
-const myCartela =
-    document.getElementById("myCartela");
-
-const gameStatus =
-    document.getElementById("gameStatus");
 
 
 /* =========================================================
@@ -1191,7 +1222,6 @@ async function api(url, options = {}){
 
 
         return await response.json();
-
 
     }catch(error){
 
@@ -1243,64 +1273,46 @@ async function loadState(){
 
 function renderAll(){
 
-    walletElement.textContent =
-        formatNumber(
-            state.wallet
-        );
-
-
     playersElement.textContent =
         state.players ?? 0;
 
 
-    gameElement.textContent =
-        state.game ?? 1;
+    /*
+       Current backend calculates the prize
+       from players. We display that as Derash
+       until we add a dedicated money field.
+    */
 
-
-    timerElement.textContent =
-        Math.max(
-            0,
-            state.timer ?? 0
+    const pool =
+        Number(state.prize || 0) ||
+        (
+            Number(state.players || 0) * 100
         );
 
 
-    if(state.phase === "selection"){
-
-        selectionView.classList.remove(
-            "hidden"
-        );
-
-        gameView.classList.add(
-            "hidden"
-        );
-
-        gameOverView.classList.add(
-            "hidden"
-        );
+    derashElement.textContent =
+        formatNumber(pool);
 
 
-        renderCartelas();
+    /*
+       Current game stake used by the backend.
+    */
+
+    betElement.textContent =
+        "100";
 
 
-        if(state.selected){
-
-            localSelected =
-                state.selected;
-
-
-            statusElement.textContent =
-                "Cartela " +
-                state.selected +
-                " selected";
-
-        }
+    const called =
+        Array.isArray(state.called)
+            ? state.called
+            : [];
 
 
-    }else if(state.phase === "playing"){
+    callCountElement.textContent =
+        called.length;
 
-        selectionView.classList.add(
-            "hidden"
-        );
+
+    if(state.phase === "playing"){
 
         gameView.classList.remove(
             "hidden"
@@ -1310,15 +1322,9 @@ function renderAll(){
             "hidden"
         );
 
-
         renderGame();
 
-
     }else if(state.phase === "finished"){
-
-        selectionView.classList.add(
-            "hidden"
-        );
 
         gameView.classList.add(
             "hidden"
@@ -1328,182 +1334,260 @@ function renderAll(){
             "hidden"
         );
 
-
         renderGameOver();
-
-    }
-
-}
-
-
-/* =========================================================
-   CARTELA GRID
-   ========================================================= */
-
-function renderCartelas(){
-
-    grid.innerHTML = "";
-
-
-    const taken =
-        new Set(
-            state.taken || []
-        );
-
-
-    for(
-        let n = 1;
-        n <= 100;
-        n++
-    ){
-
-        const button =
-            document.createElement(
-                "button"
-            );
-
-
-        button.className =
-            "num available";
-
-
-        button.textContent =
-            n;
-
-
-        if(taken.has(n)){
-
-            button.classList.remove(
-                "available"
-            );
-
-            button.classList.add(
-                "taken"
-            );
-
-        }
-
-
-        if(
-            Number(state.selected) === n ||
-            Number(localSelected) === n
-        ){
-
-            button.classList.remove(
-                "available"
-            );
-
-            button.classList.remove(
-                "taken"
-            );
-
-            button.classList.add(
-                "selected"
-            );
-
-        }
-
-
-        button.onclick =
-            () => selectCartela(n);
-
-
-        grid.appendChild(
-            button
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   SELECT CARTELA
-   ========================================================= */
-
-async function selectCartela(number){
-
-    const taken =
-        new Set(
-            state.taken || []
-        );
-
-
-    const alreadyMine =
-        Number(state.selected) === number;
-
-
-    if(
-        taken.has(number) &&
-        !alreadyMine
-    ){
-
-        showStatus(
-            "Cartela " +
-            number +
-            " is already taken."
-        );
-
-        return;
-
-    }
-
-
-    const data =
-        await api(
-            "/api/select",
-            {
-                method:"POST",
-
-                body:JSON.stringify({
-                    cartela:number
-                })
-            }
-        );
-
-
-    if(data){
-
-        state = {
-
-            ...state,
-
-            ...data
-
-        };
-
-
-        localSelected =
-            state.selected;
-
-
-        renderAll();
-
-
-        showStatus(
-            "Cartela " +
-            number +
-            " selected"
-        );
-
 
     }else{
 
-        localSelected =
-            number;
+        /*
+           If this page is opened during selection,
+           the existing selection screen should still
+           be used by the deployed version.
+        */
+
+        window.location.reload();
+
+    }
+
+}
 
 
-        state.selected =
-            number;
+/* =========================================================
+   NUMBER -> BINGO LETTER
+   ========================================================= */
+
+function bingoLetter(number){
+
+    number =
+        Number(number);
 
 
-        renderCartelas();
+    if(number >= 1 && number <= 15){
+        return "B";
+    }
+
+    if(number >= 16 && number <= 30){
+        return "I";
+    }
+
+    if(number >= 31 && number <= 45){
+        return "N";
+    }
+
+    if(number >= 46 && number <= 60){
+        return "G";
+    }
+
+    if(number >= 61 && number <= 75){
+        return "O";
+    }
+
+    return "";
+
+}
 
 
-        showStatus(
-            "Cartela " +
-            number +
-            " selected"
+/* =========================================================
+   COLUMN CLASS
+   ========================================================= */
+
+function columnClass(number){
+
+    const letter =
+        bingoLetter(number);
+
+    return (
+        letter
+            ? letter.toLowerCase()
+            : ""
+    );
+
+}
+
+
+/* =========================================================
+   RENDER 1-75 BOARD
+   ========================================================= */
+
+function renderCallingBoard(){
+
+    callGrid.innerHTML = "";
+
+
+    const called =
+        new Set(
+            (state.called || [])
+                .map(Number)
+        );
+
+
+    const current =
+        Number(state.current);
+
+
+    /*
+       1-15 B
+       16-30 I
+       31-45 N
+       46-60 G
+       61-75 O
+
+       We display it row-by-row:
+       1 16 31 46 61
+       2 17 32 47 62
+       ...
+       15 30 45 60 75
+    */
+
+    for(let row = 0; row < 15; row++){
+
+        for(let col = 0; col < 5; col++){
+
+            const number =
+                row + 1 + (col * 15);
+
+
+            const cell =
+                document.createElement(
+                    "div"
+                );
+
+
+            cell.className =
+                "call-number";
+
+
+            if(called.has(number)){
+
+                cell.classList.add(
+                    columnClass(number) +
+                    "-called"
+                );
+
+                cell.classList.add(
+                    "called"
+                );
+
+            }
+
+
+            if(number === current){
+
+                cell.classList.add(
+                    "current"
+                );
+
+            }
+
+
+            cell.textContent =
+                number;
+
+
+            callGrid.appendChild(
+                cell
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   RENDER CURRENT CALL
+   ========================================================= */
+
+function renderCurrentCall(){
+
+    const current =
+        Number(state.current);
+
+
+    if(!current){
+
+        currentBall.textContent =
+            "—";
+
+        return;
+
+    }
+
+
+    currentBall.textContent =
+        bingoLetter(current) +
+        "-" +
+        current;
+
+}
+
+
+/* =========================================================
+   RENDER RECENT CALLS
+   ========================================================= */
+
+function renderRecentCalls(){
+
+    recentList.innerHTML = "";
+
+
+    const numbers =
+        Array.isArray(state.called)
+            ? [...state.called].reverse()
+            : [];
+
+
+    /*
+       Show the three most recent calls,
+       just like the reference design.
+    */
+
+    numbers
+        .slice(0,3)
+        .forEach(number => {
+
+            const ball =
+                document.createElement(
+                    "div"
+                );
+
+
+            ball.className =
+                "recent-ball " +
+                columnClass(number);
+
+
+            ball.textContent =
+                bingoLetter(number) +
+                "-" +
+                number;
+
+
+            recentList.appendChild(
+                ball
+            );
+
+        });
+
+
+    if(numbers.length === 0){
+
+        const ball =
+            document.createElement(
+                "div"
+            );
+
+
+        ball.className =
+            "recent-ball n";
+
+
+        ball.textContent =
+            "—";
+
+
+        recentList.appendChild(
+            ball
         );
 
     }
@@ -1512,28 +1596,246 @@ async function selectCartela(number){
 
 
 /* =========================================================
-   PROCEED
+   RENDER PLAYER CARD
    ========================================================= */
 
-function proceed(){
+function renderPlayerCard(){
 
-    if(
-        !state.selected &&
-        !localSelected
-    ){
+    playerCardGrid.innerHTML = "";
 
-        showStatus(
-            "Please select a Cartela first."
-        );
+
+    let card =
+        state.card;
+
+
+    if(!card){
+
+        renderEmptyPlayerCard();
 
         return;
 
     }
 
 
-    showStatus(
-        "Waiting for Cartela selection to close..."
-    );
+    /*
+       Support both:
+       5 arrays of 5
+       OR flat 25-number array.
+    */
+
+    if(
+        Array.isArray(card) &&
+        card.length === 25
+    ){
+
+        card = [
+
+            card.slice(0,5),
+
+            card.slice(5,10),
+
+            card.slice(10,15),
+
+            card.slice(15,20),
+
+            card.slice(20,25)
+
+        ];
+
+    }
+
+
+    if(
+        !Array.isArray(card) ||
+        card.length !== 5
+    ){
+
+        renderEmptyPlayerCard();
+
+        return;
+
+    }
+
+
+    const called =
+        new Set(
+            (state.called || [])
+                .map(Number)
+        );
+
+
+    const current =
+        Number(state.current);
+
+
+    for(let row = 0; row < 5; row++){
+
+        for(let col = 0; col < 5; col++){
+
+            const cell =
+                document.createElement(
+                    "div"
+                );
+
+
+            cell.className =
+                "player-cell";
+
+
+            const value =
+                card[row][col];
+
+
+            /*
+               Center is FREE.
+            */
+
+            if(
+                row === 2 &&
+                col === 2
+            ){
+
+                cell.classList.add(
+                    "free"
+                );
+
+                cell.textContent =
+                    "FREE";
+
+
+            }else{
+
+                cell.textContent =
+                    value;
+
+
+                const number =
+                    Number(value);
+
+
+                if(called.has(number)){
+
+                    cell.classList.add(
+                        "marked"
+                    );
+
+                }
+
+
+                if(
+                    number === current &&
+                    current
+                ){
+
+                    cell.classList.add(
+                        "current"
+                    );
+
+                }
+
+            }
+
+
+            playerCardGrid.appendChild(
+                cell
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   EMPTY PLAYER CARD
+   ========================================================= */
+
+function renderEmptyPlayerCard(){
+
+    for(let i = 0; i < 25; i++){
+
+        const cell =
+            document.createElement(
+                "div"
+            );
+
+
+        cell.className =
+            "player-cell";
+
+
+        if(i === 12){
+
+            cell.classList.add(
+                "free"
+            );
+
+            cell.textContent =
+                "FREE";
+
+        }else{
+
+            cell.textContent =
+                "—";
+
+        }
+
+
+        playerCardGrid.appendChild(
+            cell
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   RENDER GAME
+   ========================================================= */
+
+function renderGame(){
+
+    renderCallingBoard();
+
+    renderCurrentCall();
+
+    renderRecentCalls();
+
+    renderPlayerCard();
+
+
+    chosenCartela.textContent =
+        state.cartela ||
+        state.selected ||
+        "—";
+
+
+    if(state.current){
+
+        waitingMessage.textContent =
+            "Dear Player,\n\n" +
+            "Game is in progress";
+
+
+        gameStatus.textContent =
+            "Current call: " +
+            bingoLetter(state.current) +
+            "-" +
+            state.current;
+
+    }else{
+
+        waitingMessage.textContent =
+            "Dear Player,\n\n" +
+            "Please wait for the first call";
+
+
+        gameStatus.textContent =
+            "Waiting for the first number...";
+
+    }
 
 }
 
@@ -1546,7 +1848,7 @@ async function backToRooms(){
 
     const confirmed =
         confirm(
-            "Leave your current Cartela?"
+            "Leave your current game?"
         );
 
 
@@ -1577,333 +1879,7 @@ async function backToRooms(){
         };
 
 
-        localSelected =
-            null;
-
-
         renderAll();
-
-
-    }else{
-
-        showStatus(
-            "Unable to leave right now."
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   BINGO GAME
-   ========================================================= */
-
-function renderGame(){
-
-    myCartela.textContent =
-        state.cartela ||
-        state.selected ||
-        "-";
-
-
-    currentNumber.textContent =
-        state.current ||
-        "—";
-
-
-    renderCalledNumbers();
-
-    renderBingoCard();
-
-
-    if(state.current){
-
-        gameStatus.textContent =
-            "Number " +
-            state.current +
-            " was called.";
-
-    }else{
-
-        gameStatus.textContent =
-            "Waiting for the first number...";
-
-    }
-
-}
-
-
-/* =========================================================
-   CALLED NUMBERS
-   ========================================================= */
-
-function renderCalledNumbers(){
-
-    calledList.innerHTML = "";
-
-
-    const numbers =
-        Array.isArray(state.called)
-            ? state.called
-            : [];
-
-
-    if(numbers.length === 0){
-
-        const empty =
-            document.createElement(
-                "div"
-            );
-
-
-        empty.className =
-            "empty-called";
-
-
-        empty.textContent =
-            "Waiting for the first number...";
-
-
-        calledList.appendChild(
-            empty
-        );
-
-
-        return;
-
-    }
-
-
-    const reversed =
-        [...numbers].reverse();
-
-
-    reversed.forEach(
-        number => {
-
-            const item =
-                document.createElement(
-                    "div"
-                );
-
-
-            item.className =
-                "called-number";
-
-
-            item.textContent =
-                number;
-
-
-            calledList.appendChild(
-                item
-            );
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   BINGO CARD
-   ========================================================= */
-
-function renderBingoCard(){
-
-    bingoGrid.innerHTML = "";
-
-
-    let card =
-        state.card;
-
-
-    if(!card){
-
-        renderEmptyCard();
-
-        return;
-
-    }
-
-
-    if(
-        Array.isArray(card) &&
-        card.length === 25
-    ){
-
-        card = [
-
-            card.slice(0,5),
-
-            card.slice(5,10),
-
-            card.slice(10,15),
-
-            card.slice(15,20),
-
-            card.slice(20,25)
-
-        ];
-
-    }
-
-
-    if(
-        !Array.isArray(card) ||
-        card.length !== 5
-    ){
-
-        renderEmptyCard();
-
-        return;
-
-    }
-
-
-    const called =
-        new Set(
-            (state.called || [])
-                .map(Number)
-        );
-
-
-    const current =
-        Number(
-            state.current
-        );
-
-
-    for(
-        let row = 0;
-        row < 5;
-        row++
-    ){
-
-        for(
-            let col = 0;
-            col < 5;
-            col++
-        ){
-
-            const cell =
-                document.createElement(
-                    "div"
-                );
-
-
-            cell.className =
-                "bingo-cell";
-
-
-            const value =
-                card[row][col];
-
-
-            if(
-                row === 2 &&
-                col === 2
-            ){
-
-                cell.classList.add(
-                    "free"
-                );
-
-
-                cell.textContent =
-                    "FREE";
-
-
-            }else{
-
-                cell.textContent =
-                    value;
-
-
-                const number =
-                    Number(value);
-
-
-                if(
-                    called.has(number)
-                ){
-
-                    cell.classList.add(
-                        "marked"
-                    );
-
-                }
-
-
-                if(
-                    number === current &&
-                    current
-                ){
-
-                    cell.classList.add(
-                        "current-mark"
-                    );
-
-                }
-
-            }
-
-
-            bingoGrid.appendChild(
-                cell
-            );
-
-        }
-
-    }
-
-}
-
-
-/* =========================================================
-   EMPTY CARD
-   ========================================================= */
-
-function renderEmptyCard(){
-
-    for(
-        let i = 0;
-        i < 25;
-        i++
-    ){
-
-        const cell =
-            document.createElement(
-                "div"
-            );
-
-
-        cell.className =
-            "bingo-cell";
-
-
-        if(i === 12){
-
-            cell.classList.add(
-                "free"
-            );
-
-
-            cell.textContent =
-                "FREE";
-
-        }else{
-
-            cell.textContent =
-                "—";
-
-        }
-
-
-        bingoGrid.appendChild(
-            cell
-        );
 
     }
 
@@ -1915,10 +1891,6 @@ function renderEmptyCard(){
    ========================================================= */
 
 function renderGameOver(){
-
-    const winner =
-        state.winner;
-
 
     const winnerTitle =
         document.getElementById(
@@ -1938,42 +1910,33 @@ function renderGameOver(){
         );
 
 
-    if(winner){
-
-        winnerTitle.textContent =
-            "BINGO! 🏆";
+    const winner =
+        state.winner;
 
 
-        /*
-           Backend sends winner as an object.
-           Show the Cartela instead of [object Object].
-        */
+    winnerTitle.textContent =
+        "BINGO! 🏆";
 
-        if(
-            typeof winner === "object"
-        ){
 
-            winnerText.textContent =
-                "Winning Cartela: " +
-                (
-                    winner.cartela ??
-                    "-"
-                );
+    if(
+        winner &&
+        typeof winner === "object"
+    ){
 
-        }else{
+        winnerText.textContent =
+            "Winning Cartela: " +
+            (
+                winner.cartela ??
+                "-"
+            );
 
-            winnerText.textContent =
-                "Winner: " +
-                winner;
+    }else if(winner){
 
-        }
-
+        winnerText.textContent =
+            "Winner: " +
+            winner;
 
     }else{
-
-        winnerTitle.textContent =
-            "Game Over";
-
 
         winnerText.textContent =
             "The Bingo game has ended.";
@@ -1994,31 +1957,13 @@ function renderGameOver(){
                 state.prize
             );
 
-    }else{
-
-        prize.classList.add(
-            "hidden"
-        );
-
     }
 
 }
 
 
 /* =========================================================
-   STATUS
-   ========================================================= */
-
-function showStatus(message){
-
-    statusElement.textContent =
-        message;
-
-}
-
-
-/* =========================================================
-   NUMBER FORMAT
+   FORMAT NUMBER
    ========================================================= */
 
 function formatNumber(value){
