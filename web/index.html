@@ -66,7 +66,7 @@ button{
 
 
 /* =========================================================
-   TOP TITLE
+   TELEGRAM / TOP TITLE
 ========================================================= */
 
 .top-title{
@@ -81,39 +81,61 @@ button{
 
 
 /* =========================================================
-   GAME INFO
+   TOP INFORMATION BOXES
+   PHONE FRIENDLY
 ========================================================= */
 
 .game-info{
     width:100%;
     display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:7px;
-    padding:7px;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:6px;
+    padding:6px 5px;
     background:#e5b6f5;
+    border-top:2px solid rgba(255,255,255,.75);
+    border-bottom:2px solid rgba(255,255,255,.75);
 }
 
 .info-box{
-    min-height:65px;
+    min-width:0;
+    height:68px;
     background:#fffdf0;
-    border-radius:12px;
+    border-radius:11px;
     display:flex;
     flex-direction:column;
     justify-content:center;
     align-items:center;
+    overflow:hidden;
 }
 
 .info-label{
-    font-size:16px;
+    font-size:15px;
     font-weight:900;
     color:#762b82;
-    margin-bottom:3px;
+    line-height:18px;
+    margin-bottom:2px;
+    white-space:nowrap;
 }
 
 .info-value{
     font-size:20px;
     font-weight:900;
     color:#111;
+    line-height:23px;
+    white-space:nowrap;
+}
+
+
+/* COUNTDOWN NUMBER */
+
+.countdown-box .info-value{
+    color:#d9273f;
+    font-size:25px;
+    font-weight:900;
+}
+
+.countdown-box .info-label{
+    display:none;
 }
 
 
@@ -122,70 +144,48 @@ button{
 ========================================================= */
 
 .selection-screen{
-    padding:10px 8px 25px;
+    padding:10px 7px 25px;
 }
 
 .selection-title{
     text-align:center;
     color:#762b82;
-    font-size:25px;
+    font-size:24px;
     font-weight:900;
-    margin:8px 0 5px;
+    margin:7px 0 4px;
 }
 
 .selection-subtitle{
     text-align:center;
     color:#5d6570;
-    font-size:15px;
-    margin-bottom:12px;
-}
-
-.timer-box{
-    width:100%;
-    text-align:center;
-    background:#f37908;
-    color:#fff;
-    border-radius:12px;
-    padding:13px 10px;
-    font-size:23px;
-    font-weight:900;
+    font-size:14px;
     margin-bottom:10px;
-}
-
-.wallet-box{
-    text-align:center;
-    background:#fffdf0;
-    color:#75417d;
-    border-radius:12px;
-    padding:10px;
-    margin-bottom:10px;
-    font-weight:800;
 }
 
 
 /* =========================================================
-   CARTELA 1-100
-   LIKE YOUR SCREENSHOT
+   CARTELA GRID
 ========================================================= */
 
 .cartela-grid{
     width:100%;
     background:#e5b6f5;
-    border:2px solid rgba(255,255,255,.75);
+    border:2px solid rgba(255,255,255,.85);
     border-radius:10px;
-    padding:17px 10px;
+    padding:17px 8px;
     display:grid;
-    grid-template-columns:repeat(8,1fr);
-    gap:10px;
+    grid-template-columns:repeat(8,minmax(0,1fr));
+    gap:9px 8px;
 }
 
 .cartela-button{
     width:100%;
     min-width:0;
     height:45px;
+    padding:0;
     background:#ead9f8;
     color:#111;
-    border:1px solid rgba(255,255,255,.85);
+    border:1px solid rgba(255,255,255,.95);
     border-radius:10px;
     font-size:17px;
     font-weight:900;
@@ -197,7 +197,7 @@ button{
 }
 
 
-/* TAKEN CARTELA = ORANGE */
+/* TAKEN CARTELA */
 
 .cartela-button.taken{
     background:#ff8100;
@@ -205,7 +205,7 @@ button{
 }
 
 
-/* YOUR SELECTED CARTELA = ORANGE */
+/* YOUR SELECTED CARTELA */
 
 .cartela-button.selected{
     background:#ff8100;
@@ -222,11 +222,11 @@ button{
     margin-top:14px;
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:10px;
+    gap:8px;
 }
 
 .action-button{
-    min-height:54px;
+    min-height:53px;
     border-radius:12px;
     font-size:18px;
     font-weight:900;
@@ -255,7 +255,7 @@ button{
     color:#21aeb9;
     font-size:24px;
     font-weight:900;
-    padding:10px 10px 15px;
+    padding:10px;
 }
 
 
@@ -595,8 +595,7 @@ button{
 
 
 /* =========================================================
-   WINNER CARD
-   COLORS MATCH THE NORMAL BOARD
+   WINNER BINGO CARD
 ========================================================= */
 
 .result-card-wrapper{
@@ -692,21 +691,6 @@ button{
 
 
 /* =========================================================
-   NO WINNER
-========================================================= */
-
-.no-winner{
-    text-align:center;
-    background:#fffdf0;
-    border-radius:15px;
-    padding:25px 15px;
-    color:#75417d;
-    font-size:23px;
-    font-weight:900;
-}
-
-
-/* =========================================================
    WRONG BINGO
 ========================================================= */
 
@@ -756,31 +740,59 @@ button{
 
 
 /* =========================================================
-   MOBILE
+   PHONE SIZE
 ========================================================= */
 
 @media(max-width:500px){
 
     .top-title{
-        font-size:25px;
+        font-size:24px;
+        padding:14px 8px;
+    }
+
+    .game-info{
+        grid-template-columns:repeat(4,minmax(0,1fr));
+        gap:5px;
+        padding:5px 4px;
+    }
+
+    .info-box{
+        height:67px;
+        border-radius:10px;
     }
 
     .info-label{
-        font-size:14px;
+        font-size:13px;
     }
 
     .info-value{
         font-size:19px;
     }
 
+    .countdown-box .info-value{
+        font-size:25px;
+    }
+
+    .selection-screen{
+        padding:8px 6px 25px;
+    }
+
+    .selection-title{
+        font-size:23px;
+    }
+
+    .selection-subtitle{
+        font-size:13px;
+    }
+
     .cartela-grid{
-        grid-template-columns:repeat(8,1fr);
-        gap:8px;
-        padding:16px 8px;
+        grid-template-columns:repeat(8,minmax(0,1fr));
+        gap:8px 7px;
+        padding:15px 7px;
     }
 
     .cartela-button{
-        height:43px;
+        height:42px;
         font-size:16px;
         border-radius:9px;
     }
@@ -861,10 +873,28 @@ button{
 
 
     <!-- =====================================================
-         GAME INFORMATION
+         TOP BOXES
+         SELECTION SCREEN:
+         COUNTDOWN | PLAYERS | WALLET | BET
     ====================================================== -->
 
     <div class="game-info">
+
+        <!-- COUNTDOWN -->
+
+        <div class="info-box countdown-box">
+
+            <div
+                id="countdownValue"
+                class="info-value"
+            >
+                30
+            </div>
+
+        </div>
+
+
+        <!-- PLAYERS -->
 
         <div class="info-box">
 
@@ -882,21 +912,25 @@ button{
         </div>
 
 
+        <!-- WALLET -->
+
         <div class="info-box">
 
             <div class="info-label">
-                Derash
+                Wallet
             </div>
 
             <div
-                id="derashValue"
+                id="walletValue"
                 class="info-value"
             >
-                0
+                ""
             </div>
 
         </div>
 
+
+        <!-- BET -->
 
         <div class="info-box">
 
@@ -904,24 +938,10 @@ button{
                 Bet
             </div>
 
-            <div class="info-value">
-                10
-            </div>
-
-        </div>
-
-
-        <div class="info-box">
-
-            <div class="info-label">
-                Call
-            </div>
-
             <div
-                id="callCountValue"
                 class="info-value"
             >
-                0
+                10
             </div>
 
         </div>
@@ -930,7 +950,7 @@ button{
 
 
     <!-- =====================================================
-         CARTELA SELECTION
+         SELECTION
     ====================================================== -->
 
     <section
@@ -947,27 +967,18 @@ button{
         </div>
 
 
-        <div
-            id="selectionTimer"
-            class="timer-box"
-        >
-            Selection ends in 30 sec
-        </div>
+        <!-- NO SEPARATE COUNTDOWN BOX HERE -->
 
 
-        <div
-            id="walletBox"
-            class="wallet-box"
-        >
-            Balance: 0 birr
-        </div>
-
+        <!-- CARTELAS -->
 
         <div
             id="cartelaGrid"
             class="cartela-grid"
         ></div>
 
+
+        <!-- BUTTONS -->
 
         <div class="selection-actions">
 
@@ -1115,7 +1126,7 @@ button{
 
                     <div
                         id="cardNumberLabel"
-                        class="card-number-label"
+                        class="card-title"
                     >
                         Card Number
                     </div>
@@ -1223,7 +1234,7 @@ button{
 
 
 <!-- =========================================================
-     WRONG CLAIM
+     WRONG BINGO
 ========================================================= -->
 
 <div
@@ -1545,7 +1556,7 @@ function showOnly(...ids){
 
 
 /* =========================================================
-   HEADER
+   TOP HEADER
 ========================================================= */
 
 function updateHeader(){
@@ -1562,40 +1573,7 @@ function updateHeader(){
         players;
 
 
-    const BET_AMOUNT =
-        10;
-
-    const DERASH_PERCENT =
-        0.75;
-
-
-    const derash =
-        Math.floor(
-            players *
-            BET_AMOUNT *
-            DERASH_PERCENT
-        );
-
-
-    document.getElementById(
-        "derashValue"
-    ).textContent =
-        derash;
-
-
-    const called =
-        Array.isArray(
-            state.called
-        )
-            ? state.called.length
-            : 0;
-
-
-    document.getElementById(
-        "callCountValue"
-    ).textContent =
-        called;
-
+    /* WALLET */
 
     const wallet =
         Number(
@@ -1604,11 +1582,52 @@ function updateHeader(){
 
 
     document.getElementById(
-        "walletBox"
+        "walletValue"
     ).textContent =
-        "Balance: " +
-        wallet +
-        " birr";
+        '""';
+
+
+    /*
+       COUNTDOWN
+
+       During selection:
+       show selection countdown.
+
+       During other phases:
+       show 0 or starting countdown.
+    */
+
+    let countdown = 0;
+
+
+    if(
+        state.phase ===
+        "selection"
+    ){
+
+        countdown =
+            Number(
+                state.selection_remaining ?? 0
+            );
+
+    }
+    else if(
+        state.phase ===
+        "starting"
+    ){
+
+        countdown =
+            Number(
+                state.start_remaining ?? 0
+            );
+
+    }
+
+
+    document.getElementById(
+        "countdownValue"
+    ).textContent =
+        countdown;
 
 }
 
@@ -1618,20 +1637,6 @@ function updateHeader(){
 ========================================================= */
 
 function renderSelection(){
-
-    const remaining =
-        Number(
-            state.selection_remaining ?? 0
-        );
-
-
-    document.getElementById(
-        "selectionTimer"
-    ).textContent =
-        "Selection ends in " +
-        remaining +
-        " sec";
-
 
     const grid =
         document.getElementById(
@@ -1659,9 +1664,7 @@ function renderSelection(){
 
 
     /*
-       IMPORTANT:
-       CARTELAS ARE STILL 1-100.
-       ONLY THE DESIGN HAS CHANGED.
+       KEEP CARTELAS 1-100
     */
 
     for(
@@ -1684,9 +1687,7 @@ function renderSelection(){
             number;
 
 
-        /*
-           TAKEN CARTELAS ARE ORANGE
-        */
+        /* TAKEN */
 
         if(
             taken.has(number) &&
@@ -1697,12 +1698,13 @@ function renderSelection(){
                 "taken"
             );
 
+            button.disabled =
+                true;
+
         }
 
 
-        /*
-           YOUR SELECTED CARTELA IS ORANGE
-        */
+        /* SELECTED */
 
         if(
             Number(selected) === number
@@ -1711,20 +1713,6 @@ function renderSelection(){
             button.classList.add(
                 "selected"
             );
-
-        }
-
-
-        /*
-           A TAKEN CARTELA CANNOT BE CLICKED
-        */
-
-        if(
-            taken.has(number) &&
-            Number(selected) !== number
-        ){
-
-            button.disabled = true;
 
         }
 
@@ -2515,7 +2503,7 @@ function renderResult(){
 
 
 /* =========================================================
-   GET WINNER CARD
+   WINNER CARD
 ========================================================= */
 
 function getWinnerCard(){
@@ -2535,7 +2523,7 @@ function getWinnerCard(){
 
 
 /* =========================================================
-   WINNER CARD
+   WINNER CARD RENDER
 ========================================================= */
 
 function renderResultCard(
