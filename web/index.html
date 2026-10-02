@@ -1014,11 +1014,6 @@ async function loadState(){
         const newGame =
             newState.game;
 
-        /*
-         * Only reset the local player state
-         * when a genuinely NEW game starts.
-         */
-
         if(
             oldGame !== null &&
             newGame !== oldGame
@@ -1037,10 +1032,6 @@ async function loadState(){
         state = newState;
 
 
-        /*
-         * Restore Cartela selected on server.
-         */
-
         if(
             newState.selected ||
             newState.my_cartela ||
@@ -1057,22 +1048,12 @@ async function loadState(){
         }
 
 
-        /*
-         * If server says this user proceeded,
-         * keep them inside the game screen.
-         */
-
         if(newState.proceeded){
 
             proceeded = true;
 
         }
 
-
-        /*
-         * If server is still in selection and
-         * user has not proceeded, selection page.
-         */
 
         if(
             newState.phase === "selection" &&
@@ -1138,10 +1119,6 @@ function render(){
         return;
 
 
-    /*
-     * FINISHED
-     */
-
     if(state.phase === "finished"){
 
         showView("resultView");
@@ -1152,10 +1129,6 @@ function render(){
 
     }
 
-
-    /*
-     * PLAYING
-     */
 
     if(state.phase === "playing"){
 
@@ -1168,15 +1141,6 @@ function render(){
     }
 
 
-    /*
-     * STARTING
-     *
-     * THIS IS THE IMPORTANT FIX.
-     *
-     * The old code did not handle "starting",
-     * so it returned to Cartela selection.
-     */
-
     if(state.phase === "starting"){
 
         showView("gameView");
@@ -1187,14 +1151,6 @@ function render(){
 
     }
 
-
-    /*
-     * SELECTION AFTER PROCEED
-     *
-     * While the server is still in selection,
-     * the player who pressed Proceed stays
-     * inside the game screen.
-     */
 
     if(
         state.phase === "selection" &&
@@ -1210,10 +1166,6 @@ function render(){
 
     }
 
-
-    /*
-     * NORMAL CARTELA SELECTION
-     */
 
     showView("selectionView");
 
@@ -1417,17 +1369,6 @@ async function proceedToGame(){
 
     try{
 
-        /*
-         * IMPORTANT:
-         *
-         * The old version only changed
-         * "proceeded" locally.
-         *
-         * This version actually tells
-         * the Python server that the player
-         * pressed PROCEED.
-         */
-
         const result =
             await api(
                 "/api/proceed",
@@ -1460,10 +1401,6 @@ async function proceedToGame(){
             );
 
         state = result;
-
-        /*
-         * Immediately show the game screen.
-         */
 
         showView("gameView");
 
@@ -1528,15 +1465,42 @@ async function refreshSelection(){
 
 function renderGame(){
 
+    const players =
+        Number(state.players ?? 0);
+
     document
         .getElementById("playersValue")
         .textContent =
-        state.players ?? 0;
+        players;
+
+
+    /*
+     * DERASH
+     *
+     * Each player pays 10 birr.
+     * 75% of the total pool goes
+     * to the winner.
+     *
+     * Example:
+     * 10 players = 10 × 10 × 75% = 75
+     * 20 players = 20 × 10 × 75% = 150
+     */
+
+    const DERASH_PERCENT = 0.75;
+    const BET_AMOUNT = 10;
+
+    const derash =
+        Math.floor(
+            players *
+            BET_AMOUNT *
+            DERASH_PERCENT
+        );
 
     document
         .getElementById("derashValue")
         .textContent =
-        state.prize ?? 0;
+        derash;
+
 
     const called =
         state.called ||
@@ -1551,21 +1515,12 @@ function renderGame(){
 
     /*
      * STARTING COUNTDOWN
-     *
-     * During "starting" use
-     * start_remaining.
      */
 
     const countdown =
         document.getElementById(
             "gameCountdown"
         );
-
-    const timer =
-        document.getElementById(
-            "gameTimer"
-        );
-
 
     if(
         state.phase === "starting"
@@ -1588,8 +1543,7 @@ function renderGame(){
     }
 
     /*
-     * During selection after Proceed,
-     * keep showing the selection countdown.
+     * SELECTION AFTER PROCEED
      */
 
     else if(
