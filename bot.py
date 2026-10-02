@@ -211,6 +211,8 @@ class BingoGame:
         self.blocked_users = set()
         self.wrong_claims = set()
 
+        self.result_message = None
+
         self.start_selection_locked()
 
     # -----------------------------------------------------
@@ -349,13 +351,8 @@ class BingoGame:
 
     # -----------------------------------------------------
 
-    def draw_number_locked():
-
-        pass
-
-    # -----------------------------------------------------
-
     def draw_number_locked(self):
+
         if self.phase != "playing":
             return None
 
@@ -366,10 +363,12 @@ class BingoGame:
         ]
 
         if not remaining:
+
             self.finish_locked(
                 winner=None,
                 reason="No winner — all 75 numbers were called."
             )
+
             return None
 
         number = random.choice(remaining)
@@ -384,6 +383,7 @@ class BingoGame:
         )
 
         if len(self.drawn_numbers) >= 75:
+
             self.finish_locked(
                 winner=None,
                 reason="No winner — all 75 numbers were called."
@@ -394,6 +394,7 @@ class BingoGame:
     # -----------------------------------------------------
 
     def finish_locked(self, winner=None, reason=None):
+
         self.phase = "finished"
 
         self.winner = winner
@@ -488,6 +489,7 @@ game = BingoGame()
 # =========================================================
 
 def telegram_user_id(message: Message):
+
     if not message.from_user:
         return "unknown"
 
@@ -715,6 +717,7 @@ async def api_select(request):
     try:
         data = await request.json()
     except Exception:
+
         return web.json_response(
             {
                 "success": False,
@@ -728,6 +731,7 @@ async def api_select(request):
     try:
         cartela = int(cartela)
     except Exception:
+
         return web.json_response(
             {
                 "success": False,
@@ -739,6 +743,7 @@ async def api_select(request):
     async with game.lock:
 
         if game.phase != "selection":
+
             return web.json_response(
                 {
                     "success": False,
@@ -748,6 +753,7 @@ async def api_select(request):
             )
 
         if game.selection_remaining() <= 0:
+
             return web.json_response(
                 {
                     "success": False,
@@ -757,6 +763,7 @@ async def api_select(request):
             )
 
         if user_id in game.proceeded_users:
+
             return web.json_response(
                 {
                     "success": False,
@@ -766,6 +773,7 @@ async def api_select(request):
             )
 
         if cartela < 1 or cartela > 100:
+
             return web.json_response(
                 {
                     "success": False,
@@ -775,6 +783,7 @@ async def api_select(request):
             )
 
         if cartela in game.taken_cartelas:
+
             return web.json_response(
                 {
                     "success": False,
@@ -815,6 +824,7 @@ async def api_proceed(request):
     async with game.lock:
 
         if game.phase != "selection":
+
             return web.json_response(
                 {
                     "success": False,
@@ -826,6 +836,7 @@ async def api_proceed(request):
         cartela = game.player_cartelas.get(user_id)
 
         if not cartela:
+
             return web.json_response(
                 {
                     "success": False,
@@ -899,6 +910,7 @@ async def api_claim_bingo(request):
     try:
         data = await request.json()
     except Exception:
+
         return web.json_response(
             {
                 "success": False,
@@ -1210,12 +1222,10 @@ async def setup_commands():
 
     commands = telegram_commands()
 
-    # Register the commands.
-    await bot.set_my_commands(commands)
+    await bot.set_my_commands(
+        commands
+    )
 
-    # IMPORTANT:
-    # Explicitly tell Telegram to use the command list
-    # when the user opens the Menu button.
     await bot.set_chat_menu_button(
         menu_button=MenuButtonCommands()
     )
@@ -1226,7 +1236,7 @@ async def setup_commands():
 
 
 # =========================================================
-# TELEGRAM STARTUP SETUP WITH RETRIES
+# TELEGRAM STARTUP SETUP
 # =========================================================
 
 async def setup_telegram():
@@ -1238,7 +1248,10 @@ async def setup_telegram():
 
     max_attempts = 5
 
-    for attempt in range(1, max_attempts + 1):
+    for attempt in range(
+        1,
+        max_attempts + 1
+    ):
 
         try:
 
@@ -1248,7 +1261,7 @@ async def setup_telegram():
                 max_attempts,
             )
 
-            # Configure the Menu commands.
+            # Register Telegram menu.
             await setup_commands()
 
             logger.info(
@@ -1256,25 +1269,37 @@ async def setup_telegram():
                 webhook_url,
             )
 
-            # Remove the previous webhook.
-            await bot.delete_webhook(
-                drop_pending_updates=False
-            )
+            # IMPORTANT:
+            # We intentionally DO NOT call delete_webhook()
+            # before setting the webhook.
+            #
+            # This makes the bot safer when Render restarts
+            # or wakes the service after sleeping.
 
-            # Create the new webhook.
             await bot.set_webhook(
                 url=webhook_url,
                 secret_token=WEBHOOK_SECRET,
                 drop_pending_updates=False,
             )
 
-            # Verify the webhook after setting it.
             webhook_info = await bot.get_webhook_info()
 
             logger.info(
                 "Telegram webhook active: %s",
                 webhook_info.url,
             )
+
+            if webhook_info.url != webhook_url:
+
+                logger.warning(
+                    "Telegram webhook URL does not match expected URL."
+                )
+
+            else:
+
+                logger.info(
+                    "Telegram webhook verified successfully."
+                )
 
             logger.info(
                 "Telegram setup completed successfully."
@@ -1431,7 +1456,7 @@ async def on_startup(app):
         "Starting Rodas Friend Zone..."
     )
 
-    # Start the game loop independently.
+    # Start the Bingo game loop.
     app["game_task"] = asyncio.create_task(
         game_loop()
     )
@@ -1443,8 +1468,8 @@ async def on_startup(app):
 
         logger.error(
             "Telegram setup did not complete successfully. "
-            "The server will remain running and can be restarted "
-            "to retry Telegram setup."
+            "The server will remain running and can retry "
+            "after the next restart."
         )
 
 
@@ -1458,7 +1483,9 @@ async def on_shutdown(app):
         "Shutting down Rodas Friend Zone..."
     )
 
-    task = app.get("game_task")
+    task = app.get(
+        "game_task"
+    )
 
     if task:
 
@@ -1466,22 +1493,29 @@ async def on_shutdown(app):
 
         try:
             await task
+
         except asyncio.CancelledError:
             pass
 
+    # IMPORTANT:
+    # DO NOT DELETE THE TELEGRAM WEBHOOK HERE.
+    #
+    # Render can restart/sleep/wake the service.
+    # Deleting the webhook during shutdown can make the
+    # Telegram menu commands appear to stop responding
+    # until the service starts again.
+    #
+    # The webhook remains registered with Telegram.
+
     try:
 
-        await bot.delete_webhook(
-            drop_pending_updates=False
-        )
+        await bot.session.close()
 
     except Exception:
 
         logger.exception(
-            "Could not remove webhook during shutdown."
+            "Could not close Telegram bot session cleanly."
         )
-
-    await bot.session.close()
 
 
 # =========================================================
