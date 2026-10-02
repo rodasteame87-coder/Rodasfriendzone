@@ -132,7 +132,7 @@ CARTELA_CARDS = {
 
 def get_bingo_pattern(card, marked_numbers):
     marked = set(marked_numbers)
-    marked.add(0)  # FREE is always marked
+    marked.add(0)
 
     # Rows
     for row in range(5):
@@ -315,7 +315,6 @@ class BingoGame:
 
         total = players * BET_AMOUNT
 
-        # Current rule:
         # 75% goes to the winner
         # 25% goes to the creator
         return int(total * 0.75)
@@ -1014,11 +1013,8 @@ async def api_claim_bingo(request):
             marked
         )
 
-        # IMPORTANT:
-        # There is NO automatic winner check here during
-        # number drawing. A winner is only declared when:
-        # 1. Auto mode sends a valid claim, OR
-        # 2. The player presses BINGO WIN.
+        # A winner is declared only when the player
+        # submits a valid Bingo claim.
         if not pattern:
 
             game.blocked_users.add(user_id)
@@ -1248,14 +1244,37 @@ async def game_loop():
 
                     if now >= game.selection_end:
 
-                        game.ensure_start_timer_locked()
+                        # IMPORTANT:
+                        # DO NOT START THE GAME IF NO PLAYER
+                        # HAS SELECTED A CARTELA.
+                        if len(game.player_cartelas) == 0:
 
-                        game.phase = "starting"
+                            logger.info(
+                                "Game %s: no players selected a Cartela. "
+                                "Keeping selection open for another %s seconds.",
+                                game.game_number,
+                                SELECTION_SECONDS,
+                            )
 
-                        logger.info(
-                            "Game %s: starting countdown.",
-                            game.game_number,
-                        )
+                            # Restart the selection timer.
+                            # The game remains in "selection".
+                            game.selection_end = (
+                                now + SELECTION_SECONDS
+                            )
+
+                        else:
+
+                            # At least one player selected a Cartela.
+                            # Now the starting countdown can begin.
+                            game.ensure_start_timer_locked()
+
+                            game.phase = "starting"
+
+                            logger.info(
+                                "Game %s: starting countdown with %s player(s).",
+                                game.game_number,
+                                len(game.player_cartelas),
+                            )
 
                 # -----------------------------------------
                 # STARTING
@@ -1268,7 +1287,22 @@ async def game_loop():
                         and now >= game.start_end
                     ):
 
-                        game.start_playing_locked()
+                        # Extra safety check:
+                        # Never start a game if all players
+                        # somehow left before the game started.
+                        if len(game.player_cartelas) == 0:
+
+                            logger.info(
+                                "Game %s: all players left before start. "
+                                "Returning to selection.",
+                                game.game_number,
+                            )
+
+                            game.start_selection_locked()
+
+                        else:
+
+                            game.start_playing_locked()
 
                 # -----------------------------------------
                 # PLAYING
