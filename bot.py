@@ -13,6 +13,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    MenuButtonCommands,
     Update,
     WebAppInfo,
 )
@@ -87,11 +88,11 @@ def generate_card(number):
     rng = random.Random(number)
 
     columns = [
-        list(range(1, 16)),     # B
-        list(range(16, 31)),    # I
-        list(range(31, 46)),    # N
-        list(range(46, 61)),    # G
-        list(range(61, 76)),    # O
+        list(range(1, 16)),
+        list(range(16, 31)),
+        list(range(31, 46)),
+        list(range(46, 61)),
+        list(range(61, 76)),
     ]
 
     card = []
@@ -134,7 +135,6 @@ def get_bingo_pattern(card, marked_numbers):
     marked = set(marked_numbers)
     marked.add(0)
 
-    # Rows
     for row in range(5):
         if all(
             card[row][col] == 0
@@ -143,7 +143,6 @@ def get_bingo_pattern(card, marked_numbers):
         ):
             return f"Row {row + 1}"
 
-    # Columns
     for col in range(5):
         if all(
             card[row][col] == 0
@@ -153,7 +152,6 @@ def get_bingo_pattern(card, marked_numbers):
             letters = ["B", "I", "N", "G", "O"]
             return f"Column {letters[col]}"
 
-    # Main diagonal
     if all(
         card[i][i] == 0
         or card[i][i] in marked
@@ -161,7 +159,6 @@ def get_bingo_pattern(card, marked_numbers):
     ):
         return "Main Diagonal"
 
-    # Other diagonal
     if all(
         card[i][4 - i] == 0
         or card[i][4 - i] in marked
@@ -223,7 +220,9 @@ class BingoGame:
 
         self.game_number += 1
 
-        self.selection_end = time.monotonic() + SELECTION_SECONDS
+        self.selection_end = (
+            time.monotonic() + SELECTION_SECONDS
+        )
 
         self.start_end = None
         self.result_end = None
@@ -241,6 +240,8 @@ class BingoGame:
 
         self.blocked_users.clear()
         self.wrong_claims.clear()
+
+        self.result_message = None
 
         logger.info(
             "Game %s: selection started",
@@ -296,6 +297,7 @@ class BingoGame:
     # -----------------------------------------------------
 
     def get_view_phase(self, user_id):
+
         if self.phase == "selection":
 
             if user_id in self.proceeded_users:
@@ -315,8 +317,6 @@ class BingoGame:
 
         total = players * BET_AMOUNT
 
-        # 75% goes to the winner
-        # 25% goes to the creator
         return int(total * 0.75)
 
     # -----------------------------------------------------
@@ -346,6 +346,12 @@ class BingoGame:
             len(self.player_cartelas),
             self.prize,
         )
+
+    # -----------------------------------------------------
+
+    def draw_number_locked():
+
+        pass
 
     # -----------------------------------------------------
 
@@ -969,16 +975,12 @@ async def api_claim_bingo(request):
                 }
             )
 
-        # FREE center is always marked
         marked.add(0)
 
-        # Only numbers actually on the player's card
         valid_card_numbers = set(
             card_numbers(card)
         )
 
-        # Player cannot claim using a number
-        # that has not been called.
         invalid_marks = {
             number
             for number in marked
@@ -1013,8 +1015,6 @@ async def api_claim_bingo(request):
             marked
         )
 
-        # A winner is declared only when the player
-        # submits a valid Bingo claim.
         if not pattern:
 
             game.blocked_users.add(user_id)
@@ -1034,7 +1034,6 @@ async def api_claim_bingo(request):
                 }
             )
 
-        # VALID WINNER
         winner_amount = game.prize
 
         game.winner = {
@@ -1165,61 +1164,150 @@ async def telegram_webhook(request):
 # TELEGRAM MENU
 # =========================================================
 
-async def setup_commands():
+def telegram_commands():
 
-    commands = [
-
+    return [
         BotCommand(
             command="start",
             description="Start Rodas Friend Zone",
         ),
-
         BotCommand(
             command="play",
             description="Play Bingo",
         ),
-
         BotCommand(
             command="deposit",
             description="Deposit",
         ),
-
         BotCommand(
             command="balance",
             description="Check balance",
         ),
-
         BotCommand(
             command="withdraw",
             description="Withdraw",
         ),
-
         BotCommand(
             command="transfer",
             description="Transfer",
         ),
-
         BotCommand(
             command="instruction",
             description="How to play",
         ),
-
         BotCommand(
             command="invite",
             description="Invite friends",
         ),
-
         BotCommand(
             command="support",
             description="Support",
         ),
     ]
 
+
+async def setup_commands():
+
+    commands = telegram_commands()
+
+    # Register the commands.
     await bot.set_my_commands(commands)
 
-    logger.info(
-        "Telegram menu commands registered."
+    # IMPORTANT:
+    # Explicitly tell Telegram to use the command list
+    # when the user opens the Menu button.
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonCommands()
     )
+
+    logger.info(
+        "Telegram menu commands and Menu button registered."
+    )
+
+
+# =========================================================
+# TELEGRAM STARTUP SETUP WITH RETRIES
+# =========================================================
+
+async def setup_telegram():
+
+    webhook_url = (
+        RENDER_EXTERNAL_URL
+        + WEBHOOK_PATH
+    )
+
+    max_attempts = 5
+
+    for attempt in range(1, max_attempts + 1):
+
+        try:
+
+            logger.info(
+                "Telegram setup attempt %s/%s",
+                attempt,
+                max_attempts,
+            )
+
+            # Configure the Menu commands.
+            await setup_commands()
+
+            logger.info(
+                "Setting Telegram webhook: %s",
+                webhook_url,
+            )
+
+            # Remove the previous webhook.
+            await bot.delete_webhook(
+                drop_pending_updates=False
+            )
+
+            # Create the new webhook.
+            await bot.set_webhook(
+                url=webhook_url,
+                secret_token=WEBHOOK_SECRET,
+                drop_pending_updates=False,
+            )
+
+            # Verify the webhook after setting it.
+            webhook_info = await bot.get_webhook_info()
+
+            logger.info(
+                "Telegram webhook active: %s",
+                webhook_info.url,
+            )
+
+            logger.info(
+                "Telegram setup completed successfully."
+            )
+
+            return True
+
+        except Exception:
+
+            logger.exception(
+                "Telegram setup attempt %s failed.",
+                attempt,
+            )
+
+            if attempt < max_attempts:
+
+                wait_seconds = attempt * 3
+
+                logger.info(
+                    "Retrying Telegram setup in %s seconds...",
+                    wait_seconds,
+                )
+
+                await asyncio.sleep(
+                    wait_seconds
+                )
+
+    logger.error(
+        "Telegram setup failed after %s attempts.",
+        max_attempts,
+    )
+
+    return False
 
 
 # =========================================================
@@ -1244,28 +1332,18 @@ async def game_loop():
 
                     if now >= game.selection_end:
 
-                        # IMPORTANT:
-                        # DO NOT START THE GAME IF NO PLAYER
-                        # HAS SELECTED A CARTELA.
                         if len(game.player_cartelas) == 0:
 
                             logger.info(
                                 "Game %s: no players selected a Cartela. "
-                                "Keeping selection open for another %s seconds.",
+                                "Restarting selection.",
                                 game.game_number,
-                                SELECTION_SECONDS,
                             )
 
-                            # Restart the selection timer.
-                            # The game remains in "selection".
-                            game.selection_end = (
-                                now + SELECTION_SECONDS
-                            )
+                            game.start_selection_locked()
 
                         else:
 
-                            # At least one player selected a Cartela.
-                            # Now the starting countdown can begin.
                             game.ensure_start_timer_locked()
 
                             game.phase = "starting"
@@ -1287,9 +1365,6 @@ async def game_loop():
                         and now >= game.start_end
                     ):
 
-                        # Extra safety check:
-                        # Never start a game if all players
-                        # somehow left before the game started.
                         if len(game.player_cartelas) == 0:
 
                             logger.info(
@@ -1356,36 +1431,21 @@ async def on_startup(app):
         "Starting Rodas Friend Zone..."
     )
 
-    await setup_commands()
-
-    webhook_url = (
-        RENDER_EXTERNAL_URL
-        + WEBHOOK_PATH
-    )
-
-    logger.info(
-        "Setting Telegram webhook: %s",
-        webhook_url,
-    )
-
-    # Remove any previous webhook first.
-    await bot.delete_webhook(
-        drop_pending_updates=False
-    )
-
-    await bot.set_webhook(
-        url=webhook_url,
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=False,
-    )
-
-    logger.info(
-        "Telegram webhook configured successfully."
-    )
-
+    # Start the game loop independently.
     app["game_task"] = asyncio.create_task(
         game_loop()
     )
+
+    # Configure Telegram.
+    telegram_ready = await setup_telegram()
+
+    if not telegram_ready:
+
+        logger.error(
+            "Telegram setup did not complete successfully. "
+            "The server will remain running and can be restarted "
+            "to retry Telegram setup."
+        )
 
 
 # =========================================================
