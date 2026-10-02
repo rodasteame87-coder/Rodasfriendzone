@@ -19,6 +19,10 @@
 
 <style>
 
+/* =========================================================
+   GENERAL
+========================================================= */
+
 *{
     box-sizing:border-box;
     -webkit-tap-highlight-color:transparent;
@@ -31,7 +35,7 @@ body{
     width:100%;
     min-height:100%;
     font-family:Arial,Helvetica,sans-serif;
-    background:#cceff4;
+    background:#e5b6f5;
 }
 
 body{
@@ -56,24 +60,23 @@ button{
 #app{
     width:100%;
     min-height:100vh;
-    background:#cceff4;
+    background:#e5b6f5;
     padding-bottom:30px;
 }
 
 
 /* =========================================================
-   HEADER
+   TOP TITLE
 ========================================================= */
 
 .top-title{
     width:100%;
     text-align:center;
-    font-size:28px;
+    font-size:27px;
     font-weight:900;
     color:#ffffff;
-    background:#15222d;
-    padding:16px 10px;
-    letter-spacing:.3px;
+    background:#17232e;
+    padding:15px 10px;
 }
 
 
@@ -86,26 +89,25 @@ button{
     display:grid;
     grid-template-columns:repeat(4,1fr);
     gap:7px;
-    padding:8px;
-    background:#cceff4;
+    padding:7px;
+    background:#e5b6f5;
 }
 
 .info-box{
-    min-height:66px;
+    min-height:65px;
     background:#fffdf0;
-    border-radius:13px;
+    border-radius:12px;
     display:flex;
     flex-direction:column;
     justify-content:center;
     align-items:center;
-    box-shadow:0 1px 3px rgba(0,0,0,.08);
 }
 
 .info-label{
     font-size:16px;
-    font-weight:800;
-    color:#75417d;
-    margin-bottom:4px;
+    font-weight:900;
+    color:#762b82;
+    margin-bottom:3px;
 }
 
 .info-value{
@@ -120,7 +122,7 @@ button{
 ========================================================= */
 
 .selection-screen{
-    padding:15px;
+    padding:10px 8px 25px;
 }
 
 .selection-title{
@@ -135,7 +137,7 @@ button{
     text-align:center;
     color:#5d6570;
     font-size:15px;
-    margin-bottom:15px;
+    margin-bottom:12px;
 }
 
 .timer-box{
@@ -144,10 +146,10 @@ button{
     background:#f37908;
     color:#fff;
     border-radius:12px;
-    padding:15px 10px;
-    font-size:24px;
+    padding:13px 10px;
+    font-size:23px;
     font-weight:900;
-    margin-bottom:15px;
+    margin-bottom:10px;
 }
 
 .wallet-box{
@@ -156,43 +158,68 @@ button{
     color:#75417d;
     border-radius:12px;
     padding:10px;
-    margin-bottom:15px;
+    margin-bottom:10px;
     font-weight:800;
 }
 
+
+/* =========================================================
+   CARTELA 1-100
+   LIKE YOUR SCREENSHOT
+========================================================= */
+
 .cartela-grid{
+    width:100%;
+    background:#e5b6f5;
+    border:2px solid rgba(255,255,255,.75);
+    border-radius:10px;
+    padding:17px 10px;
     display:grid;
-    grid-template-columns:repeat(5,1fr);
-    gap:8px;
+    grid-template-columns:repeat(8,1fr);
+    gap:10px;
 }
 
 .cartela-button{
-    min-height:52px;
-    background:#fffdf0;
-    color:#5c3170;
+    width:100%;
+    min-width:0;
+    height:45px;
+    background:#ead9f8;
+    color:#111;
+    border:1px solid rgba(255,255,255,.85);
     border-radius:10px;
     font-size:17px;
     font-weight:900;
-    border:2px solid transparent;
-}
-
-.cartela-button.taken{
-    background:#bdbdbd;
-    color:#777;
-}
-
-.cartela-button.selected{
-    background:#4fd28a;
-    color:#fff;
-    border-color:#249d60;
+    box-shadow:0 1px 1px rgba(0,0,0,.05);
 }
 
 .cartela-button:active{
-    transform:scale(.96);
+    transform:scale(.95);
 }
 
+
+/* TAKEN CARTELA = ORANGE */
+
+.cartela-button.taken{
+    background:#ff8100;
+    color:#111;
+}
+
+
+/* YOUR SELECTED CARTELA = ORANGE */
+
+.cartela-button.selected{
+    background:#ff8100;
+    color:#111;
+    border:2px solid #e56d00;
+}
+
+
+/* =========================================================
+   SELECTION BUTTONS
+========================================================= */
+
 .selection-actions{
-    margin-top:18px;
+    margin-top:14px;
     display:grid;
     grid-template-columns:1fr 1fr;
     gap:10px;
@@ -225,7 +252,7 @@ button{
 
 .starting-message{
     text-align:center;
-    color:#21b9c3;
+    color:#21aeb9;
     font-size:24px;
     font-weight:900;
     padding:10px 10px 15px;
@@ -233,17 +260,17 @@ button{
 
 
 /* =========================================================
-   PLAYING AREA
+   GAME SCREEN
 ========================================================= */
 
 .game-screen{
-    padding:0 15px 25px;
+    padding:0 8px 25px;
 }
 
 .play-layout{
     display:grid;
     grid-template-columns:40% 60%;
-    gap:8px;
+    gap:7px;
 }
 
 
@@ -266,7 +293,7 @@ button{
 }
 
 .call-letter{
-    height:46px;
+    height:45px;
     display:flex;
     align-items:center;
     justify-content:center;
@@ -326,33 +353,29 @@ button{
 
 
 /* =========================================================
-   RIGHT GAME AREA
+   CURRENT CALL
 ========================================================= */
 
-.game-right{
-    min-width:0;
-}
-
 .current-call-box{
-    min-height:112px;
+    min-height:105px;
     border-radius:55px;
     background:#990099;
     color:#fff;
     display:flex;
     align-items:center;
     justify-content:space-between;
-    padding:10px 15px 10px 22px;
-    margin-bottom:8px;
+    padding:10px 15px 10px 20px;
+    margin-bottom:7px;
 }
 
 .current-call-label{
-    font-size:19px;
+    font-size:18px;
     font-weight:900;
 }
 
 .current-call-number{
-    width:72px;
-    height:72px;
+    width:70px;
+    height:70px;
     border-radius:50%;
     background:#ff9800;
     color:#fff;
@@ -374,28 +397,28 @@ button{
 
 .auto-box{
     background:#fff;
-    border-radius:16px;
-    min-height:70px;
+    border-radius:15px;
+    min-height:65px;
     display:flex;
     align-items:center;
     justify-content:flex-end;
-    gap:15px;
-    padding:10px 15px;
-    margin-bottom:8px;
+    gap:12px;
+    padding:8px 12px;
+    margin-bottom:7px;
 }
 
 .auto-label{
-    font-size:20px;
+    font-size:19px;
     font-weight:900;
     color:#75417d;
 }
 
 .switch{
-    width:82px;
-    height:52px;
+    width:78px;
+    height:48px;
     border-radius:30px;
     background:#4fd28a;
-    padding:5px;
+    padding:4px;
     display:flex;
     align-items:center;
     justify-content:flex-end;
@@ -407,30 +430,30 @@ button{
 }
 
 .switch-circle{
-    width:42px;
-    height:42px;
+    width:40px;
+    height:40px;
     border-radius:50%;
     background:#fff;
 }
 
 
 /* =========================================================
-   BINGO CARD
+   PLAYER BINGO CARD
 ========================================================= */
 
 .card-container{
     background:#fff;
-    border-radius:16px;
-    padding:8px;
+    border-radius:15px;
+    padding:7px;
     overflow:hidden;
 }
 
 .card-title{
     text-align:center;
     color:#697d84;
-    font-size:19px;
+    font-size:17px;
     font-weight:900;
-    padding:8px 3px;
+    padding:7px 3px;
 }
 
 .bingo-card{
@@ -440,7 +463,7 @@ button{
 }
 
 .bingo-card th{
-    height:47px;
+    height:44px;
     color:#fff;
     font-size:21px;
     font-weight:900;
@@ -468,11 +491,11 @@ button{
 }
 
 .bingo-card td{
-    height:58px;
+    height:56px;
     text-align:center;
     background:#ffffff;
     color:#222;
-    font-size:17px;
+    font-size:16px;
     font-weight:800;
     border:1px solid #ddd;
 }
@@ -480,7 +503,6 @@ button{
 .bingo-card td.free{
     background:#4fd28a;
     color:#167447;
-    font-size:16px;
 }
 
 .bingo-card td.marked{
@@ -488,33 +510,19 @@ button{
     color:#fff;
 }
 
-.bingo-card td.winning{
-    background:#4fd28a;
-    color:#fff;
-}
-
-.card-number-label{
-    text-align:center;
-    background:#fff;
-    color:#697d84;
-    font-size:17px;
-    font-weight:900;
-    padding:8px;
-}
-
 
 /* =========================================================
-   BINGO BUTTONS
+   BINGO BUTTON
 ========================================================= */
 
 .bingo-win-button{
     width:100%;
-    min-height:60px;
-    margin-top:8px;
+    min-height:58px;
+    margin-top:7px;
     border-radius:35px;
     background:#e9b07c;
     color:#fff;
-    font-size:22px;
+    font-size:21px;
     font-weight:900;
 }
 
@@ -525,35 +533,35 @@ button{
 .game-actions{
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:8px;
-    margin-top:8px;
+    gap:7px;
+    margin-top:7px;
 }
 
 .leave-game{
     background:#e92932;
     color:#fff;
-    min-height:58px;
+    min-height:55px;
     border-radius:30px;
-    font-size:19px;
+    font-size:18px;
     font-weight:900;
 }
 
 .refresh-game{
     background:#2f67dc;
     color:#fff;
-    min-height:58px;
+    min-height:55px;
     border-radius:30px;
-    font-size:19px;
+    font-size:18px;
     font-weight:900;
 }
 
 
 /* =========================================================
-   RESULT / WINNER SCREEN
+   WINNER SCREEN
 ========================================================= */
 
 .result-screen{
-    padding:10px 15px 30px;
+    padding:10px 12px 30px;
 }
 
 .winner-banner{
@@ -562,22 +570,20 @@ button{
     border-radius:8px;
     text-align:center;
     color:#fff;
-    padding:28px 10px;
-    margin:10px 0 25px;
-    box-shadow:0 1px 4px rgba(0,0,0,.15);
+    padding:25px 10px;
+    margin:10px 0 20px;
 }
 
 .winner-title{
-    font-size:48px;
+    font-size:46px;
     font-weight:900;
-    line-height:1.1;
-    margin-bottom:22px;
+    margin-bottom:18px;
 }
 
 .winner-text{
-    font-size:23px;
+    font-size:22px;
     font-weight:900;
-    line-height:1.25;
+    line-height:1.3;
 }
 
 .winner-name{
@@ -587,6 +593,12 @@ button{
     border-radius:2px;
 }
 
+
+/* =========================================================
+   WINNER CARD
+   COLORS MATCH THE NORMAL BOARD
+========================================================= */
+
 .result-card-wrapper{
     width:100%;
     max-width:550px;
@@ -594,7 +606,7 @@ button{
     background:#e7dcf7;
     border:3px solid #fff;
     border-radius:18px;
-    padding:10px;
+    padding:9px;
 }
 
 .result-card-title{
@@ -612,7 +624,7 @@ button{
 }
 
 .result-bingo-card th{
-    height:55px;
+    height:54px;
     color:#fff;
     font-size:23px;
     font-weight:900;
@@ -640,11 +652,11 @@ button{
 }
 
 .result-bingo-card td{
-    height:68px;
+    height:66px;
     text-align:center;
     background:#fffdf0;
     color:#111;
-    font-size:22px;
+    font-size:21px;
     font-weight:900;
     border:2px solid #fff;
 }
@@ -668,7 +680,7 @@ button{
 }
 
 .result-prize{
-    margin-top:18px;
+    margin-top:15px;
     background:#fffdf0;
     color:#75417d;
     border-radius:14px;
@@ -695,7 +707,7 @@ button{
 
 
 /* =========================================================
-   WRONG CLAIM
+   WRONG BINGO
 ========================================================= */
 
 .overlay{
@@ -744,7 +756,7 @@ button{
 
 
 /* =========================================================
-   RESPONSIVE
+   MOBILE
 ========================================================= */
 
 @media(max-width:500px){
@@ -761,12 +773,24 @@ button{
         font-size:19px;
     }
 
+    .cartela-grid{
+        grid-template-columns:repeat(8,1fr);
+        gap:8px;
+        padding:16px 8px;
+    }
+
+    .cartela-button{
+        height:43px;
+        font-size:16px;
+        border-radius:9px;
+    }
+
     .play-layout{
         grid-template-columns:40% 60%;
     }
 
     .call-letter{
-        height:44px;
+        height:43px;
         font-size:19px;
     }
 
@@ -775,62 +799,61 @@ button{
     }
 
     .current-call-box{
-        min-height:108px;
+        min-height:103px;
     }
 
     .current-call-label{
-        font-size:18px;
-    }
-
-    .current-call-number{
-        width:68px;
-        height:68px;
-    }
-
-    .card-title{
         font-size:17px;
     }
 
+    .current-call-number{
+        width:66px;
+        height:66px;
+    }
+
     .bingo-card th{
-        height:43px;
+        height:42px;
         font-size:20px;
     }
 
     .bingo-card td{
-        height:55px;
-        font-size:16px;
-    }
-
-    .result-card-wrapper{
-        padding:8px;
+        height:53px;
+        font-size:15px;
     }
 
     .result-bingo-card th{
-        height:53px;
+        height:52px;
         font-size:21px;
     }
 
     .result-bingo-card td{
-        height:63px;
+        height:62px;
         font-size:20px;
     }
 
     .winner-title{
-        font-size:44px;
+        font-size:43px;
     }
 
     .winner-text{
-        font-size:21px;
+        font-size:20px;
     }
+
 }
 
 </style>
 
 </head>
 
+
 <body>
 
 <div id="app">
+
+
+    <!-- =====================================================
+         TITLE
+    ====================================================== -->
 
     <div class="top-title">
         Rodas Friend Zone
@@ -844,6 +867,7 @@ button{
     <div class="game-info">
 
         <div class="info-box">
+
             <div class="info-label">
                 Players
             </div>
@@ -854,10 +878,12 @@ button{
             >
                 0
             </div>
+
         </div>
 
 
         <div class="info-box">
+
             <div class="info-label">
                 Derash
             </div>
@@ -868,10 +894,12 @@ button{
             >
                 0
             </div>
+
         </div>
 
 
         <div class="info-box">
+
             <div class="info-label">
                 Bet
             </div>
@@ -879,10 +907,12 @@ button{
             <div class="info-value">
                 10
             </div>
+
         </div>
 
 
         <div class="info-box">
+
             <div class="info-label">
                 Call
             </div>
@@ -893,13 +923,14 @@ button{
             >
                 0
             </div>
+
         </div>
 
     </div>
 
 
     <!-- =====================================================
-         SELECTION
+         CARTELA SELECTION
     ====================================================== -->
 
     <section
@@ -915,12 +946,14 @@ button{
             Select one available Cartela from 1–100
         </div>
 
+
         <div
             id="selectionTimer"
             class="timer-box"
         >
             Selection ends in 30 sec
         </div>
+
 
         <div
             id="walletBox"
@@ -929,10 +962,12 @@ button{
             Balance: 0 birr
         </div>
 
+
         <div
             id="cartelaGrid"
             class="cartela-grid"
         ></div>
+
 
         <div class="selection-actions">
 
@@ -943,6 +978,7 @@ button{
             >
                 PROCEED
             </button>
+
 
             <button
                 class="action-button leave-button"
@@ -957,21 +993,23 @@ button{
 
 
     <!-- =====================================================
-         STARTING MESSAGE
+         STARTING
     ====================================================== -->
 
     <div
         id="startingMessage"
         class="starting-message hidden"
     >
+
         Game starting in
         <span id="startingSeconds">0</span>
         sec
+
     </div>
 
 
     <!-- =====================================================
-         PLAYING
+         GAME
     ====================================================== -->
 
     <section
@@ -981,7 +1019,8 @@ button{
 
         <div class="play-layout">
 
-            <!-- LEFT CALL BOARD -->
+
+            <!-- CALL BOARD -->
 
             <div class="called-board">
 
@@ -1009,6 +1048,7 @@ button{
 
                 </div>
 
+
                 <div
                     id="callNumberGrid"
                     class="call-number-grid"
@@ -1017,9 +1057,10 @@ button{
             </div>
 
 
-            <!-- RIGHT -->
+            <!-- GAME RIGHT -->
 
             <div class="game-right">
+
 
                 <div class="current-call-box">
 
@@ -1048,7 +1089,9 @@ button{
                         class="switch"
                         onclick="toggleAuto()"
                     >
+
                         <div class="switch-circle"></div>
+
                     </div>
 
                 </div>
@@ -1063,10 +1106,12 @@ button{
                         CHOSEN CARTELA
                     </div>
 
+
                     <table
                         id="playerCard"
                         class="bingo-card"
                     ></table>
+
 
                     <div
                         id="cardNumberLabel"
@@ -1096,6 +1141,7 @@ button{
                         Leave
                     </button>
 
+
                     <button
                         class="refresh-game"
                         onclick="refreshGame()"
@@ -1120,6 +1166,7 @@ button{
         id="resultScreen"
         class="result-screen hidden"
     >
+
 
         <div class="winner-banner">
 
@@ -1146,10 +1193,12 @@ button{
                 WINNING CARTELA
             </div>
 
+
             <table
                 id="resultCard"
                 class="result-bingo-card"
             ></table>
+
 
             <div
                 id="resultBoardNumber"
@@ -1174,7 +1223,7 @@ button{
 
 
 <!-- =========================================================
-     WRONG CLAIM OVERLAY
+     WRONG CLAIM
 ========================================================= -->
 
 <div
@@ -1212,9 +1261,10 @@ button{
    TELEGRAM
 ========================================================= */
 
-const tg = window.Telegram
-    ? window.Telegram.WebApp
-    : null;
+const tg =
+    window.Telegram
+        ? window.Telegram.WebApp
+        : null;
 
 if(tg){
 
@@ -1238,16 +1288,19 @@ if(
     tg.initDataUnsafe.user.id
 ){
 
-    userId = String(
-        tg.initDataUnsafe.user.id
-    );
+    userId =
+        String(
+            tg.initDataUnsafe.user.id
+        );
 
 }
 
 if(!userId){
 
     userId =
-        localStorage.getItem("bingo_user_id");
+        localStorage.getItem(
+            "bingo_user_id"
+        );
 
 }
 
@@ -1277,8 +1330,6 @@ let autoMode = true;
 
 let markedNumbers = new Set();
 
-let lastGameNumber = null;
-
 let polling = null;
 
 
@@ -1295,7 +1346,8 @@ async function api(
 
         ...(options.headers || {}),
 
-        "X-User-ID": userId,
+        "X-User-ID":
+            userId,
 
         "Content-Type":
             "application/json"
@@ -1322,7 +1374,9 @@ async function loadState(){
     try{
 
         const newState =
-            await api("/api/state");
+            await api(
+                "/api/state"
+            );
 
         if(!newState){
 
@@ -1330,7 +1384,8 @@ async function loadState(){
 
         }
 
-        state = newState;
+        state =
+            newState;
 
         render();
 
@@ -1355,7 +1410,9 @@ function startPolling(){
 
     if(polling){
 
-        clearInterval(polling);
+        clearInterval(
+            polling
+        );
 
     }
 
@@ -1382,21 +1439,27 @@ function render(){
 
     updateHeader();
 
+
     const viewPhase =
-        state.view_phase || state.phase;
+        state.view_phase ||
+        state.phase;
 
 
     if(
-        viewPhase === "selection"
+        viewPhase ===
+        "selection"
     ){
 
-        showOnly("selectionScreen");
+        showOnly(
+            "selectionScreen"
+        );
 
         renderSelection();
 
     }
     else if(
-        viewPhase === "starting"
+        viewPhase ===
+        "starting"
     ){
 
         showOnly(
@@ -1410,19 +1473,25 @@ function render(){
 
     }
     else if(
-        viewPhase === "playing"
+        viewPhase ===
+        "playing"
     ){
 
-        showOnly("gameScreen");
+        showOnly(
+            "gameScreen"
+        );
 
         renderGame();
 
     }
     else if(
-        viewPhase === "finished"
+        viewPhase ===
+        "finished"
     ){
 
-        showOnly("resultScreen");
+        showOnly(
+            "resultScreen"
+        );
 
         renderResult();
 
@@ -1432,7 +1501,7 @@ function render(){
 
 
 /* =========================================================
-   SHOW/HIDE
+   SHOW ONLY
 ========================================================= */
 
 function showOnly(...ids){
@@ -1440,29 +1509,37 @@ function showOnly(...ids){
     const all = [
 
         "selectionScreen",
+
         "startingMessage",
+
         "gameScreen",
+
         "resultScreen"
 
     ];
 
-    all.forEach(id => {
 
-        const element =
-            document.getElementById(id);
+    all.forEach(
+        id => {
 
-        if(!element){
+            const element =
+                document.getElementById(
+                    id
+                );
 
-            return;
+            if(!element){
+
+                return;
+
+            }
+
+            element.classList.toggle(
+                "hidden",
+                !ids.includes(id)
+            );
 
         }
-
-        element.classList.toggle(
-            "hidden",
-            !ids.includes(id)
-        );
-
-    });
+    );
 
 }
 
@@ -1478,25 +1555,19 @@ function updateHeader(){
             state.players ?? 0
         );
 
+
     document.getElementById(
         "playersValue"
     ).textContent =
         players;
 
 
-    /*
-       DERASH = 75% OF TOTAL BET
+    const BET_AMOUNT =
+        10;
 
-       10 players = 75
-       20 players = 150
-       30 players = 225
-       50 players = 375
-       100 players = 750
-    */
+    const DERASH_PERCENT =
+        0.75;
 
-    const BET_AMOUNT = 10;
-
-    const DERASH_PERCENT = 0.75;
 
     const derash =
         Math.floor(
@@ -1505,6 +1576,7 @@ function updateHeader(){
             DERASH_PERCENT
         );
 
+
     document.getElementById(
         "derashValue"
     ).textContent =
@@ -1512,9 +1584,12 @@ function updateHeader(){
 
 
     const called =
-        Array.isArray(state.called)
+        Array.isArray(
+            state.called
+        )
             ? state.called.length
             : 0;
+
 
     document.getElementById(
         "callCountValue"
@@ -1527,6 +1602,7 @@ function updateHeader(){
             state.wallet ?? 0
         );
 
+
     document.getElementById(
         "walletBox"
     ).textContent =
@@ -1538,7 +1614,7 @@ function updateHeader(){
 
 
 /* =========================================================
-   SELECTION
+   CARTELA SELECTION
 ========================================================= */
 
 function renderSelection(){
@@ -1547,6 +1623,7 @@ function renderSelection(){
         Number(
             state.selection_remaining ?? 0
         );
+
 
     document.getElementById(
         "selectionTimer"
@@ -1561,12 +1638,15 @@ function renderSelection(){
             "cartelaGrid"
         );
 
+
     grid.innerHTML = "";
 
 
     const taken =
         new Set(
-            Array.isArray(state.taken)
+            Array.isArray(
+                state.taken
+            )
                 ? state.taken
                 : []
         );
@@ -1577,6 +1657,12 @@ function renderSelection(){
         state.my_cartela ||
         state.cartela;
 
+
+    /*
+       IMPORTANT:
+       CARTELAS ARE STILL 1-100.
+       ONLY THE DESIGN HAS CHANGED.
+    */
 
     for(
         let number = 1;
@@ -1589,12 +1675,18 @@ function renderSelection(){
                 "button"
             );
 
+
         button.className =
             "cartela-button";
+
 
         button.textContent =
             number;
 
+
+        /*
+           TAKEN CARTELAS ARE ORANGE
+        */
 
         if(
             taken.has(number) &&
@@ -1605,10 +1697,12 @@ function renderSelection(){
                 "taken"
             );
 
-            button.disabled = true;
-
         }
 
+
+        /*
+           YOUR SELECTED CARTELA IS ORANGE
+        */
 
         if(
             Number(selected) === number
@@ -1621,11 +1715,30 @@ function renderSelection(){
         }
 
 
+        /*
+           A TAKEN CARTELA CANNOT BE CLICKED
+        */
+
+        if(
+            taken.has(number) &&
+            Number(selected) !== number
+        ){
+
+            button.disabled = true;
+
+        }
+
+
         button.onclick =
-            () => selectCartela(number);
+            () =>
+                selectCartela(
+                    number
+                );
 
 
-        grid.appendChild(button);
+        grid.appendChild(
+            button
+        );
 
     }
 
@@ -1635,9 +1748,12 @@ function renderSelection(){
             "proceedButton"
         );
 
+
     proceed.disabled =
         !selected ||
-        Boolean(state.proceeded);
+        Boolean(
+            state.proceeded
+        );
 
 }
 
@@ -1658,9 +1774,10 @@ async function selectCartela(
                 {
                     method:"POST",
 
-                    body:JSON.stringify({
-                        cartela:number
-                    })
+                    body:
+                        JSON.stringify({
+                            cartela:number
+                        })
                 }
             );
 
@@ -1670,18 +1787,24 @@ async function selectCartela(
             !result.success
         ){
 
-            alert(result.message);
+            alert(
+                result.message
+            );
 
         }
 
-        state = result;
+
+        state =
+            result;
 
         render();
 
     }
     catch(error){
 
-        console.error(error);
+        console.error(
+            error
+        );
 
         alert(
             "Could not select Cartela."
@@ -1706,7 +1829,8 @@ async function proceedToGame(){
                 {
                     method:"POST",
 
-                    body:JSON.stringify({})
+                    body:
+                        JSON.stringify({})
                 }
             );
 
@@ -1720,7 +1844,9 @@ async function proceedToGame(){
                 "Could not enter the game."
             );
 
-            state = result;
+
+            state =
+                result;
 
             render();
 
@@ -1729,14 +1855,17 @@ async function proceedToGame(){
         }
 
 
-        state = result;
+        state =
+            result;
 
         render();
 
     }
     catch(error){
 
-        console.error(error);
+        console.error(
+            error
+        );
 
         alert(
             "Could not enter the game."
@@ -1758,6 +1887,7 @@ function renderStarting(){
             state.start_remaining ?? 0
         );
 
+
     document.getElementById(
         "startingSeconds"
     ).textContent =
@@ -1772,14 +1902,13 @@ function renderStarting(){
 
 function renderGame(){
 
-    const card =
-        state.card;
-
     renderCallBoard();
 
     renderCurrentCall();
 
-    renderPlayerCard(card);
+    renderPlayerCard(
+        state.card
+    );
 
     updateAutoSwitch();
 
@@ -1797,12 +1926,15 @@ function renderCallBoard(){
             "callNumberGrid"
         );
 
+
     grid.innerHTML = "";
 
 
     const called =
         new Set(
-            Array.isArray(state.called)
+            Array.isArray(
+                state.called
+            )
                 ? state.called
                 : []
         );
@@ -1825,8 +1957,10 @@ function renderCallBoard(){
                 "div"
             );
 
+
         cell.className =
             "call-number";
+
 
         cell.textContent =
             number;
@@ -1854,7 +1988,9 @@ function renderCallBoard(){
         }
 
 
-        grid.appendChild(cell);
+        grid.appendChild(
+            cell
+        );
 
     }
 
@@ -1871,6 +2007,7 @@ function renderCurrentCall(){
         document.getElementById(
             "currentCallNumber"
         );
+
 
     const current =
         state.current;
@@ -1904,12 +2041,15 @@ function renderCurrentCall(){
    PLAYER CARD
 ========================================================= */
 
-function renderPlayerCard(card){
+function renderPlayerCard(
+    card
+){
 
     const table =
         document.getElementById(
             "playerCard"
         );
+
 
     table.innerHTML = "";
 
@@ -1946,6 +2086,7 @@ function renderPlayerCard(card){
             "thead"
         );
 
+
     const headerRow =
         document.createElement(
             "tr"
@@ -1958,24 +2099,32 @@ function renderPlayerCard(card){
         "N",
         "G",
         "O"
-    ].forEach(letter => {
+    ].forEach(
+        letter => {
 
-        const th =
-            document.createElement(
-                "th"
+            const th =
+                document.createElement(
+                    "th"
+                );
+
+            th.textContent =
+                letter;
+
+            headerRow.appendChild(
+                th
             );
 
-        th.textContent =
-            letter;
-
-        headerRow.appendChild(th);
-
-    });
+        }
+    );
 
 
-    thead.appendChild(headerRow);
+    thead.appendChild(
+        headerRow
+    );
 
-    table.appendChild(thead);
+    table.appendChild(
+        thead
+    );
 
 
     const tbody =
@@ -1986,7 +2135,9 @@ function renderPlayerCard(card){
 
     const called =
         new Set(
-            Array.isArray(state.called)
+            Array.isArray(
+                state.called
+            )
                 ? state.called
                 : []
         );
@@ -2061,30 +2212,37 @@ function renderPlayerCard(card){
 
 
                 td.onclick =
-                    () => toggleManualNumber(
-                        number
-                    );
+                    () =>
+                        toggleManualNumber(
+                            number
+                        );
 
             }
 
 
-            tr.appendChild(td);
+            tr.appendChild(
+                td
+            );
 
         }
 
 
-        tbody.appendChild(tr);
+        tbody.appendChild(
+            tr
+        );
 
     }
 
 
-    table.appendChild(tbody);
+    table.appendChild(
+        tbody
+    );
 
 }
 
 
 /* =========================================================
-   AUTO MODE
+   AUTO
 ========================================================= */
 
 function toggleAuto(){
@@ -2092,11 +2250,13 @@ function toggleAuto(){
     autoMode =
         !autoMode;
 
+
     if(autoMode){
 
         markedNumbers.clear();
 
     }
+
 
     updateAutoSwitch();
 
@@ -2111,21 +2271,22 @@ function toggleAuto(){
 
 function updateAutoSwitch(){
 
-    const switchElement =
+    const element =
         document.getElementById(
             "autoSwitch"
         );
 
+
     if(autoMode){
 
-        switchElement.classList.remove(
+        element.classList.remove(
             "off"
         );
 
     }
     else{
 
-        switchElement.classList.add(
+        element.classList.add(
             "off"
         );
 
@@ -2151,7 +2312,9 @@ function toggleManualNumber(
 
     const called =
         new Set(
-            Array.isArray(state.called)
+            Array.isArray(
+                state.called
+            )
                 ? state.called
                 : []
         );
@@ -2170,12 +2333,16 @@ function toggleManualNumber(
         markedNumbers.has(number)
     ){
 
-        markedNumbers.delete(number);
+        markedNumbers.delete(
+            number
+        );
 
     }
     else{
 
-        markedNumbers.add(number);
+        markedNumbers.add(
+            number
+        );
 
     }
 
@@ -2186,7 +2353,7 @@ function toggleManualNumber(
 
 
 /* =========================================================
-   BINGO CLAIM
+   CLAIM BINGO
 ========================================================= */
 
 async function claimBingo(){
@@ -2197,7 +2364,9 @@ async function claimBingo(){
     if(autoMode){
 
         marked =
-            Array.isArray(state.called)
+            Array.isArray(
+                state.called
+            )
                 ? [...state.called]
                 : [];
 
@@ -2218,9 +2387,10 @@ async function claimBingo(){
                 {
                     method:"POST",
 
-                    body:JSON.stringify({
-                        marked:marked
-                    })
+                    body:
+                        JSON.stringify({
+                            marked:marked
+                        })
                 }
             );
 
@@ -2229,7 +2399,8 @@ async function claimBingo(){
 
             showWrongOverlay();
 
-            state = result;
+            state =
+                result;
 
             render();
 
@@ -2250,14 +2421,17 @@ async function claimBingo(){
         }
 
 
-        state = result;
+        state =
+            result;
 
         render();
 
     }
     catch(error){
 
-        console.error(error);
+        console.error(
+            error
+        );
 
         alert(
             "Could not submit Bingo."
@@ -2269,7 +2443,7 @@ async function claimBingo(){
 
 
 /* =========================================================
-   RESULT / WINNER
+   RESULT
 ========================================================= */
 
 function renderResult(){
@@ -2341,22 +2515,10 @@ function renderResult(){
 
 
 /* =========================================================
-   WINNER CARD
+   GET WINNER CARD
 ========================================================= */
 
 function getWinnerCard(){
-
-    if(
-        state.winner &&
-        state.winner.cartela &&
-        state.winner.cartela ===
-        state.selected
-    ){
-
-        return state.card;
-
-    }
-
 
     if(
         state.card
@@ -2373,7 +2535,7 @@ function getWinnerCard(){
 
 
 /* =========================================================
-   RESULT CARD
+   WINNER CARD
 ========================================================= */
 
 function renderResultCard(
@@ -2385,6 +2547,7 @@ function renderResultCard(
         document.getElementById(
             "resultCard"
         );
+
 
     table.innerHTML = "";
 
@@ -2428,6 +2591,7 @@ function renderResultCard(
             "thead"
         );
 
+
     const headerRow =
         document.createElement(
             "tr"
@@ -2440,19 +2604,23 @@ function renderResultCard(
         "N",
         "G",
         "O"
-    ].forEach(letter => {
+    ].forEach(
+        letter => {
 
-        const th =
-            document.createElement(
-                "th"
+            const th =
+                document.createElement(
+                    "th"
+                );
+
+            th.textContent =
+                letter;
+
+            headerRow.appendChild(
+                th
             );
 
-        th.textContent =
-            letter;
-
-        headerRow.appendChild(th);
-
-    });
+        }
+    );
 
 
     thead.appendChild(
@@ -2536,12 +2704,16 @@ function renderResultCard(
             }
 
 
-            tr.appendChild(td);
+            tr.appendChild(
+                td
+            );
 
         }
 
 
-        tbody.appendChild(tr);
+        tbody.appendChild(
+            tr
+        );
 
     }
 
@@ -2576,16 +2748,17 @@ function getWinningNumbers(
 
 
         if(
-            pattern.startsWith("Row")
+            pattern.startsWith(
+                "Row"
+            )
         ){
 
             const row =
                 Number(
-                    pattern
-                        .replace(
-                            "Row ",
-                            ""
-                        )
+                    pattern.replace(
+                        "Row ",
+                        ""
+                    )
                 ) - 1;
 
 
@@ -2602,6 +2775,7 @@ function getWinningNumbers(
 
                     const number =
                         card[row][col];
+
 
                     if(number !== 0){
 
@@ -2623,11 +2797,10 @@ function getWinningNumbers(
         ){
 
             const letter =
-                pattern
-                    .replace(
-                        "Column ",
-                        ""
-                    );
+                pattern.replace(
+                    "Column ",
+                    ""
+                );
 
 
             const letters =
@@ -2659,6 +2832,7 @@ function getWinningNumbers(
                     const number =
                         card[row][col];
 
+
                     if(number !== 0){
 
                         numbers.add(
@@ -2686,6 +2860,7 @@ function getWinningNumbers(
                 const number =
                     card[i][i];
 
+
                 if(number !== 0){
 
                     numbers.add(
@@ -2709,7 +2884,8 @@ function getWinningNumbers(
             ){
 
                 const number =
-                    card[i][4 - i];
+                    card[i][4-i];
+
 
                 if(number !== 0){
 
@@ -2745,7 +2921,8 @@ async function leaveGame(){
                 {
                     method:"POST",
 
-                    body:JSON.stringify({})
+                    body:
+                        JSON.stringify({})
                 }
             );
 
@@ -2762,14 +2939,17 @@ async function leaveGame(){
         }
 
 
-        state = result;
+        state =
+            result;
 
         render();
 
     }
     catch(error){
 
-        console.error(error);
+        console.error(
+            error
+        );
 
         alert(
             "Could not leave the game."
@@ -2830,22 +3010,27 @@ function escapeHtml(
 ){
 
     return String(value)
+
         .replace(
             /&/g,
             "&amp;"
         )
+
         .replace(
             /</g,
             "&lt;"
         )
+
         .replace(
             />/g,
             "&gt;"
         )
+
         .replace(
             /"/g,
             "&quot;"
         )
+
         .replace(
             /'/g,
             "&#039;"
