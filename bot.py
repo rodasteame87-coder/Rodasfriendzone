@@ -6,31 +6,44 @@ import time
 from pathlib import Path
 
 from aiohttp import web
-from aiogram import Bot, Dispatcher
-from aiogram.filters import Command, CommandStart
+from aiogram import Bot, Dispatcher, F
+from aiogram.filters import Command
 from aiogram.types import (
     BotCommand,
     BotCommandScopeAllPrivateChats,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    Message,
     MenuButtonCommands,
+    Message,
     Update,
     WebAppInfo,
 )
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, WEBHOOK_SECRET
 
 
-# =========================================================
+# ============================================================
+# LOGGING
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+
+logger = logging.getLogger("rodas-friend-zone-bingo")
+
+
+# ============================================================
 # CONFIGURATION
-# =========================================================
+# ============================================================
 
 PORT = int(os.getenv("PORT", "10000"))
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
 BET_AMOUNT = 10
+
 SELECTION_SECONDS = 30
 DRAW_INTERVAL = 3
 RESULT_SECONDS = 10
@@ -44,29 +57,22 @@ WEBHOOK_PATH = "/telegram/webhook"
 RENDER_EXTERNAL_URL = os.getenv(
     "RENDER_EXTERNAL_URL",
     "https://rodasfriendzone.onrender.com",
-)
+).rstrip("/")
 
-WEBHOOK_URL = f"{RENDER_EXTERNAL_URL.rstrip('/')}{WEBHOOK_PATH}"
-
-
-# =========================================================
-# LOGGING
-# =========================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-
-logger = logging.getLogger("rodas-friend-zone-bingo")
+WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}"
 
 
-# =========================================================
-# GLOBALS
-# =========================================================
+# ============================================================
+# BOT / DISPATCHER
+# ============================================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+
+# ============================================================
+# GLOBAL GAME STATE
+# ============================================================
 
 games = {}
 
@@ -74,24 +80,37 @@ game_lock = asyncio.Lock()
 
 next_game_number = 1
 
+game_loop_task = None
 
-# =========================================================
+
+# ============================================================
 # HELPERS
-# =========================================================
+# ============================================================
 
 def now():
     return time.time()
 
 
 def get_user_id(request):
-    return str(
+    """
+    Gets the user ID supplied by the web app.
+
+    Telegram Web App / frontend can send:
+      X-User-ID
+      X-Telegram-User-ID
+
+    If neither exists, use guest.
+    """
+    value = (
         request.headers.get("X-User-ID")
         or request.headers.get("X-Telegram-User-ID")
         or "guest"
     )
 
+    return str(value)
 
-def safe_int(value, default=None):
+
+def safe_int(value, default=0):
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -107,56 +126,38 @@ def generate_game_number():
     return number
 
 
-def bingo_column(number):
-    if 1 <= number <= 15:
-        return "B"
+def bingo_column(column):
+    ranges = {
+        "B": range(1, 16),
+        "I": range(16, 31),
+        "N": range(31, 46),
+        "G": range(46, 61),
+        "O": range(61, 76),
+    }
 
-    if 16 <= number <= 30:
-        return "I"
+    values = list(ranges[column])
 
-    if 31 <= number <= 45:
-        return "N"
-
-    if 46 <= number <= 60:
-        return "G"
-
-    if 61 <= number <= 75:
-        return "O"
-
-    return ""
+    return random.sample(values, 5)
 
 
 def generate_cartela():
-    """
-    Standard 5x5 Bingo card.
-
-    B: 1-15
-    I: 16-30
-    N: 31-45
-    G: 46-60
-    O: 61-75
-
-    Center is FREE.
-    """
-
-    columns = [
-        random.sample(range(1, 16), 5),
-        random.sample(range(16, 31), 5),
-        random.sample(range(31, 46), 5),
-        random.sample(range(46, 61), 5),
-        random.sample(range(61, 76), 5),
-    ]
+    columns = ["B", "I", "N", "G", "O"]
 
     board = []
+
+    column_values = {
+        column: bingo_column(column)
+        for column in columns
+    }
 
     for row in range(5):
         current_row = []
 
-        for column in range(5):
-            if row == 2 and column == 2:
-                current_row.append(0)
+        for column in columns:
+            if column == "N" and row == 2:
+                current_row.append("FREE")
             else:
-                current_row.append(columns[column][row])
+                current_row.append(column_values[column][row])
 
         board.append(current_row)
 
@@ -164,1186 +165,880 @@ def generate_cartela():
 
 
 def flatten_board(board):
-    return [
-        value
-        for row in board
-        for value in row
-        if value != 0
-    ]
+    result = []
+
+    for row in board:
+        for value in row:
+            if value != "FREE":
+                result.append(value)
+
+    return result
 
 
-def check_pattern(board, called_numbers, pattern):
+def check_pattern(board, called_numbers):
     called = set(called_numbers)
 
-    if pattern == "row_1":
-        positions = [(0, c) for c in range(5)]
+    # Rows
+    for row in board:
+        if all(
+            value == "FREE" or value in called
+            for value in row
+        ):
+            return True
 
-    elif pattern == "row_2":
-        positions = [(1, c) for c in range(5)]
+    # Columns
+    for col in range(5):
+        if all(
+            board[row][col] == "FREE"
+            or board[row][col] in called
+            for row in range(5)
+        ):
+            return True
 
-    elif pattern == "row_3":
-        positions = [(2, c) for c in range(5)]
+    # Main diagonal
+    if all(
+        board[i][i] == "FREE"
+        or board[i][i] in called
+        for i in range(5)
+    ):
+        return True
 
-    elif pattern == "row_4":
-        positions = [(3, c) for c in range(5)]
+    # Other diagonal
+    if all(
+        board[i][4 - i] == "FREE"
+        or board[i][4 - i] in called
+        for i in range(5)
+    ):
+        return True
 
-    elif pattern == "row_5":
-        positions = [(4, c) for c in range(5)]
-
-    elif pattern == "column_b":
-        positions = [(r, 0) for r in range(5)]
-
-    elif pattern == "column_i":
-        positions = [(r, 1) for r in range(5)]
-
-    elif pattern == "column_n":
-        positions = [(r, 2) for r in range(5)]
-
-    elif pattern == "column_g":
-        positions = [(r, 3) for r in range(5)]
-
-    elif pattern == "column_o":
-        positions = [(r, 4) for r in range(5)]
-
-    elif pattern == "diagonal_down":
-        positions = [
-            (0, 0),
-            (1, 1),
-            (2, 2),
-            (3, 3),
-            (4, 4),
-        ]
-
-    elif pattern == "diagonal_up":
-        positions = [
-            (4, 0),
-            (3, 1),
-            (2, 2),
-            (1, 3),
-            (0, 4),
-        ]
-
-    else:
-        return False
-
-    for row, column in positions:
-        value = board[row][column]
-
-        if value == 0:
-            continue
-
-        if value not in called:
-            return False
-
-    return True
+    return False
 
 
 def winning_patterns_for_board(board, called_numbers):
-    patterns = [
-        "row_1",
-        "row_2",
-        "row_3",
-        "row_4",
-        "row_5",
-        "column_b",
-        "column_i",
-        "column_n",
-        "column_g",
-        "column_o",
-        "diagonal_down",
-        "diagonal_up",
-    ]
+    called = set(called_numbers)
 
-    return [
-        pattern
-        for pattern in patterns
-        if check_pattern(board, called_numbers, pattern)
-    ]
+    patterns = []
+
+    # Rows
+    for row_index, row in enumerate(board):
+        if all(
+            value == "FREE" or value in called
+            for value in row
+        ):
+            patterns.append(f"row-{row_index + 1}")
+
+    # Columns
+    for col in range(5):
+        if all(
+            board[row][col] == "FREE"
+            or board[row][col] in called
+            for row in range(5)
+        ):
+            patterns.append(f"column-{col + 1}")
+
+    # Main diagonal
+    if all(
+        board[i][i] == "FREE"
+        or board[i][i] in called
+        for i in range(5)
+    ):
+        patterns.append("diagonal-main")
+
+    # Other diagonal
+    if all(
+        board[i][4 - i] == "FREE"
+        or board[i][4 - i] in called
+        for i in range(5)
+    ):
+        patterns.append("diagonal-other")
+
+    return patterns
 
 
-# =========================================================
+# ============================================================
 # BINGO GAME
-# =========================================================
+# ============================================================
 
 class BingoGame:
+
     def __init__(self, game_number):
         self.game_number = game_number
 
         self.phase = "selection"
 
-        self.created_at = now()
+        self.selection_started_at = now()
 
-        # -------------------------------------------------
-        # Shared 30-second timer
-        # -------------------------------------------------
+        self.selection_seconds = SELECTION_SECONDS
 
-        self.selection_end = now() + SELECTION_SECONDS
-        self.start_end = None
-
-        # -------------------------------------------------
-        # Players
-        # -------------------------------------------------
-
-        self.player_cartelas = {}
+        self.players = {}
         self.player_names = {}
+
+        self.boards = {}
 
         self.left_users = set()
         self.proceeded_users = set()
 
-        # -------------------------------------------------
-        # Cartela boards
-        # -------------------------------------------------
-
-        self.cartela_boards = {}
-
-        # -------------------------------------------------
-        # Bingo drawing
-        # -------------------------------------------------
-
-        self.call_order = []
         self.called_numbers = []
 
-        self.current_call = None
-        self.last_call = None
+        self.number_pool = list(range(1, 76))
+        random.shuffle(self.number_pool)
 
-        self.draw_task = None
+        self.last_draw_at = None
 
-        # -------------------------------------------------
-        # Winner
-        # -------------------------------------------------
-
-        self.winner_user_id = None
-        self.winner_name = None
-        self.winning_pattern = None
-
-        self.result_end = None
+        self.started_at = None
 
         self.finished_at = None
 
-        # -------------------------------------------------
-        # Prize
-        # -------------------------------------------------
+        self.winner = None
+        self.winner_user_id = None
+        self.winner_cartela = None
+        self.winner_pattern = None
 
         self.total_bets = 0
         self.prize = 0
 
-    # =====================================================
-    # PLAYER COUNT
-    # =====================================================
+        self.result_started_at = None
 
-    @property
-    def player_count(self):
-        return len(self.player_cartelas)
-
-    # =====================================================
-    # CARTELA COUNT
-    # =====================================================
-
-    @property
-    def taken_cartelas(self):
-        return set(self.player_cartelas.values())
-
-    # =====================================================
-    # TIMER
-    # =====================================================
+    # --------------------------------------------------------
+    # TIMERS
+    # --------------------------------------------------------
 
     def selection_remaining(self):
-        if self.phase != "selection":
-            return 0
+        elapsed = now() - self.selection_started_at
 
         return max(
             0,
-            int(self.selection_end - now())
+            int(self.selection_seconds - elapsed),
         )
 
-    def start_remaining(self):
-        if self.phase != "starting":
-            return 0
+    def result_remaining(self):
+        if not self.result_started_at:
+            return RESULT_SECONDS
 
-        if self.start_end is None:
-            return 0
+        elapsed = now() - self.result_started_at
 
         return max(
             0,
-            int(self.start_end - now())
+            int(RESULT_SECONDS - elapsed),
         )
 
-    # =====================================================
-    # START TIMER
-    # =====================================================
+    def reset_selection_timer(self):
+        self.selection_started_at = now()
 
-    def ensure_start_timer_locked(self):
-        self.start_end = self.selection_end
+    # --------------------------------------------------------
+    # START GAME
+    # --------------------------------------------------------
 
-        logger.info(
-            "Game %s: shared countdown deadline set. "
-            "Selection and start timers are identical.",
-            self.game_number,
-        )
-
-        return self.start_end
-
-    # =====================================================
-    # START SELECTION AGAIN
-    # =====================================================
-
-    def start_selection_locked(self):
-        self.phase = "selection"
-
-        self.selection_end = now() + SELECTION_SECONDS
-        self.start_end = None
-
-        self.player_cartelas.clear()
-        self.player_names.clear()
-        self.proceeded_users.clear()
-
-        self.call_order.clear()
-        self.called_numbers.clear()
-
-        self.current_call = None
-        self.last_call = None
-
-        self.winner_user_id = None
-        self.winner_name = None
-        self.winning_pattern = None
-
-        self.result_end = None
-        self.finished_at = None
-
-        self.total_bets = 0
-        self.prize = 0
-
-        logger.info(
-            "Game %s: selection restarted.",
-            self.game_number,
-        )
-
-    # =====================================================
-    # START PLAYING
-    # =====================================================
-
-    def start_playing_locked(self):
-        if len(self.player_cartelas) == 0:
-            self.start_selection_locked()
-            return False
-
+    def start_playing(self):
         self.phase = "playing"
 
-        self.start_end = None
+        self.started_at = now()
 
-        self.call_order = list(range(1, 76))
-        random.shuffle(self.call_order)
-
-        self.called_numbers.clear()
-
-        self.current_call = None
-        self.last_call = None
-
-        self.total_bets = len(self.player_cartelas) * BET_AMOUNT
-
-        self.prize = round(
-            self.total_bets * PRIZE_PERCENT,
-            2,
-        )
+        self.last_draw_at = now()
 
         logger.info(
-            "Game %s started with %s players. "
-            "Total bets=%s prize=%s",
+            "Game %s started with %s player(s).",
             self.game_number,
-            len(self.player_cartelas),
-            self.total_bets,
-            self.prize,
+            len(self.players),
         )
+
+    # --------------------------------------------------------
+    # PLAYER
+    # --------------------------------------------------------
+
+    def add_player(self, user_id, name=None):
+        user_id = str(user_id)
+
+        if user_id in self.left_users:
+            self.left_users.remove(user_id)
+
+        if user_id not in self.players:
+            self.players[user_id] = None
+            self.total_bets += BET_AMOUNT
+
+        if name:
+            self.player_names[user_id] = name
 
         return True
 
-    # =====================================================
-    # ADD PLAYER
-    # =====================================================
-
-    def add_player(self, user_id, name="Player"):
+    def select_cartela(self, user_id, cartela_number):
         user_id = str(user_id)
 
-        self.left_users.discard(user_id)
-
-        self.player_names[user_id] = name
-
-    # =====================================================
-    # SELECT CARTELA
-    # =====================================================
-
-    def select_cartela(self, user_id, cartela):
-        user_id = str(user_id)
-
-        if self.phase != "selection":
-            return False, "Cartela selection is closed."
-
-        if self.selection_remaining() <= 0:
-            return False, "Cartela selection time has ended."
-
-        cartela = safe_int(cartela)
-
-        if cartela is None:
-            return False, "Invalid Cartela."
-
-        if not (
-            CARTELA_MIN <= cartela <= CARTELA_MAX
-        ):
-            return False, "Invalid Cartela."
-
-        current = self.player_cartelas.get(user_id)
-
-        if current == cartela:
-            return False, "Cartela already selected."
-
-        owner = None
-
-        for player_id, selected in self.player_cartelas.items():
-            if selected == cartela:
-                owner = player_id
-                break
-
-        if owner is not None and owner != user_id:
-            return False, "This Cartela is already taken."
-
-        if current is not None:
-            self.player_cartelas.pop(user_id, None)
-
-        self.player_cartelas[user_id] = cartela
-
-        if cartela not in self.cartela_boards:
-            self.cartela_boards[cartela] = generate_cartela()
-
-        self.add_player(
-            user_id,
-            self.player_names.get(user_id, "Player"),
+        cartela_number = safe_int(
+            cartela_number,
+            0,
         )
 
-        return True, "Cartela selected."
+        if not (
+            CARTELA_MIN
+            <= cartela_number
+            <= CARTELA_MAX
+        ):
+            return False, "Invalid cartela number."
 
-    # =====================================================
-    # DESELECT CARTELA
-    # =====================================================
+        # Ensure player exists.
+        self.add_player(user_id)
+
+        # Don't allow same cartela to be selected
+        # by another player.
+        for other_user_id, selected in self.players.items():
+            if (
+                other_user_id != user_id
+                and selected == cartela_number
+            ):
+                return False, "That cartela is already selected."
+
+        self.players[user_id] = cartela_number
+
+        self.boards[user_id] = generate_cartela()
+
+        return True, "Cartela selected."
 
     def deselect_cartela(self, user_id):
         user_id = str(user_id)
 
-        if self.phase != "selection":
-            return False, "Cartela selection is closed."
+        if user_id in self.players:
+            self.players[user_id] = None
 
-        if self.selection_remaining() <= 0:
-            return False, "Cartela selection time has ended."
+        self.boards.pop(user_id, None)
 
-        if user_id not in self.player_cartelas:
-            self.proceeded_users.discard(user_id)
-
-            return True, "No Cartela selected."
-
-        old_cartela = self.player_cartelas.pop(
-            user_id,
-            None,
-        )
-
-        self.proceeded_users.discard(user_id)
-
-        logger.info(
-            "Game %s: user %s deselected Cartela %s.",
-            self.game_number,
-            user_id,
-            old_cartela,
-        )
-
-        return True, "Cartela deselected."
-
-    # =====================================================
-    # PROCEED
-    # =====================================================
+        return True
 
     def proceed(self, user_id):
         user_id = str(user_id)
 
-        if self.phase != "selection":
-            return False, "You cannot proceed now."
+        if user_id not in self.players:
+            return False
 
-        if self.selection_remaining() <= 0:
-            return False, "Selection time has ended."
-
-        if user_id not in self.player_cartelas:
-            return False, "Please choose a Cartela first."
+        if self.players[user_id] is None:
+            return False
 
         self.proceeded_users.add(user_id)
 
-        return True, "Proceed accepted."
-
-    # =====================================================
-    # LEAVE
-    # =====================================================
+        return True
 
     def leave(self, user_id):
         user_id = str(user_id)
 
-        if self.phase == "result":
-            return False, "The game has already finished."
-
-        if self.phase == "finished":
-            return False, "The game has already finished."
-
-        old_cartela = self.player_cartelas.pop(
-            user_id,
-            None,
-        )
-
-        self.proceeded_users.discard(user_id)
-
         self.left_users.add(user_id)
 
-        if old_cartela is not None:
-            logger.info(
-                "Game %s: user %s left. "
-                "Cartela %s is now free.",
-                self.game_number,
-                user_id,
-                old_cartela,
-            )
+        self.players.pop(user_id, None)
+        self.player_names.pop(user_id, None)
+        self.boards.pop(user_id, None)
+        self.proceeded_users.discard(user_id)
 
-        if (
-            self.phase in ("selection", "starting")
-            and len(self.player_cartelas) == 0
-        ):
-            self.start_selection_locked()
+        return True
 
-        return True, "You left the game."
+    # --------------------------------------------------------
+    # DRAW NUMBERS
+    # --------------------------------------------------------
 
-    # =====================================================
-    # DRAW NUMBER
-    # =====================================================
-
-    def draw_number_locked(self):
-        if self.phase != "playing":
+    def draw_number(self):
+        if not self.number_pool:
             return None
 
-        if not self.call_order:
-            self.phase = "result"
-            self.result_end = now() + RESULT_SECONDS
-            self.finished_at = now()
-
-            return None
-
-        number = self.call_order.pop(0)
-
-        self.last_call = self.current_call
-        self.current_call = number
+        number = self.number_pool.pop(0)
 
         self.called_numbers.append(number)
 
+        self.last_draw_at = now()
+
         logger.info(
-            "Game %s: called number %s.",
+            "Game %s: number called: %s",
             self.game_number,
             number,
         )
 
         return number
 
-    # =====================================================
-    # CHECK WINNER
-    # =====================================================
+    # --------------------------------------------------------
+    # WINNER
+    # --------------------------------------------------------
 
-    def check_winner_locked(self):
-        if self.phase != "playing":
-            return None
+    def check_winner(self):
+        for user_id, board in self.boards.items():
 
-        for user_id, cartela in list(
-            self.player_cartelas.items()
-        ):
-            board = self.cartela_boards.get(cartela)
-
-            if not board:
+            if user_id not in self.players:
                 continue
 
-            patterns = winning_patterns_for_board(
+            if self.players.get(user_id) is None:
+                continue
+
+            if check_pattern(
                 board,
                 self.called_numbers,
-            )
+            ):
+                patterns = winning_patterns_for_board(
+                    board,
+                    self.called_numbers,
+                )
 
-            if patterns:
                 self.winner_user_id = user_id
 
-                self.winner_name = self.player_names.get(
-                    user_id,
-                    "Player",
+                self.winner = (
+                    self.player_names.get(
+                        user_id,
+                        user_id,
+                    )
                 )
 
-                self.winning_pattern = patterns[0]
-
-                self.phase = "result"
-
-                self.result_end = now() + RESULT_SECONDS
-
-                self.finished_at = now()
-
-                logger.info(
-                    "Game %s: winner=%s cartela=%s pattern=%s",
-                    self.game_number,
-                    user_id,
-                    cartela,
-                    self.winning_pattern,
+                self.winner_cartela = self.players.get(
+                    user_id
                 )
 
-                return user_id
+                self.winner_pattern = (
+                    patterns[0]
+                    if patterns
+                    else None
+                )
 
-        return None
+                self.prize = round(
+                    self.total_bets * PRIZE_PERCENT,
+                    2,
+                )
 
-    # =====================================================
-    # SERIALIZE STATE
-    # =====================================================
+                return True
 
-    def state_for(self, user_id):
-        user_id = str(user_id)
+        return False
 
-        selected = self.player_cartelas.get(user_id)
+    # --------------------------------------------------------
+    # SERIALIZE
+    # --------------------------------------------------------
 
-        if self.phase == "selection":
-            remaining = self.selection_remaining()
+    def serialize(self, user_id=None):
 
-        elif self.phase == "starting":
-            remaining = self.start_remaining()
-
-        else:
-            remaining = 0
-
-        selected_board = None
-
-        if selected is not None:
-            selected_board = self.cartela_boards.get(
-                selected
-            )
-
-        taken = sorted(
-            self.taken_cartelas
+        user_id = (
+            str(user_id)
+            if user_id is not None
+            else None
         )
 
-        winner_cartela = None
+        my_cartela = None
+        my_board = None
 
-        if self.winner_user_id is not None:
-            winner_cartela = self.player_cartelas.get(
-                self.winner_user_id
-            )
+        if user_id:
+            my_cartela = self.players.get(user_id)
+
+            my_board = self.boards.get(user_id)
 
         return {
-            "success": True,
-
             "game_number": self.game_number,
-
             "phase": self.phase,
 
-            "bet": BET_AMOUNT,
-            "bet_amount": BET_AMOUNT,
+            "running": self.phase
+            in (
+                "selection",
+                "starting",
+                "playing",
+                "result",
+            ),
 
-            "players": len(self.player_cartelas),
-            "player_count": len(self.player_cartelas),
-
-            "total_bets": self.total_bets,
-
-            "prize": self.prize,
-            "derash": self.prize,
-
-            "selection_remaining": remaining,
-
-            "start_remaining": (
-                self.start_remaining()
-                if self.phase == "starting"
+            "selection_remaining": (
+                self.selection_remaining()
+                if self.phase == "selection"
                 else 0
             ),
 
-            "remaining": remaining,
-
-            "selected": selected,
-            "my_cartela": selected,
-            "cartela": selected,
-
-            "taken_cartelas": taken,
-            "taken": taken,
-
-            "cartelas": taken,
-
-            "available_cartelas": [
-                number
-                for number in range(
-                    CARTELA_MIN,
-                    CARTELA_MAX + 1,
-                )
-                if number not in self.taken_cartelas
-                or number == selected
-            ],
-
-            "proceeded": user_id in self.proceeded_users,
-
-            "current_call": self.current_call,
-
-            "last_call": self.last_call,
-
-            "called_numbers": list(
-                self.called_numbers
+            "result_remaining": (
+                self.result_remaining()
+                if self.phase == "result"
+                else 0
             ),
 
-            "call_count": len(
-                self.called_numbers
+            "players": len(self.players),
+
+            "player_count": len(self.players),
+
+            "my_cartela": my_cartela,
+
+            "my_board": my_board,
+
+            "called": self.called_numbers,
+
+            "called_numbers": self.called_numbers,
+
+            "last_called": (
+                self.called_numbers[-1]
+                if self.called_numbers
+                else None
             ),
 
-            "board": selected_board,
+            "winner": self.winner,
 
             "winner_user_id": self.winner_user_id,
 
-            "winner_name": self.winner_name,
+            "winner_cartela": self.winner_cartela,
 
-            "winner_cartela": winner_cartela,
+            "winner_pattern": self.winner_pattern,
 
-            "winning_pattern": self.winning_pattern,
+            "prize": self.prize,
 
-            "result_remaining": (
-                max(
-                    0,
-                    int(
-                        self.result_end - now()
-                    ),
-                )
-                if self.phase == "result"
-                and self.result_end is not None
-                else 0
-            ),
+            "total_bets": self.total_bets,
         }
 
 
-# =========================================================
-# GET CURRENT GAME
-# =========================================================
+# ============================================================
+# CURRENT GAME
+# ============================================================
 
 def get_current_game():
-    if not games:
-        game = BingoGame(
-            generate_game_number()
-        )
-
-        games[game.game_number] = game
-
-        return game
-
     active = [
         game
         for game in games.values()
-        if game.phase
-        in (
-            "selection",
-            "starting",
-            "playing",
-            "result",
-        )
+        if game.phase != "finished"
     ]
 
     if active:
-        return sorted(
-            active,
-            key=lambda item: item.game_number,
-        )[-1]
+        return active[-1]
 
-    game = BingoGame(
-        generate_game_number()
+    game_number = generate_game_number()
+
+    game = BingoGame(game_number)
+
+    games[game_number] = game
+
+    logger.info(
+        "Initial Bingo game created: %s",
+        game_number,
     )
-
-    games[game.game_number] = game
 
     return game
 
 
-# =========================================================
+# ============================================================
 # GAME LOOP
-# =========================================================
+# ============================================================
 
 async def game_loop():
+
+    logger.info("Bingo game loop started.")
+
     while True:
+
         try:
+
             async with game_lock:
-                active_games = list(
-                    games.values()
-                )
 
-                current_time = now()
+                game = get_current_game()
 
-                for game in active_games:
+                # --------------------------------------------
+                # SELECTION
+                # --------------------------------------------
 
-                    # -------------------------------------
-                    # SELECTION
-                    # -------------------------------------
+                if game.phase == "selection":
 
-                    if game.phase == "selection":
+                    remaining = game.selection_remaining()
 
-                        if current_time >= game.selection_end:
+                    # Selection timer expired.
+                    if remaining <= 0:
 
-                            if (
-                                len(game.player_cartelas)
-                                == 0
-                            ):
-                                game.start_selection_locked()
+                        if game.players:
 
-                            else:
-                                game.ensure_start_timer_locked()
-
-                                game.phase = "starting"
-
-                                logger.info(
-                                    "Game %s entered starting phase.",
-                                    game.game_number,
-                                )
-
-                    # -------------------------------------
-                    # STARTING
-                    # -------------------------------------
-
-                    elif game.phase == "starting":
-
-                        if (
-                            game.start_end is not None
-                            and current_time
-                            >= game.start_end
-                        ):
-
-                            if (
-                                len(game.player_cartelas)
-                                == 0
-                            ):
-                                game.start_selection_locked()
-
-                            else:
-                                game.start_playing_locked()
-
-                    # -------------------------------------
-                    # PLAYING
-                    # -------------------------------------
-
-                    elif game.phase == "playing":
-
-                        last_draw = getattr(
-                            game,
-                            "_last_draw_time",
-                            0,
-                        )
-
-                        if (
-                            current_time - last_draw
-                            >= DRAW_INTERVAL
-                        ):
-
-                            game._last_draw_time = (
-                                current_time
-                            )
-
-                            game.draw_number_locked()
-
-                            game.check_winner_locked()
-
-                    # -------------------------------------
-                    # RESULT
-                    # -------------------------------------
-
-                    elif game.phase == "result":
-
-                        if (
-                            game.result_end is not None
-                            and current_time
-                            >= game.result_end
-                        ):
-                            game.phase = "finished"
+                            game.phase = "starting"
 
                             logger.info(
-                                "Game %s finished.",
+                                "Game %s: selection finished.",
                                 game.game_number,
                             )
 
-                    # -------------------------------------
-                    # FINISHED
-                    # -------------------------------------
+                            # Give the game a short moment
+                            # before number calling starts.
+                            await asyncio.sleep(1)
 
-                    elif game.phase == "finished":
-                        pass
+                            game.start_playing()
 
-                # -----------------------------------------
-                # Make sure there is always an active game.
-                # -----------------------------------------
+                        else:
 
-                active_games = [
-                    game
-                    for game in games.values()
-                    if game.phase
-                    in (
-                        "selection",
-                        "starting",
-                        "playing",
-                        "result",
+                            game.reset_selection_timer()
+
+                            logger.info(
+                                "Game %s: selection restarted.",
+                                game.game_number,
+                            )
+
+                # --------------------------------------------
+                # PLAYING
+                # --------------------------------------------
+
+                elif game.phase == "playing":
+
+                    if (
+                        game.last_draw_at is None
+                        or now() - game.last_draw_at
+                        >= DRAW_INTERVAL
+                    ):
+
+                        number = game.draw_number()
+
+                        if number is not None:
+
+                            if game.check_winner():
+
+                                game.phase = "result"
+
+                                game.result_started_at = now()
+
+                                logger.info(
+                                    "Game %s: winner is %s.",
+                                    game.game_number,
+                                    game.winner,
+                                )
+
+                        else:
+
+                            game.phase = "result"
+
+                            game.result_started_at = now()
+
+                # --------------------------------------------
+                # RESULT
+                # --------------------------------------------
+
+                elif game.phase == "result":
+
+                    if game.result_remaining() <= 0:
+
+                        game.phase = "finished"
+
+                        game.finished_at = now()
+
+                        logger.info(
+                            "Game %s finished.",
+                            game.game_number,
+                        )
+
+                # --------------------------------------------
+                # FINISHED
+                # --------------------------------------------
+
+                elif game.phase == "finished":
+
+                    new_game_number = generate_game_number()
+
+                    new_game = BingoGame(
+                        new_game_number
                     )
-                ]
 
-                if not active_games:
-                    game = BingoGame(
-                        generate_game_number()
-                    )
-
-                    games[game.game_number] = game
+                    games[new_game_number] = new_game
 
                     logger.info(
-                        "Created new Bingo game %s.",
-                        game.game_number,
+                        "New Bingo game created: %s",
+                        new_game_number,
                     )
+
+        except asyncio.CancelledError:
+            logger.info("Bingo game loop cancelled.")
+            raise
 
         except Exception:
             logger.exception(
-                "Error inside Bingo game loop."
+                "Unexpected error inside Bingo game loop."
             )
 
         await asyncio.sleep(0.25)
 
 
-# =========================================================
-# HTTP ROUTES
-# =========================================================
+# ============================================================
+# WEB APP
+# ============================================================
 
-async def index(request):
+async def index_handler(request):
     index_file = WEB_DIR / "index.html"
 
     if not index_file.exists():
         return web.Response(
-            text="index.html not found.",
-            status=404,
+            text=(
+                "<h1>Rodas Friend Zone</h1>"
+                "<p>Web app is not available.</p>"
+            ),
+            content_type="text/html",
         )
 
-    return web.FileResponse(
-        index_file
-    )
+    return web.FileResponse(index_file)
 
 
-async def health(request):
+async def health_handler(request):
+
     return web.json_response(
         {
             "status": "ok",
             "game_count": len(games),
+            "webhook_url": WEBHOOK_URL,
         }
     )
 
 
-# =========================================================
-# STATE
-# =========================================================
+async def state_handler(request):
 
-async def api_state(request):
     user_id = get_user_id(request)
 
-    async with game_lock:
-        game = get_current_game()
+    game = get_current_game()
 
-        state = game.state_for(user_id)
+    return web.json_response(
+        game.serialize(user_id)
+    )
 
-    return web.json_response(state)
 
-
-# =========================================================
-# SELECT CARTELA
-# =========================================================
-
-async def api_select(request):
-    user_id = get_user_id(request)
+async def select_handler(request):
 
     try:
         data = await request.json()
     except Exception:
         return web.json_response(
             {
-                "success": False,
-                "message": "Invalid request.",
+                "ok": False,
+                "error": "Invalid JSON.",
             },
             status=400,
         )
 
-    if "cartela" not in data:
+    user_id = get_user_id(request)
+
+    cartela_number = data.get(
+        "cartela",
+        data.get(
+            "cartela_number",
+            data.get("number"),
+        ),
+    )
+
+    name = data.get("name")
+
+    async with game_lock:
+
+        game = get_current_game()
+
+        if game.phase != "selection":
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "Cartela selection is closed.",
+                    "state": game.serialize(user_id),
+                },
+                status=400,
+            )
+
+        game.add_player(
+            user_id,
+            name,
+        )
+
+        success, message = game.select_cartela(
+            user_id,
+            cartela_number,
+        )
+
         return web.json_response(
             {
-                "success": False,
-                "message": "Cartela is required.",
+                "ok": success,
+                "message": message,
+                "state": game.serialize(user_id),
+            },
+            status=200 if success else 400,
+        )
+
+
+async def proceed_handler(request):
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    user_id = get_user_id(request)
+
+    if data.get("user_id"):
+        user_id = str(data["user_id"])
+
+    async with game_lock:
+
+        game = get_current_game()
+
+        success = game.proceed(user_id)
+
+        return web.json_response(
+            {
+                "ok": success,
+                "state": game.serialize(user_id),
+            },
+            status=200 if success else 400,
+        )
+
+
+async def leave_handler(request):
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    user_id = get_user_id(request)
+
+    if data.get("user_id"):
+        user_id = str(data["user_id"])
+
+    async with game_lock:
+
+        game = get_current_game()
+
+        game.leave(user_id)
+
+        return web.json_response(
+            {
+                "ok": True,
+                "state": game.serialize(user_id),
+            }
+        )
+
+
+async def claim_bingo_handler(request):
+
+    user_id = get_user_id(request)
+
+    async with game_lock:
+
+        game = get_current_game()
+
+        board = game.boards.get(user_id)
+
+        if not board:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "You do not have a cartela.",
+                },
+                status=400,
+            )
+
+        if game.phase != "playing":
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "The game is not currently playing.",
+                    "state": game.serialize(user_id),
+                },
+                status=400,
+            )
+
+        if check_pattern(
+            board,
+            game.called_numbers,
+        ):
+
+            patterns = winning_patterns_for_board(
+                board,
+                game.called_numbers,
+            )
+
+            game.winner_user_id = user_id
+
+            game.winner = game.player_names.get(
+                user_id,
+                user_id,
+            )
+
+            game.winner_cartela = game.players.get(
+                user_id,
+            )
+
+            game.winner_pattern = (
+                patterns[0]
+                if patterns
+                else None
+            )
+
+            game.prize = round(
+                game.total_bets * PRIZE_PERCENT,
+                2,
+            )
+
+            game.phase = "result"
+
+            game.result_started_at = now()
+
+            return web.json_response(
+                {
+                    "ok": True,
+                    "message": "BINGO!",
+                    "state": game.serialize(user_id),
+                }
+            )
+
+        return web.json_response(
+            {
+                "ok": False,
+                "message": "Your cartela does not have Bingo yet.",
+                "state": game.serialize(user_id),
             },
             status=400,
         )
 
-    requested_cartela = data.get("cartela")
 
-    async with game_lock:
-        game = get_current_game()
+# ============================================================
+# TELEGRAM MENU
+# ============================================================
 
-        # -------------------------------------------------
-        # DESELECT
-        # -------------------------------------------------
+async def configure_telegram_menu():
 
-        if requested_cartela is None:
+    commands = [
+        BotCommand(
+            command="start",
+            description="Start Rodas Friend Zone",
+        ),
+        BotCommand(
+            command="play",
+            description="Play Bingo",
+        ),
+        BotCommand(
+            command="deposit",
+            description="Deposit",
+        ),
+        BotCommand(
+            command="balance",
+            description="Check balance",
+        ),
+        BotCommand(
+            command="withdraw",
+            description="Withdraw",
+        ),
+        BotCommand(
+            command="transfer",
+            description="Transfer",
+        ),
+        BotCommand(
+            command="instruction",
+            description="How to play",
+        ),
+        BotCommand(
+            command="invite",
+            description="Invite friends",
+        ),
+        BotCommand(
+            command="support",
+            description="Support",
+        ),
+    ]
 
-            success, message = (
-                game.deselect_cartela(
-                    user_id
-                )
-            )
+    await bot.set_my_commands(
+        commands=commands,
+        scope=BotCommandScopeAllPrivateChats(),
+    )
 
-            state = game.state_for(
-                user_id
-            )
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonCommands()
+    )
 
-            state["success"] = success
-            state["message"] = message
-
-            return web.json_response(
-                state
-            )
-
-        # -------------------------------------------------
-        # SELECT
-        # -------------------------------------------------
-
-        cartela = safe_int(
-            requested_cartela
-        )
-
-        if cartela is None:
-            state = game.state_for(
-                user_id
-            )
-
-            state["success"] = False
-            state["message"] = (
-                "Invalid Cartela."
-            )
-
-            return web.json_response(
-                state,
-                status=400,
-            )
-
-        success, message = (
-            game.select_cartela(
-                user_id,
-                cartela,
-            )
-        )
-
-        state = game.state_for(
-            user_id
-        )
-
-        state["success"] = success
-        state["message"] = message
-
-        if not success:
-            return web.json_response(
-                state,
-                status=400,
-            )
-
-        return web.json_response(
-            state
-        )
-
-
-# =========================================================
-# PROCEED
-# =========================================================
-
-async def api_proceed(request):
-    user_id = get_user_id(request)
-
-    async with game_lock:
-        game = get_current_game()
-
-        success, message = game.proceed(
-            user_id
-        )
-
-        if (
-            success
-            and game.phase == "selection"
-            and game.selection_remaining() <= 0
-        ):
-            if len(game.player_cartelas) > 0:
-                game.ensure_start_timer_locked()
-
-                game.phase = "starting"
-
-        state = game.state_for(
-            user_id
-        )
-
-        state["success"] = success
-        state["message"] = message
-
-    if not success:
-        return web.json_response(
-            state,
-            status=400,
-        )
-
-    return web.json_response(
-        state
+    logger.info(
+        "Telegram private-chat menu commands configured successfully."
     )
 
 
-# =========================================================
-# LEAVE
-# =========================================================
-
-async def api_leave(request):
-    user_id = get_user_id(request)
-
-    async with game_lock:
-        game = get_current_game()
-
-        success, message = game.leave(
-            user_id
-        )
-
-        state = game.state_for(
-            user_id
-        )
-
-        state["success"] = success
-        state["message"] = message
-
-    if not success:
-        return web.json_response(
-            state,
-            status=400,
-        )
-
-    return web.json_response(
-        state
-    )
-
-
-# =========================================================
-# CLAIM BINGO
-# =========================================================
-
-async def api_claim_bingo(request):
-    user_id = get_user_id(request)
-
-    async with game_lock:
-        game = get_current_game()
-
-        if game.phase != "playing":
-            state = game.state_for(
-                user_id
-            )
-
-            state["success"] = False
-            state["message"] = (
-                "Bingo cannot be claimed now."
-            )
-
-            return web.json_response(
-                state,
-                status=400,
-            )
-
-        cartela = game.player_cartelas.get(
-            user_id
-        )
-
-        if cartela is None:
-            state = game.state_for(
-                user_id
-            )
-
-            state["success"] = False
-            state["message"] = (
-                "You do not have a Cartela."
-            )
-
-            return web.json_response(
-                state,
-                status=400,
-            )
-
-        board = game.cartela_boards.get(
-            cartela
-        )
-
-        if board is None:
-            state = game.state_for(
-                user_id
-            )
-
-            state["success"] = False
-            state["message"] = (
-                "Cartela board not found."
-            )
-
-            return web.json_response(
-                state,
-                status=400,
-            )
-
-        patterns = winning_patterns_for_board(
-            board,
-            game.called_numbers,
-        )
-
-        if not patterns:
-            state = game.state_for(
-                user_id
-            )
-
-            state["success"] = False
-            state["message"] = (
-                "BINGO is not valid yet."
-            )
-
-            return web.json_response(
-                state,
-                status=400,
-            )
-
-        # -------------------------------------------------
-        # Valid winner
-        # -------------------------------------------------
-
-        game.winner_user_id = user_id
-
-        game.winner_name = game.player_names.get(
-            user_id,
-            "Player",
-        )
-
-        game.winning_pattern = patterns[0]
-
-        game.phase = "result"
-
-        game.result_end = (
-            now() + RESULT_SECONDS
-        )
-
-        game.finished_at = now()
-
-        state = game.state_for(
-            user_id
-        )
-
-        state["success"] = True
-        state["message"] = (
-            "BINGO! You won the game."
-        )
-
-        return web.json_response(
-            state
-        )
-
-
-# =========================================================
-# TELEGRAM COMMAND KEYBOARD
-# =========================================================
+# ============================================================
+# TELEGRAM KEYBOARD
+# ============================================================
 
 def open_bingo_keyboard():
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1358,134 +1053,179 @@ def open_bingo_keyboard():
     )
 
 
-# =========================================================
+# ============================================================
 # TELEGRAM COMMANDS
-# =========================================================
+# ============================================================
 
-@dp.message(CommandStart())
-async def command_start(message: Message):
-    user_id = str(
-        message.from_user.id
-    )
+@dp.message(Command("start"))
+async def start_command(message: Message):
 
     name = (
         message.from_user.first_name
-        or "Player"
+        if message.from_user
+        else "Player"
     )
 
-    async with game_lock:
-        game = get_current_game()
-
-        game.add_player(
-            user_id,
-            name,
-        )
-
-    keyboard = open_bingo_keyboard()
-
     await message.answer(
-        (
-            "🎉 Welcome to Rodas Friend Zone Bingo!\n\n"
-            "💰 Bet: 10 BIRR\n"
-            "🎫 Choose your Cartela from 1–100\n"
-            "⏱ Selection time: 30 seconds\n\n"
-            "Good luck! 🍀"
-        ),
-        reply_markup=keyboard,
+        f"👋 Welcome, {name}!\n\n"
+        "🎱 <b>Rodas Friend Zone Bingo</b>\n\n"
+        "Choose an option from the menu below "
+        "or open Bingo to play.",
+        reply_markup=open_bingo_keyboard(),
     )
 
 
 @dp.message(Command("play"))
-async def command_play(message: Message):
+async def play_command(message: Message):
+
     await message.answer(
-        "Open Rodas Friend Zone Bingo:",
+        "🎱 <b>Rodas Friend Zone Bingo</b>\n\n"
+        "Tap the button below to open the Bingo game.",
         reply_markup=open_bingo_keyboard(),
     )
 
 
 @dp.message(Command("bingo"))
-async def command_bingo(message: Message):
+async def bingo_command(message: Message):
+
     await message.answer(
-        "Open Rodas Friend Zone Bingo:",
+        "🎱 <b>Bingo is ready!</b>\n\n"
+        "Tap below to enter the game.",
         reply_markup=open_bingo_keyboard(),
     )
 
 
 @dp.message(Command("deposit"))
-async def command_deposit(message: Message):
+async def deposit_command(message: Message):
+
     await message.answer(
-        "💰 Deposit\n\n"
-        "Use the Deposit option to add BIRR to your balance."
+        "💰 <b>Deposit</b>\n\n"
+        "Deposit functionality will be available here."
     )
 
 
 @dp.message(Command("balance"))
-async def command_balance(message: Message):
+async def balance_command(message: Message):
+
     await message.answer(
-        "💰 Balance\n\n"
-        "Your balance information is available in the Rodas Friend Zone menu."
+        "💳 <b>Your Balance</b>\n\n"
+        "Your current balance is being prepared."
     )
 
 
 @dp.message(Command("withdraw"))
-async def command_withdraw(message: Message):
+async def withdraw_command(message: Message):
+
     await message.answer(
-        "💸 Withdraw\n\n"
-        "Use the Withdraw option to request a withdrawal."
+        "💸 <b>Withdraw</b>\n\n"
+        "Withdrawal functionality will be available here."
     )
 
 
 @dp.message(Command("transfer"))
-async def command_transfer(message: Message):
+async def transfer_command(message: Message):
+
     await message.answer(
-        "🔄 Transfer\n\n"
-        "Use the Transfer option to send BIRR."
+        "🔄 <b>Transfer</b>\n\n"
+        "Transfer functionality will be available here."
     )
 
 
 @dp.message(Command("instruction"))
-async def command_instruction(message: Message):
+async def instruction_command(message: Message):
+
     await message.answer(
-        "📖 How to play\n\n"
-        "1. Open Bingo.\n"
-        "2. Choose one Cartela from 1–100.\n"
-        "3. Press PROCEED.\n"
-        "4. Wait for the Bingo numbers to be called.\n"
-        "5. Complete a winning pattern and press BINGO WIN."
+        "📖 <b>How to Play</b>\n\n"
+        "1️⃣ Open Bingo.\n"
+        "2️⃣ Choose your cartela.\n"
+        "3️⃣ Wait for the game to start.\n"
+        "4️⃣ Watch the numbers being called.\n"
+        "5️⃣ Complete a winning pattern.\n"
+        "6️⃣ Press BINGO when you have a winning card."
     )
 
 
 @dp.message(Command("invite"))
-async def command_invite(message: Message):
+async def invite_command(message: Message):
+
     await message.answer(
-        "👥 Invite Friends\n\n"
-        "Share Rodas Friend Zone Bingo with your friends."
+        "👥 <b>Invite Friends</b>\n\n"
+        "Invite your friends to Rodas Friend Zone "
+        "and play Bingo together."
     )
 
 
 @dp.message(Command("support"))
-async def command_support(message: Message):
+async def support_command(message: Message):
+
     await message.answer(
-        "🆘 Support\n\n"
-        "Please contact the Rodas Friend Zone support team for assistance."
+        "🆘 <b>Support</b>\n\n"
+        "For support, please contact the Rodas Friend Zone administrator."
     )
 
 
-# =========================================================
+# ============================================================
 # TELEGRAM WEBHOOK
-# =========================================================
+# ============================================================
 
 async def telegram_webhook(request):
+
+    # --------------------------------------------------------
+    # Verify Telegram secret token
+    # --------------------------------------------------------
+
+    received_secret = request.headers.get(
+        "X-Telegram-Bot-Api-Secret-Token"
+    )
+
+    if WEBHOOK_SECRET:
+
+        if received_secret != WEBHOOK_SECRET:
+
+            logger.warning(
+                "Rejected webhook request with invalid secret."
+            )
+
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "Unauthorized",
+                },
+                status=403,
+            )
+
+    # --------------------------------------------------------
+    # Read Telegram update
+    # --------------------------------------------------------
+
     try:
         data = await request.json()
 
-        update = Update.model_validate(
-            data
+    except Exception:
+
+        logger.exception(
+            "Telegram webhook received invalid JSON."
         )
+
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "Invalid JSON",
+            },
+            status=400,
+        )
+
+    try:
+
+        update = Update.model_validate(data)
 
         await dp.feed_update(
             bot,
             update,
+        )
+
+        logger.info(
+            "Telegram update received successfully."
         )
 
         return web.json_response(
@@ -1495,10 +1235,13 @@ async def telegram_webhook(request):
         )
 
     except Exception:
+
         logger.exception(
-            "Telegram webhook error."
+            "Error while processing Telegram webhook update."
         )
 
+        # Return 500 so Telegram knows the update was not
+        # processed successfully and can retry it.
         return web.json_response(
             {
                 "ok": False,
@@ -1507,235 +1250,207 @@ async def telegram_webhook(request):
         )
 
 
-# =========================================================
-# APPLICATION SETUP
-# =========================================================
+# ============================================================
+# WEBHOOK SETUP
+# ============================================================
+
+async def setup_webhook():
+
+    logger.info(
+        "Setting Telegram webhook to %s",
+        WEBHOOK_URL,
+    )
+
+    await bot.set_webhook(
+        url=WEBHOOK_URL,
+        secret_token=WEBHOOK_SECRET,
+        drop_pending_updates=False,
+    )
+
+    # Verify the webhook after setting it.
+    info = await bot.get_webhook_info()
+
+    logger.info(
+        "Telegram webhook status: url=%s pending=%s last_error=%s",
+        info.url,
+        info.pending_update_count,
+        info.last_error_message,
+    )
+
+    if info.url != WEBHOOK_URL:
+
+        raise RuntimeError(
+            "Telegram webhook verification failed. "
+            f"Expected {WEBHOOK_URL}, got {info.url!r}"
+        )
+
+    logger.info(
+        "Telegram webhook verified successfully."
+    )
+
+
+# ============================================================
+# STARTUP
+# ============================================================
 
 async def on_startup(app):
-    logger.info(
-        "Starting Rodas Friend Zone Bingo..."
-    )
 
-    try:
-        # -------------------------------------------------
-        # TELEGRAM MENU COMMANDS
-        # -------------------------------------------------
-
-        commands = [
-            BotCommand(
-                command="start",
-                description="Open Rodas Friend Zone Bingo",
-            ),
-            BotCommand(
-                command="play",
-                description="Play Bingo",
-            ),
-            BotCommand(
-                command="deposit",
-                description="Deposit",
-            ),
-            BotCommand(
-                command="balance",
-                description="Check balance",
-            ),
-            BotCommand(
-                command="withdraw",
-                description="Withdraw",
-            ),
-            BotCommand(
-                command="transfer",
-                description="Transfer",
-            ),
-            BotCommand(
-                command="instruction",
-                description="How to play",
-            ),
-            BotCommand(
-                command="invite",
-                description="Invite friends",
-            ),
-            BotCommand(
-                command="support",
-                description="Support",
-            ),
-        ]
-
-        # -------------------------------------------------
-        # APPLY COMMANDS TO ALL PRIVATE CHATS
-        # -------------------------------------------------
-
-        await bot.set_my_commands(
-            commands=commands,
-            scope=BotCommandScopeAllPrivateChats(),
-        )
-
-        # -------------------------------------------------
-        # MAKE TELEGRAM MENU BUTTON SHOW COMMANDS
-        # -------------------------------------------------
-
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonCommands()
-        )
-
-        logger.info(
-            "Telegram private-chat menu commands configured successfully."
-        )
-
-        # -------------------------------------------------
-        # WEBHOOK
-        # -------------------------------------------------
-
-        await bot.set_webhook(
-            WEBHOOK_URL
-        )
-
-        logger.info(
-            "Telegram webhook set to %s",
-            WEBHOOK_URL,
-        )
-
-    except Exception:
-        logger.exception(
-            "Unable to configure Telegram."
-        )
-
-    game = BingoGame(
-        generate_game_number()
-    )
-
-    games[game.game_number] = game
+    global game_loop_task
 
     logger.info(
-        "Initial Bingo game created: %s",
+        "Rodas Friend Zone Bingo starting..."
+    )
+
+    # Configure Telegram menu.
+    await configure_telegram_menu()
+
+    # IMPORTANT:
+    # Set the webhook on startup.
+    # We intentionally DO NOT delete the webhook on shutdown.
+    await setup_webhook()
+
+    # Create initial game.
+    game = get_current_game()
+
+    logger.info(
+        "Current Bingo game: %s",
         game.game_number,
     )
 
-    app["game_loop_task"] = asyncio.create_task(
+    # Start Bingo loop.
+    game_loop_task = asyncio.create_task(
         game_loop()
     )
 
+    logger.info(
+        "Rodas Friend Zone Bingo is ready."
+    )
+
+
+# ============================================================
+# CLEANUP
+# ============================================================
 
 async def on_cleanup(app):
+
+    global game_loop_task
+
     logger.info(
-        "Stopping Rodas Friend Zone Bingo..."
+        "Rodas Friend Zone Bingo shutting down..."
     )
 
-    task = app.get(
-        "game_loop_task"
-    )
+    if game_loop_task:
 
-    if task:
-        task.cancel()
+        game_loop_task.cancel()
 
         try:
-            await task
+            await game_loop_task
+
         except asyncio.CancelledError:
             pass
 
-    try:
-        await bot.delete_webhook(
-            drop_pending_updates=False
-        )
-    except Exception:
-        logger.exception(
-            "Unable to delete Telegram webhook."
-        )
+        game_loop_task = None
 
-    try:
-        await bot.session.close()
-    except Exception:
-        logger.exception(
-            "Unable to close Telegram bot session."
-        )
+    # IMPORTANT:
+    #
+    # DO NOT call bot.delete_webhook() here.
+    #
+    # Render can restart/redeploy the service. If we delete
+    # the webhook during shutdown, Telegram can be left with
+    # url="" and all messages will remain pending.
+    #
+    # The webhook will remain registered with Telegram and
+    # will be verified again when the service starts.
+
+    logger.info(
+        "Telegram webhook was intentionally kept configured."
+    )
+
+    await bot.session.close()
+
+    logger.info(
+        "Rodas Friend Zone Bingo shutdown complete."
+    )
 
 
-# =========================================================
-# CREATE APP
-# =========================================================
+# ============================================================
+# CREATE APPLICATION
+# ============================================================
 
 def create_app():
-    app = web.Application()
 
-    # -----------------------------------------------------
-    # Web frontend
-    # -----------------------------------------------------
+    application = web.Application()
 
-    app.router.add_get(
+    # Web app
+    application.router.add_get(
         "/",
-        index,
+        index_handler,
     )
 
-    # -----------------------------------------------------
     # Health
-    # -----------------------------------------------------
-
-    app.router.add_get(
+    application.router.add_get(
         "/health",
-        health,
+        health_handler,
     )
 
-    # -----------------------------------------------------
     # Bingo API
-    # -----------------------------------------------------
-
-    app.router.add_get(
+    application.router.add_get(
         "/api/state",
-        api_state,
+        state_handler,
     )
 
-    app.router.add_post(
+    application.router.add_post(
         "/api/select",
-        api_select,
+        select_handler,
     )
 
-    app.router.add_post(
+    application.router.add_post(
         "/api/proceed",
-        api_proceed,
+        proceed_handler,
     )
 
-    app.router.add_post(
+    application.router.add_post(
         "/api/leave",
-        api_leave,
+        leave_handler,
     )
 
-    app.router.add_post(
+    application.router.add_post(
         "/api/claim-bingo",
-        api_claim_bingo,
+        claim_bingo_handler,
     )
 
-    # -----------------------------------------------------
-    # Telegram
-    # -----------------------------------------------------
-
-    app.router.add_post(
+    # Telegram webhook
+    application.router.add_post(
         WEBHOOK_PATH,
         telegram_webhook,
     )
 
-    # -----------------------------------------------------
-    # Lifecycle
-    # -----------------------------------------------------
-
-    app.on_startup.append(
+    application.on_startup.append(
         on_startup
     )
 
-    app.on_cleanup.append(
+    application.on_cleanup.append(
         on_cleanup
     )
 
-    return app
+    return application
 
 
-# =========================================================
+# ============================================================
 # MAIN
-# =========================================================
+# ============================================================
 
 if __name__ == "__main__":
-    application = create_app()
+
+    logger.info(
+        "Starting Rodas Friend Zone Bingo on port %s",
+        PORT,
+    )
+
+    app = create_app()
 
     web.run_app(
-        application,
+        app,
         host="0.0.0.0",
         port=PORT,
     )
