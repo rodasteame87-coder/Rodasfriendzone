@@ -6,7 +6,8 @@ import time
 from pathlib import Path
 
 from aiohttp import web
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import (
     BotCommand,
@@ -376,11 +377,8 @@ class BingoGame:
         ):
             return False, "Invalid cartela number."
 
-        # Ensure player exists.
         self.add_player(user_id)
 
-        # Don't allow same cartela to be selected
-        # by another player.
         for other_user_id, selected in self.players.items():
             if (
                 other_user_id != user_id
@@ -621,15 +619,10 @@ async def game_loop():
 
                 game = get_current_game()
 
-                # --------------------------------------------
-                # SELECTION
-                # --------------------------------------------
-
                 if game.phase == "selection":
 
                     remaining = game.selection_remaining()
 
-                    # Selection timer expired.
                     if remaining <= 0:
 
                         if game.players:
@@ -641,8 +634,6 @@ async def game_loop():
                                 game.game_number,
                             )
 
-                            # Give the game a short moment
-                            # before number calling starts.
                             await asyncio.sleep(1)
 
                             game.start_playing()
@@ -655,10 +646,6 @@ async def game_loop():
                                 "Game %s: selection restarted.",
                                 game.game_number,
                             )
-
-                # --------------------------------------------
-                # PLAYING
-                # --------------------------------------------
 
                 elif game.phase == "playing":
 
@@ -690,10 +677,6 @@ async def game_loop():
 
                             game.result_started_at = now()
 
-                # --------------------------------------------
-                # RESULT
-                # --------------------------------------------
-
                 elif game.phase == "result":
 
                     if game.result_remaining() <= 0:
@@ -706,10 +689,6 @@ async def game_loop():
                             "Game %s finished.",
                             game.game_number,
                         )
-
-                # --------------------------------------------
-                # FINISHED
-                # --------------------------------------------
 
                 elif game.phase == "finished":
 
@@ -1043,7 +1022,7 @@ def open_bingo_keyboard():
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎮 OPEN BINGO",
+                    text="🎯 PLAY BINGO",
                     web_app=WebAppInfo(
                         url=RENDER_EXTERNAL_URL
                     ),
@@ -1068,10 +1047,11 @@ async def start_command(message: Message):
 
     await message.answer(
         f"👋 Welcome, {name}!\n\n"
-        "🎱 <b>Rodas Friend Zone Bingo</b>\n\n"
+        "🎯 <b>Rodas Friend Zone Bingo</b>\n\n"
         "Choose an option from the menu below "
         "or open Bingo to play.",
         reply_markup=open_bingo_keyboard(),
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1079,9 +1059,10 @@ async def start_command(message: Message):
 async def play_command(message: Message):
 
     await message.answer(
-        "🎱 <b>Rodas Friend Zone Bingo</b>\n\n"
+        "🎯 <b>Rodas Friend Zone Bingo</b>\n\n"
         "Tap the button below to open the Bingo game.",
         reply_markup=open_bingo_keyboard(),
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1089,9 +1070,10 @@ async def play_command(message: Message):
 async def bingo_command(message: Message):
 
     await message.answer(
-        "🎱 <b>Bingo is ready!</b>\n\n"
+        "🎯 <b>Bingo is ready!</b>\n\n"
         "Tap below to enter the game.",
         reply_markup=open_bingo_keyboard(),
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1100,7 +1082,8 @@ async def deposit_command(message: Message):
 
     await message.answer(
         "💰 <b>Deposit</b>\n\n"
-        "Deposit functionality will be available here."
+        "Deposit functionality will be available here.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1109,7 +1092,8 @@ async def balance_command(message: Message):
 
     await message.answer(
         "💳 <b>Your Balance</b>\n\n"
-        "Your current balance is being prepared."
+        "Your current balance is being prepared.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1118,7 +1102,8 @@ async def withdraw_command(message: Message):
 
     await message.answer(
         "💸 <b>Withdraw</b>\n\n"
-        "Withdrawal functionality will be available here."
+        "Withdrawal functionality will be available here.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1127,7 +1112,8 @@ async def transfer_command(message: Message):
 
     await message.answer(
         "🔄 <b>Transfer</b>\n\n"
-        "Transfer functionality will be available here."
+        "Transfer functionality will be available here.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1141,7 +1127,8 @@ async def instruction_command(message: Message):
         "3️⃣ Wait for the game to start.\n"
         "4️⃣ Watch the numbers being called.\n"
         "5️⃣ Complete a winning pattern.\n"
-        "6️⃣ Press BINGO when you have a winning card."
+        "6️⃣ Press BINGO when you have a winning card.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1151,7 +1138,8 @@ async def invite_command(message: Message):
     await message.answer(
         "👥 <b>Invite Friends</b>\n\n"
         "Invite your friends to Rodas Friend Zone "
-        "and play Bingo together."
+        "and play Bingo together.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1160,7 +1148,8 @@ async def support_command(message: Message):
 
     await message.answer(
         "🆘 <b>Support</b>\n\n"
-        "For support, please contact the Rodas Friend Zone administrator."
+        "For support, please contact the Rodas Friend Zone administrator.",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -1169,10 +1158,6 @@ async def support_command(message: Message):
 # ============================================================
 
 async def telegram_webhook(request):
-
-    # --------------------------------------------------------
-    # Verify Telegram secret token
-    # --------------------------------------------------------
 
     received_secret = request.headers.get(
         "X-Telegram-Bot-Api-Secret-Token"
@@ -1193,10 +1178,6 @@ async def telegram_webhook(request):
                 },
                 status=403,
             )
-
-    # --------------------------------------------------------
-    # Read Telegram update
-    # --------------------------------------------------------
 
     try:
         data = await request.json()
@@ -1240,8 +1221,6 @@ async def telegram_webhook(request):
             "Error while processing Telegram webhook update."
         )
 
-        # Return 500 so Telegram knows the update was not
-        # processed successfully and can retry it.
         return web.json_response(
             {
                 "ok": False,
@@ -1267,7 +1246,6 @@ async def setup_webhook():
         drop_pending_updates=False,
     )
 
-    # Verify the webhook after setting it.
     info = await bot.get_webhook_info()
 
     logger.info(
@@ -1301,15 +1279,10 @@ async def on_startup(app):
         "Rodas Friend Zone Bingo starting..."
     )
 
-    # Configure Telegram menu.
     await configure_telegram_menu()
 
-    # IMPORTANT:
-    # Set the webhook on startup.
-    # We intentionally DO NOT delete the webhook on shutdown.
     await setup_webhook()
 
-    # Create initial game.
     game = get_current_game()
 
     logger.info(
@@ -1317,7 +1290,6 @@ async def on_startup(app):
         game.game_number,
     )
 
-    # Start Bingo loop.
     game_loop_task = asyncio.create_task(
         game_loop()
     )
@@ -1352,16 +1324,7 @@ async def on_cleanup(app):
         game_loop_task = None
 
     # IMPORTANT:
-    #
-    # DO NOT call bot.delete_webhook() here.
-    #
-    # Render can restart/redeploy the service. If we delete
-    # the webhook during shutdown, Telegram can be left with
-    # url="" and all messages will remain pending.
-    #
-    # The webhook will remain registered with Telegram and
-    # will be verified again when the service starts.
-
+    # Do NOT delete the Telegram webhook on shutdown.
     logger.info(
         "Telegram webhook was intentionally kept configured."
     )
@@ -1381,19 +1344,16 @@ def create_app():
 
     application = web.Application()
 
-    # Web app
     application.router.add_get(
         "/",
         index_handler,
     )
 
-    # Health
     application.router.add_get(
         "/health",
         health_handler,
     )
 
-    # Bingo API
     application.router.add_get(
         "/api/state",
         state_handler,
@@ -1419,7 +1379,6 @@ def create_app():
         claim_bingo_handler,
     )
 
-    # Telegram webhook
     application.router.add_post(
         WEBHOOK_PATH,
         telegram_webhook,
