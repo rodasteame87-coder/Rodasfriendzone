@@ -50,8 +50,315 @@ button {
     width: 100%;
     max-width: 900px;
     margin: 0 auto;
-    padding: 8px;
+    padding: 5px;
 }
+
+
+/* =========================================================
+   LOBBY
+========================================================= */
+
+#lobbyView {
+    width: 100%;
+}
+
+.lobby-header {
+    width: 100%;
+    min-height: 58px;
+    background: #690078;
+    color: white;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 0;
+}
+
+.lobby-header-left {
+    font-size: 30px;
+    font-weight: 400;
+    line-height: 1;
+}
+
+.lobby-header-title {
+    flex: 1;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.lobby-header-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-size: 30px;
+    line-height: 1;
+}
+
+.lobby-page {
+    width: 100%;
+    background: #c9edf4;
+    min-height: calc(100vh - 63px);
+    padding-bottom: 10px;
+}
+
+.lobby-top-info {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 8px;
+    padding: 16px 12px 10px;
+    align-items: center;
+}
+
+.live-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #690078;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.live-dot {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 5px rgba(22,163,74,0.6);
+}
+
+.live-dot.offline {
+    background: #e51c2a;
+    box-shadow: 0 0 5px rgba(229,28,42,0.5);
+}
+
+.balance-box {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 7px;
+    color: #690078;
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.balance-icon {
+    font-size: 25px;
+}
+
+.balance-number {
+    font-size: 21px;
+}
+
+.lobby-section-title {
+    padding: 5px 18px 8px;
+    color: #690078;
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.lobby-table-header {
+    width: calc(100% - 24px);
+    margin: 0 12px 8px;
+    background: #fffdf0;
+    border-radius: 14px;
+    padding: 10px 8px;
+    display: grid;
+    grid-template-columns: 18% 42% 40%;
+    text-align: center;
+    color: #690078;
+    font-size: 16px;
+    font-weight: 900;
+}
+
+.lobby-game-row {
+    width: calc(100% - 24px);
+    margin: 0 12px 9px;
+    background: #fffdf0;
+    border-radius: 14px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 18% 42% 40%;
+    min-height: 112px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+
+.lobby-bet {
+    background: #690078;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+}
+
+.lobby-bet-number {
+    font-size: 38px;
+    line-height: 38px;
+}
+
+.lobby-bet-label {
+    font-size: 17px;
+    margin-top: 2px;
+}
+
+.lobby-game-info {
+    padding: 10px 7px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.lobby-win {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #079443;
+    font-size: 27px;
+    font-weight: 900;
+}
+
+.lobby-trophy {
+    font-size: 28px;
+}
+
+.lobby-players {
+    color: #690078;
+    font-size: 17px;
+    font-weight: 800;
+    margin-top: 3px;
+}
+
+.lobby-jackpot-wrap {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.lobby-jackpot-label {
+    background: #690078;
+    color: white;
+    height: 18px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.lobby-status-area {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.lobby-status {
+    min-width: 115px;
+    text-align: center;
+    background: #1877df;
+    color: white;
+    border-radius: 20px;
+    padding: 7px 8px;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.lobby-status.ready {
+    background: #d8f4df;
+    color: #07883c;
+    border-radius: 8px;
+}
+
+.lobby-join {
+    width: 100%;
+    max-width: 150px;
+    background: #0a9b45;
+    color: white;
+    border-radius: 10px;
+    padding: 10px 8px;
+    font-size: 19px;
+    font-weight: 900;
+}
+
+.lobby-join:active {
+    transform: scale(0.97);
+}
+
+.lobby-bottom {
+    width: calc(100% - 24px);
+    margin: 12px;
+    background: #dff6fa;
+    border-radius: 13px;
+    padding: 13px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #690078;
+}
+
+.lobby-bottom-title {
+    font-size: 19px;
+    font-weight: 900;
+}
+
+.lobby-bottom-text {
+    font-size: 13px;
+    margin-top: 3px;
+}
+
+.lobby-demo-btn {
+    background: #690078;
+    color: white;
+    border-radius: 9px;
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.lobby-nav {
+    width: 100%;
+    background: white;
+    border-radius: 12px 12px 0 0;
+    min-height: 82px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: center;
+    margin-top: 8px;
+    box-shadow: 0 -1px 4px rgba(0,0,0,0.08);
+}
+
+.lobby-nav-item {
+    text-align: center;
+    color: #4d4560;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.lobby-nav-icon {
+    display: block;
+    font-size: 27px;
+    margin-bottom: 3px;
+}
+
+.lobby-nav-item.active {
+    color: #85008f;
+}
+
+.lobby-nav-item.active .lobby-nav-icon {
+    color: #85008f;
+}
+
+
+/* =========================================================
+   EXISTING GAME
+========================================================= */
 
 .top-title {
     width: 100%;
@@ -695,10 +1002,125 @@ button {
     font-weight: 900;
 }
 
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
 @media (max-width: 500px) {
 
     #app {
         padding: 5px;
+    }
+
+    .lobby-header {
+        min-height: 52px;
+        padding: 7px 8px;
+    }
+
+    .lobby-header-left {
+        font-size: 27px;
+    }
+
+    .lobby-header-title {
+        font-size: 17px;
+    }
+
+    .lobby-header-right {
+        gap: 10px;
+        font-size: 26px;
+    }
+
+    .lobby-top-info {
+        padding: 13px 10px 8px;
+    }
+
+    .live-status {
+        font-size: 16px;
+    }
+
+    .balance-box {
+        font-size: 15px;
+    }
+
+    .balance-number {
+        font-size: 18px;
+    }
+
+    .lobby-section-title {
+        font-size: 21px;
+        padding-left: 12px;
+    }
+
+    .lobby-table-header {
+        width: calc(100% - 16px);
+        margin-left: 8px;
+        margin-right: 8px;
+        font-size: 13px;
+        padding: 8px 4px;
+    }
+
+    .lobby-game-row {
+        width: calc(100% - 16px);
+        margin-left: 8px;
+        margin-right: 8px;
+        min-height: 100px;
+        grid-template-columns: 18% 42% 40%;
+    }
+
+    .lobby-bet-number {
+        font-size: 31px;
+        line-height: 31px;
+    }
+
+    .lobby-bet-label {
+        font-size: 14px;
+    }
+
+    .lobby-win {
+        font-size: 22px;
+    }
+
+    .lobby-trophy {
+        font-size: 23px;
+    }
+
+    .lobby-players {
+        font-size: 14px;
+    }
+
+    .lobby-jackpot-label {
+        font-size: 9px;
+    }
+
+    .lobby-status {
+        min-width: 85px;
+        font-size: 11px;
+        padding: 6px 4px;
+    }
+
+    .lobby-join {
+        max-width: 125px;
+        padding: 9px 5px;
+        font-size: 17px;
+    }
+
+    .lobby-bottom {
+        width: calc(100% - 16px);
+        margin-left: 8px;
+        margin-right: 8px;
+    }
+
+    .lobby-nav {
+        min-height: 72px;
+    }
+
+    .lobby-nav-icon {
+        font-size: 24px;
+    }
+
+    .lobby-nav-item {
+        font-size: 11px;
     }
 
     .top-title {
@@ -827,8 +1249,231 @@ button {
 
 <div id="app">
 
-    <div class="top-title">
-        🎱 Rodas Friend Zone Bingo
+
+    <!-- =====================================================
+         NEW LOBBY
+    ====================================================== -->
+
+    <div id="lobbyView">
+
+        <div class="lobby-header">
+
+            <div class="lobby-header-left">
+                ×
+            </div>
+
+            <div class="lobby-header-title">
+                Rodas Friend Zone Bingo
+            </div>
+
+            <div class="lobby-header-right">
+                <span>⌄</span>
+                <span>⋮</span>
+            </div>
+
+        </div>
+
+
+        <div class="lobby-page">
+
+            <div class="lobby-top-info">
+
+                <div class="live-status">
+
+                    <span
+                        id="lobbyLiveDot"
+                        class="live-dot"
+                    ></span>
+
+                    <span id="lobbyLiveText">
+                        Live
+                    </span>
+
+                </div>
+
+
+                <div class="balance-box">
+
+                    <span class="balance-icon">
+                        💳
+                    </span>
+
+                    <span>
+                        Balance:
+                    </span>
+
+                    <span
+                        id="lobbyBalance"
+                        class="balance-number"
+                    >
+                        0.00
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="lobby-section-title">
+                🎯 BINGO GAMES
+            </div>
+
+
+            <div class="lobby-table-header">
+
+                <div>
+                    BET
+                </div>
+
+                <div>
+                    WIN / PLAYER
+                </div>
+
+                <div>
+                    STATUS & JOIN
+                </div>
+
+            </div>
+
+
+            <div class="lobby-game-row">
+
+                <div class="lobby-bet">
+
+                    <div
+                        id="lobbyBet"
+                        class="lobby-bet-number"
+                    >
+                        10
+                    </div>
+
+                    <div class="lobby-bet-label">
+                        BIRR
+                    </div>
+
+                </div>
+
+
+                <div class="lobby-game-info">
+
+                    <div class="lobby-win">
+
+                        <span class="lobby-trophy">
+                            🏆
+                        </span>
+
+                        <span id="lobbyPrize">
+                            0
+                        </span>
+
+                    </div>
+
+                    <div
+                        id="lobbyPlayers"
+                        class="lobby-players"
+                    >
+                        0 players
+                    </div>
+
+
+                    <div class="lobby-jackpot-wrap">
+
+                        <div
+                            id="lobbyJackpot"
+                            class="lobby-jackpot-label"
+                        >
+                            JACKPOT 0 / 1000
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="lobby-status-area">
+
+                    <div
+                        id="lobbyStatus"
+                        class="lobby-status ready"
+                    >
+                        READY
+                    </div>
+
+
+                    <button
+                        class="lobby-join"
+                        onclick="joinLobbyGame()"
+                    >
+                        JOIN
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="lobby-bottom">
+
+                <div>
+
+                    <div class="lobby-bottom-title">
+                        🎮 FREE
+                    </div>
+
+                    <div class="lobby-bottom-text">
+                        Practice Mode — No Real Money
+                    </div>
+
+                </div>
+
+                <button
+                    class="lobby-demo-btn"
+                    onclick="showDemoMessage()"
+                >
+                    OPEN
+                </button>
+
+            </div>
+
+
+            <div class="lobby-nav">
+
+                <div class="lobby-nav-item active">
+
+                    <span class="lobby-nav-icon">
+                        🎮
+                    </span>
+
+                    Game
+
+                </div>
+
+
+                <div class="lobby-nav-item">
+
+                    <span class="lobby-nav-icon">
+                        🏆
+                    </span>
+
+                    Scores
+
+                </div>
+
+
+                <div class="lobby-nav-item">
+
+                    <span class="lobby-nav-icon">
+                        👤
+                    </span>
+
+                    Profile
+
+                </div>
+
+            </div>
+
+        </div>
+
     </div>
 
 
@@ -836,7 +1481,11 @@ button {
          SELECTION
     ====================================================== -->
 
-    <div id="selectionView">
+    <div id="selectionView" class="hidden">
+
+        <div class="top-title">
+            🎱 Rodas Friend Zone Bingo
+        </div>
 
         <div class="game-info">
 
@@ -916,6 +1565,10 @@ button {
     ====================================================== -->
 
     <div id="gameView" class="hidden">
+
+        <div class="top-title">
+            🎱 Rodas Friend Zone Bingo
+        </div>
 
         <div class="game-info">
 
@@ -1333,15 +1986,118 @@ let autoMode = true;
 
 let manuallyMarked = new Set();
 
-/*
-   IMPORTANT:
-   This becomes TRUE immediately after the player leaves
-   the current game.
-
-   It forces the Mini App to show the Cartela selection
-   screen instead of showing the old Bingo game screen.
-*/
 let returnedToSelection = false;
+
+
+/*
+   NEW:
+
+   The Mini App starts on the Lobby.
+
+   Once JOIN is pressed, this becomes false and the existing
+   Cartela Selection screen is shown.
+*/
+
+let inLobby = true;
+
+
+/*
+   Used for the LIVE indicator.
+
+   Green = this player is currently using the Mini App.
+   Red = Mini App is in the background/inactive.
+*/
+
+let playerIsOnline = true;
+
+
+/* =========================================================
+   LIVE STATUS
+========================================================= */
+
+function setLiveStatus(isOnline) {
+
+    playerIsOnline =
+        Boolean(isOnline);
+
+    const dot =
+        document.getElementById(
+            "lobbyLiveDot"
+        );
+
+    const text =
+        document.getElementById(
+            "lobbyLiveText"
+        );
+
+
+    if (!dot || !text) {
+        return;
+    }
+
+
+    if (playerIsOnline) {
+
+        dot.classList.remove(
+            "offline"
+        );
+
+        text.textContent =
+            "Live";
+
+    } else {
+
+        dot.classList.add(
+            "offline"
+        );
+
+        text.textContent =
+            "Offline";
+
+    }
+
+}
+
+
+/*
+   Telegram Mini App visibility.
+
+   When the player is actively inside the Mini App:
+   GREEN.
+
+   When Telegram hides the Mini App:
+   RED.
+*/
+
+document.addEventListener(
+    "visibilitychange",
+    function() {
+
+        setLiveStatus(
+            document.visibilityState ===
+            "visible"
+        );
+
+    }
+);
+
+window.addEventListener(
+    "focus",
+    function() {
+
+        setLiveStatus(true);
+
+    }
+);
+
+window.addEventListener(
+    "blur",
+    function() {
+
+        setLiveStatus(false);
+
+    }
+);
 
 
 /* =========================================================
@@ -1401,6 +2157,204 @@ async function api(
 
 
 /* =========================================================
+   LOBBY JOIN
+========================================================= */
+
+function joinLobbyGame() {
+
+    /*
+       JOIN performs the same navigation purpose as
+       entering the game flow.
+
+       It does NOT choose a Cartela and does NOT call
+       /api/proceed.
+
+       The player goes to the existing Cartela Selection
+       screen first.
+    */
+
+    inLobby =
+        false;
+
+    returnedToSelection =
+        false;
+
+    proceeded =
+        Boolean(
+            state?.proceeded
+        );
+
+    render();
+
+}
+
+
+/* =========================================================
+   LOBBY
+========================================================= */
+
+function renderLobby() {
+
+    if (!state) {
+        return;
+    }
+
+
+    const wallet =
+        Number(
+            state.wallet || 0
+        );
+
+
+    const players =
+        Number(
+            state.players || 0
+        );
+
+
+    const bet =
+        Number(
+            state.bet || 10
+        );
+
+
+    /*
+       Existing backend prize calculation:
+
+       75% of total player bets.
+    */
+
+    const prize =
+        calculateDerash(
+            players
+        );
+
+
+    document.getElementById(
+        "lobbyBalance"
+    ).textContent =
+        wallet.toFixed(2);
+
+
+    document.getElementById(
+        "lobbyBet"
+    ).textContent =
+        bet;
+
+
+    document.getElementById(
+        "lobbyPrize"
+    ).textContent =
+        prize;
+
+
+    document.getElementById(
+        "lobbyPlayers"
+    ).textContent =
+        players +
+        (
+            players === 1
+                ? " player"
+                : " players"
+        );
+
+
+    /*
+       Jackpot display is informational and based on the
+       current player pool.
+
+       We do not invent another game or another jackpot.
+    */
+
+    const jackpot =
+        players * bet;
+
+
+    document.getElementById(
+        "lobbyJackpot"
+    ).textContent =
+        "JACKPOT " +
+        jackpot +
+        " / 1000";
+
+
+    const status =
+        document.getElementById(
+            "lobbyStatus"
+        );
+
+
+    if (
+        state.phase === "playing"
+    ) {
+
+        status.textContent =
+            "ACTIVE";
+
+        status.classList.remove(
+            "ready"
+        );
+
+    } else if (
+        state.phase === "starting"
+    ) {
+
+        status.textContent =
+            "STARTING " +
+            Number(
+                state.start_remaining || 0
+            ) +
+            "s";
+
+        status.classList.remove(
+            "ready"
+        );
+
+    } else if (
+        state.phase === "finished"
+    ) {
+
+        status.textContent =
+            "RESULT";
+
+        status.classList.remove(
+            "ready"
+        );
+
+    } else {
+
+        status.textContent =
+            "READY";
+
+        status.classList.add(
+            "ready"
+        );
+
+    }
+
+
+    setLiveStatus(
+        document.visibilityState ===
+        "visible"
+    );
+
+}
+
+
+/* =========================================================
+   DEMO BUTTON
+========================================================= */
+
+function showDemoMessage() {
+
+    alert(
+        "Practice Mode is not connected yet."
+    );
+
+}
+
+
+/* =========================================================
    LOAD STATE
 ========================================================= */
 
@@ -1422,10 +2376,18 @@ async function loadState() {
 
 
         /*
-           If the player has just left and the server has
-           already moved to a NEW selection phase, we can
-           completely reset the local leave state.
+           Always keep the player on the Lobby until JOIN
+           is pressed.
         */
+
+        if (inLobby) {
+
+            renderLobby();
+
+            return;
+
+        }
+
 
         if (
             returnedToSelection &&
@@ -1437,10 +2399,6 @@ async function loadState() {
 
         }
 
-
-        /*
-           Do not restore the old Cartela after leaving.
-        */
 
         if (returnedToSelection) {
 
@@ -1522,14 +2480,6 @@ function renderCartelaGrid() {
         button.textContent =
             number;
 
-
-        /*
-           During the period after leaving, the current game
-           may still be running.
-
-           We still show all 1–100 Cartelas, but selection
-           remains disabled until the next selection phase.
-        */
 
         if (
             taken.has(number) &&
@@ -1792,19 +2742,11 @@ async function leaveGame() {
             result.success
         ) {
 
-            /*
-               IMPORTANT FIX
-
-               Tell the frontend that this player has left
-               the current game.
-
-               We do NOT allow render() to use the current
-               playing phase to put the player back into the
-               Bingo screen.
-            */
-
             returnedToSelection =
                 true;
+
+            inLobby =
+                false;
 
             state =
                 result;
@@ -1817,11 +2759,6 @@ async function leaveGame() {
 
             manuallyMarked =
                 new Set();
-
-
-            /*
-               Immediately display the Cartela screen.
-            */
 
             showSelectionAfterLeave();
 
@@ -1866,6 +2803,8 @@ async function leaveGame() {
             button.textContent =
                 "LEAVE";
 
+            }
+
         }
 
     }
@@ -1894,10 +2833,15 @@ function showSelectionAfterLeave() {
             "resultView"
         );
 
+    const lobbyView =
+        document.getElementById(
+            "lobbyView"
+        );
 
-    /*
-       Hide Bingo and result.
-    */
+
+    lobbyView.classList.add(
+        "hidden"
+    );
 
     gameView.classList.add(
         "hidden"
@@ -1907,20 +2851,10 @@ function showSelectionAfterLeave() {
         "hidden"
     );
 
-
-    /*
-       Show Cartela selection immediately.
-    */
-
     selectionView.classList.remove(
         "hidden"
     );
 
-
-    /*
-       Update the selection screen with the
-       current server state.
-    */
 
     renderSelectionInfo();
 
@@ -1928,11 +2862,6 @@ function showSelectionAfterLeave() {
 
     renderSelection();
 
-
-    /*
-       If the current game is still running, tell the player
-       why they cannot select another Cartela yet.
-    */
 
     const selectedText =
         document.getElementById(
@@ -2004,8 +2933,46 @@ function render() {
     }
 
 
+    if (inLobby) {
+
+        document.getElementById(
+            "lobbyView"
+        ).classList.remove(
+            "hidden"
+        );
+
+        document.getElementById(
+            "selectionView"
+        ).classList.add(
+            "hidden"
+        );
+
+        document.getElementById(
+            "gameView"
+        ).classList.add(
+            "hidden"
+        );
+
+        document.getElementById(
+            "resultView"
+        ).classList.add(
+            "hidden"
+        );
+
+        renderLobby();
+
+        return;
+
+    }
+
+
     renderSelectionInfo();
 
+
+    const lobbyView =
+        document.getElementById(
+            "lobbyView"
+        );
 
     const selectionView =
         document.getElementById(
@@ -2023,6 +2990,10 @@ function render() {
         );
 
 
+    lobbyView.classList.add(
+        "hidden"
+    );
+
     selectionView.classList.add(
         "hidden"
     );
@@ -2035,13 +3006,6 @@ function render() {
         "hidden"
     );
 
-
-    /*
-       MOST IMPORTANT PART
-
-       If the player has pressed LEAVE, always show
-       Cartela selection instead of the current game.
-    */
 
     if (returnedToSelection) {
 
