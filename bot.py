@@ -225,11 +225,14 @@ class BingoGame:
 
         self.game_number += 1
 
+        # THIS IS THE ONE AND ONLY COUNTDOWN DEADLINE
         self.selection_end = (
             time.monotonic() + SELECTION_SECONDS
         )
 
+        # Starting countdown will use this SAME deadline.
         self.start_end = None
+
         self.result_end = None
         self.next_draw_at = None
 
@@ -289,15 +292,23 @@ class BingoGame:
         )
 
     # -----------------------------------------------------
+    # IMPORTANT:
+    # THE START COUNTDOWN IS THE SAME COUNTDOWN AS
+    # THE CARTELA SELECTION COUNTDOWN.
+    #
+    # We DO NOT create another 30-second timer.
+    # -----------------------------------------------------
 
     def ensure_start_timer_locked(self):
-        now = time.monotonic()
 
-        if self.start_end is None:
-            self.start_end = max(
-                self.selection_end,
-                now + START_SECONDS,
-            )
+        # Use the exact same deadline as Cartela selection.
+        self.start_end = self.selection_end
+
+        logger.info(
+            "Game %s: shared countdown deadline set. "
+            "Selection and start timers are identical.",
+            self.game_number,
+        )
 
         return self.start_end
 
@@ -306,7 +317,6 @@ class BingoGame:
     def get_view_phase(self, user_id):
 
         if user_id in self.left_users:
-
             return self.phase
 
         if self.phase == "selection":
@@ -853,12 +863,17 @@ async def api_proceed(request):
             user_id
         )
 
+        # IMPORTANT:
+        # This does NOT create a new 30-second timer.
+        # It uses the exact same deadline as Cartela selection.
         game.ensure_start_timer_locked()
 
         logger.info(
-            "User %s pressed PROCEED with Cartela %s",
+            "User %s pressed PROCEED with Cartela %s. "
+            "Shared countdown remaining=%ss",
             user_id,
             cartela,
+            game.start_remaining(),
         )
 
         return web.json_response(
@@ -894,7 +909,6 @@ async def api_leave(request):
                 }
             )
 
-
         # -------------------------------------------------
         # USER IS ALREADY OUT
         # -------------------------------------------------
@@ -908,7 +922,6 @@ async def api_leave(request):
                     **game.state_for_user(user_id),
                 }
             )
-
 
         # -------------------------------------------------
         # REMOVE PLAYER
@@ -925,16 +938,13 @@ async def api_leave(request):
                 cartela
             )
 
-
         game.proceeded_users.discard(
             user_id
         )
 
-
         game.left_users.add(
             user_id
         )
-
 
         game.blocked_users.discard(
             user_id
@@ -944,7 +954,6 @@ async def api_leave(request):
             user_id
         )
 
-
         logger.info(
             "User %s left Game %s during phase %s. "
             "Game continues.",
@@ -952,12 +961,6 @@ async def api_leave(request):
             game.game_number,
             game.phase,
         )
-
-
-        # -------------------------------------------------
-        # IF GAME IS STILL IN SELECTION
-        # AND NOBODY REMAINS, GAME LOOP WILL RESTART IT
-        # -------------------------------------------------
 
         return web.json_response(
             {
@@ -990,12 +993,10 @@ async def api_claim_bingo(request):
             status=400,
         )
 
-
     marked = data.get(
         "marked",
         []
     )
-
 
     if not isinstance(
         marked,
@@ -1003,7 +1004,6 @@ async def api_claim_bingo(request):
     ):
 
         marked = []
-
 
     try:
 
@@ -1015,7 +1015,6 @@ async def api_claim_bingo(request):
     except Exception:
 
         marked = set()
-
 
     async with game.lock:
 
@@ -1033,7 +1032,6 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         # -------------------------------------------------
         # BLOCKED PLAYER
         # -------------------------------------------------
@@ -1049,7 +1047,6 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         # -------------------------------------------------
         # GAME NOT PLAYING
         # -------------------------------------------------
@@ -1063,7 +1060,6 @@ async def api_claim_bingo(request):
                     **game.state_for_user(user_id),
                 }
             )
-
 
         # -------------------------------------------------
         # WINNER ALREADY EXISTS
@@ -1079,7 +1075,6 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         # -------------------------------------------------
         # PLAYER CARTELA
         # -------------------------------------------------
@@ -1087,7 +1082,6 @@ async def api_claim_bingo(request):
         cartela = game.player_cartelas.get(
             user_id
         )
-
 
         if not cartela:
 
@@ -1098,11 +1092,9 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         card = CARTELA_CARDS.get(
             cartela
         )
-
 
         if not card:
 
@@ -1113,14 +1105,11 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         marked.add(0)
-
 
         valid_card_numbers = set(
             card_numbers(card)
         )
-
 
         invalid_marks = {
             number
@@ -1131,7 +1120,6 @@ async def api_claim_bingo(request):
                 or number not in game.drawn_numbers
             )
         }
-
 
         if invalid_marks:
 
@@ -1157,12 +1145,10 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         pattern = get_bingo_pattern(
             card,
             marked
         )
-
 
         if not pattern:
 
@@ -1188,9 +1174,7 @@ async def api_claim_bingo(request):
                 }
             )
 
-
         winner_amount = game.prize
-
 
         game.winner = {
             "user_id": user_id,
@@ -1200,16 +1184,13 @@ async def api_claim_bingo(request):
             "amount": winner_amount,
         }
 
-
         get_balance(user_id)
 
         balances[user_id] += winner_amount
 
-
         game.finish_locked(
             winner=game.winner
         )
-
 
         logger.info(
             "WINNER: user=%s cartela=%s pattern=%s prize=%s",
@@ -1218,7 +1199,6 @@ async def api_claim_bingo(request):
             pattern,
             winner_amount,
         )
-
 
         return web.json_response(
             {
@@ -1238,7 +1218,6 @@ async def handle_index(request):
 
     index_file = WEB_FOLDER / "index.html"
 
-
     if not index_file.exists():
 
         return web.Response(
@@ -1249,7 +1228,6 @@ async def handle_index(request):
             content_type="text/plain",
             status=404,
         )
-
 
     return web.FileResponse(
         index_file
@@ -1282,7 +1260,6 @@ async def telegram_webhook(request):
         "X-Telegram-Bot-Api-Secret-Token"
     )
 
-
     if received_secret != WEBHOOK_SECRET:
 
         logger.warning(
@@ -1293,7 +1270,6 @@ async def telegram_webhook(request):
             text="Forbidden",
             status=403,
         )
-
 
     try:
 
@@ -1311,7 +1287,6 @@ async def telegram_webhook(request):
         return web.json_response(
             {"ok": True}
         )
-
 
     except Exception:
 
@@ -1375,16 +1350,13 @@ async def setup_commands():
 
     commands = telegram_commands()
 
-
     await bot.set_my_commands(
         commands
     )
 
-
     await bot.set_chat_menu_button(
         menu_button=MenuButtonCommands()
     )
-
 
     logger.info(
         "Telegram menu commands and Menu button registered."
@@ -1402,9 +1374,7 @@ async def setup_telegram():
         + WEBHOOK_PATH
     )
 
-
     max_attempts = 5
-
 
     for attempt in range(
         1,
@@ -1419,15 +1389,12 @@ async def setup_telegram():
                 max_attempts,
             )
 
-
             await setup_commands()
-
 
             logger.info(
                 "Setting Telegram webhook: %s",
                 webhook_url,
             )
-
 
             await bot.set_webhook(
                 url=webhook_url,
@@ -1435,15 +1402,12 @@ async def setup_telegram():
                 drop_pending_updates=False,
             )
 
-
             webhook_info = await bot.get_webhook_info()
-
 
             logger.info(
                 "Telegram webhook active: %s",
                 webhook_info.url,
             )
-
 
             if webhook_info.url != webhook_url:
 
@@ -1457,14 +1421,11 @@ async def setup_telegram():
                     "Telegram webhook verified successfully."
                 )
 
-
             logger.info(
                 "Telegram setup completed successfully."
             )
 
-
             return True
-
 
         except Exception:
 
@@ -1473,28 +1434,23 @@ async def setup_telegram():
                 attempt,
             )
 
-
             if attempt < max_attempts:
 
                 wait_seconds = attempt * 3
-
 
                 logger.info(
                     "Retrying Telegram setup in %s seconds...",
                     wait_seconds,
                 )
 
-
                 await asyncio.sleep(
                     wait_seconds
                 )
-
 
     logger.error(
         "Telegram setup failed after %s attempts.",
         max_attempts,
     )
-
 
     return False
 
@@ -1512,7 +1468,6 @@ async def game_loop():
             async with game.lock:
 
                 now = time.monotonic()
-
 
                 # -----------------------------------------
                 # SELECTION
@@ -1534,6 +1489,9 @@ async def game_loop():
 
                         else:
 
+                            # IMPORTANT:
+                            # start_end is the SAME deadline that
+                            # selection used.
                             game.ensure_start_timer_locked()
 
                             game.phase = "starting"
@@ -1543,7 +1501,6 @@ async def game_loop():
                                 game.game_number,
                                 len(game.player_cartelas),
                             )
-
 
                 # -----------------------------------------
                 # STARTING
@@ -1570,7 +1527,6 @@ async def game_loop():
 
                             game.start_playing_locked()
 
-
                 # -----------------------------------------
                 # PLAYING
                 # -----------------------------------------
@@ -1584,14 +1540,12 @@ async def game_loop():
 
                         game.draw_number_locked()
 
-
                         if game.phase == "playing":
 
                             game.next_draw_at = (
                                 now
                                 + DRAW_INTERVAL_SECONDS
                             )
-
 
                 # -----------------------------------------
                 # FINISHED
@@ -1606,13 +1560,11 @@ async def game_loop():
 
                         game.start_selection_locked()
 
-
         except Exception:
 
             logger.exception(
                 "Game loop error."
             )
-
 
         await asyncio.sleep(
             0.25
@@ -1629,14 +1581,11 @@ async def on_startup(app):
         "Starting Rodas Friend Zone..."
     )
 
-
     app["game_task"] = asyncio.create_task(
         game_loop()
     )
 
-
     telegram_ready = await setup_telegram()
-
 
     if not telegram_ready:
 
@@ -1656,16 +1605,13 @@ async def on_shutdown(app):
         "Shutting down Rodas Friend Zone..."
     )
 
-
     task = app.get(
         "game_task"
     )
 
-
     if task:
 
         task.cancel()
-
 
         try:
 
@@ -1674,7 +1620,6 @@ async def on_shutdown(app):
         except asyncio.CancelledError:
 
             pass
-
 
     try:
 
@@ -1699,53 +1644,44 @@ app.router.add_get(
     handle_index,
 )
 
-
 app.router.add_get(
     "/health",
     health,
 )
-
 
 app.router.add_post(
     WEBHOOK_PATH,
     telegram_webhook,
 )
 
-
 app.router.add_get(
     "/api/state",
     api_state,
 )
-
 
 app.router.add_post(
     "/api/select",
     api_select,
 )
 
-
 app.router.add_post(
     "/api/proceed",
     api_proceed,
 )
-
 
 app.router.add_post(
     "/api/leave",
     api_leave,
 )
 
-
 app.router.add_post(
     "/api/claim-bingo",
     api_claim_bingo,
 )
 
-
 app.on_startup.append(
     on_startup
 )
-
 
 app.on_shutdown.append(
     on_shutdown
@@ -1762,7 +1698,6 @@ if __name__ == "__main__":
         "Rodas Friend Zone running on port %s",
         PORT,
     )
-
 
     web.run_app(
         app,
