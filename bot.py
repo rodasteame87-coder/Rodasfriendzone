@@ -10,6 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BotCommand,
+    BotCommandScopeAllPrivateChats,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -205,10 +206,22 @@ def check_pattern(board, called_numbers, pattern):
         positions = [(r, 4) for r in range(5)]
 
     elif pattern == "diagonal_down":
-        positions = [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]
+        positions = [
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+        ]
 
     elif pattern == "diagonal_up":
-        positions = [(4, 0), (3, 1), (2, 2), (1, 3), (0, 4)]
+        positions = [
+            (4, 0),
+            (3, 1),
+            (2, 2),
+            (1, 3),
+            (0, 4),
+        ]
 
     else:
         return False
@@ -1505,56 +1518,67 @@ async def on_startup(app):
 
     try:
         # -------------------------------------------------
-        # RESTORE THE TELEGRAM BOT MENU
+        # TELEGRAM MENU COMMANDS
+        # -------------------------------------------------
+
+        commands = [
+            BotCommand(
+                command="start",
+                description="Open Rodas Friend Zone Bingo",
+            ),
+            BotCommand(
+                command="play",
+                description="Play Bingo",
+            ),
+            BotCommand(
+                command="deposit",
+                description="Deposit",
+            ),
+            BotCommand(
+                command="balance",
+                description="Check balance",
+            ),
+            BotCommand(
+                command="withdraw",
+                description="Withdraw",
+            ),
+            BotCommand(
+                command="transfer",
+                description="Transfer",
+            ),
+            BotCommand(
+                command="instruction",
+                description="How to play",
+            ),
+            BotCommand(
+                command="invite",
+                description="Invite friends",
+            ),
+            BotCommand(
+                command="support",
+                description="Support",
+            ),
+        ]
+
+        # -------------------------------------------------
+        # APPLY COMMANDS TO ALL PRIVATE CHATS
         # -------------------------------------------------
 
         await bot.set_my_commands(
-            [
-                BotCommand(
-                    command="start",
-                    description="Open Rodas Friend Zone Bingo",
-                ),
-                BotCommand(
-                    command="play",
-                    description="Play Bingo",
-                ),
-                BotCommand(
-                    command="deposit",
-                    description="Deposit",
-                ),
-                BotCommand(
-                    command="balance",
-                    description="Check balance",
-                ),
-                BotCommand(
-                    command="withdraw",
-                    description="Withdraw",
-                ),
-                BotCommand(
-                    command="transfer",
-                    description="Transfer",
-                ),
-                BotCommand(
-                    command="instruction",
-                    description="How to play",
-                ),
-                BotCommand(
-                    command="invite",
-                    description="Invite friends",
-                ),
-                BotCommand(
-                    command="support",
-                    description="Support",
-                ),
-            ]
+            commands=commands,
+            scope=BotCommandScopeAllPrivateChats(),
         )
 
         # -------------------------------------------------
-        # KEEP TELEGRAM MENU AS COMMANDS
+        # MAKE TELEGRAM MENU BUTTON SHOW COMMANDS
         # -------------------------------------------------
 
         await bot.set_chat_menu_button(
             menu_button=MenuButtonCommands()
+        )
+
+        logger.info(
+            "Telegram private-chat menu commands configured successfully."
         )
 
         # -------------------------------------------------
