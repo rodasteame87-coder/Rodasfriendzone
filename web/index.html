@@ -1711,10 +1711,6 @@ button {
             </div>
 
 
-            <!-- =================================================
-                 BOTTOM NAV
-            ================================================== -->
-
             <div class="lobby-nav">
 
                 <div class="lobby-nav-item active">
@@ -2018,8 +2014,6 @@ button {
         <div class="game-layout">
 
 
-            <!-- CALL BOARD -->
-
             <div class="call-board">
 
                 <div class="call-board-title">
@@ -2089,8 +2083,6 @@ button {
 
             </div>
 
-
-            <!-- RIGHT SIDE -->
 
             <div class="right-game">
 
@@ -2310,10 +2302,6 @@ button {
 
 </div>
 
-
-<!-- =========================================================
-     WRONG CLAIM OVERLAY
-========================================================= -->
 
 <div
     id="wrongOverlay"
@@ -2903,14 +2891,38 @@ async function selectCartela(
     }
 
 
+    const isSameCartela =
+        Number(
+            selectedCartela
+        ) === Number(
+            number
+        );
+
+
     try {
+
+        /*
+         * SAME NUMBER TAPPED AGAIN
+         *
+         * First tap:
+         *     25 -> selected
+         *
+         * Second tap:
+         *     25 -> unselected
+         *
+         * A different number still switches
+         * the selection normally.
+         */
 
         const result =
             await api(
                 "/api/select",
                 "POST",
                 {
-                    cartela: number
+                    cartela:
+                        isSameCartela
+                            ? null
+                            : number
                 }
             );
 
@@ -2919,11 +2931,26 @@ async function selectCartela(
             result.success
         ) {
 
-            selectedCartela =
-                number;
+            if (
+                isSameCartela
+            ) {
 
-            proceeded =
-                false;
+                selectedCartela =
+                    null;
+
+                proceeded =
+                    false;
+
+            } else {
+
+                selectedCartela =
+                    number;
+
+                proceeded =
+                    false;
+
+            }
+
 
             state =
                 result;
@@ -3905,16 +3932,6 @@ async function leaveGame() {
             result;
 
 
-        /*
-           IMPORTANT:
-
-           The player is immediately returned to the
-           Cartela Selection screen.
-
-           The shared Bingo game itself continues on
-           the server for the other players.
-        */
-
         renderSelection();
 
     } catch (error) {
@@ -4214,11 +4231,6 @@ function render() {
     }
 
 
-    /*
-       If the player has explicitly left,
-       always show Cartela Selection.
-    */
-
     if (
         returnedToSelection
     ) {
@@ -4229,10 +4241,6 @@ function render() {
 
     }
 
-
-    /*
-       Lobby is the first screen.
-    */
 
     if (
         inLobby
@@ -4269,10 +4277,6 @@ function render() {
     }
 
 
-    /*
-       Finished result.
-    */
-
     if (
         state.phase ===
         "finished"
@@ -4284,13 +4288,6 @@ function render() {
 
     }
 
-
-    /*
-       Selection.
-
-       If the player has not proceeded yet,
-       show Cartela Selection.
-    */
 
     if (
         state.phase ===
@@ -4305,11 +4302,6 @@ function render() {
 
     }
 
-
-    /*
-       If the player is in selection but has
-       no Cartela yet, keep them on selection.
-    */
 
     if (
         state.phase ===
@@ -4329,10 +4321,6 @@ function render() {
     }
 
 
-    /*
-       Starting / Playing.
-    */
-
     if (
         state.phase === "starting"
         ||
@@ -4349,10 +4337,6 @@ function render() {
 
     }
 
-
-    /*
-       Safe fallback.
-    */
 
     renderSelection();
 
@@ -4379,11 +4363,6 @@ async function loadState(
         state =
             data;
 
-
-        /*
-           Do not overwrite the explicit local
-           selection state unnecessarily.
-        */
 
         const serverSelected =
             data?.selected
@@ -4412,12 +4391,6 @@ async function loadState(
                 data?.proceeded
             );
 
-
-        /*
-           When the player deliberately left,
-           keep them on Cartela Selection until
-           they select a new Cartela.
-        */
 
         if (
             returnedToSelection
@@ -4467,11 +4440,6 @@ async function pollState() {
         state =
             data;
 
-
-        /*
-           If user has left, don't automatically
-           force them into the Bingo game again.
-        */
 
         if (
             returnedToSelection
