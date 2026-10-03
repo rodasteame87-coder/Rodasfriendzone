@@ -68,47 +68,37 @@ button {
     background: #690078;
     color: white;
     border-radius: 8px 8px 0 0;
+
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+
     padding: 8px 12px;
     margin-bottom: 0;
 }
 
-.lobby-header-left {
-    font-size: 30px;
-    font-weight: 400;
-    line-height: 1;
-}
-
 .lobby-header-title {
-    flex: 1;
+    width: 100%;
     text-align: center;
     font-size: 20px;
     font-weight: 900;
     white-space: nowrap;
 }
 
-.lobby-header-right {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    font-size: 30px;
-    line-height: 1;
-}
-
 .lobby-page {
     width: 100%;
     background: #c9edf4;
     min-height: calc(100vh - 63px);
-    padding-bottom: 10px;
+    padding-bottom: 0;
 }
 
 .lobby-top-info {
     width: 100%;
+
     display: grid;
     grid-template-columns: 1fr 1.4fr;
     gap: 8px;
+
     padding: 16px 12px 10px;
     align-items: center;
 }
@@ -117,6 +107,7 @@ button {
     display: flex;
     align-items: center;
     gap: 8px;
+
     color: #690078;
     font-size: 18px;
     font-weight: 900;
@@ -126,13 +117,9 @@ button {
     width: 15px;
     height: 15px;
     border-radius: 50%;
+
     background: #16a34a;
     box-shadow: 0 0 5px rgba(22,163,74,0.6);
-}
-
-.live-dot.offline {
-    background: #e51c2a;
-    box-shadow: 0 0 5px rgba(229,28,42,0.5);
 }
 
 .balance-box {
@@ -140,6 +127,7 @@ button {
     justify-content: flex-end;
     align-items: center;
     gap: 7px;
+
     color: #690078;
     font-size: 17px;
     font-weight: 900;
@@ -155,6 +143,7 @@ button {
 
 .lobby-section-title {
     padding: 5px 18px 8px;
+
     color: #690078;
     font-size: 24px;
     font-weight: 900;
@@ -162,13 +151,19 @@ button {
 
 .lobby-table-header {
     width: calc(100% - 24px);
+
     margin: 0 12px 8px;
+
     background: #fffdf0;
     border-radius: 14px;
+
     padding: 10px 8px;
+
     display: grid;
     grid-template-columns: 18% 42% 40%;
+
     text-align: center;
+
     color: #690078;
     font-size: 16px;
     font-weight: 900;
@@ -176,23 +171,31 @@ button {
 
 .lobby-game-row {
     width: calc(100% - 24px);
+
     margin: 0 12px 9px;
+
     background: #fffdf0;
     border-radius: 14px;
+
     overflow: hidden;
+
     display: grid;
     grid-template-columns: 18% 42% 40%;
+
     min-height: 112px;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
 .lobby-bet {
     background: #690078;
     color: white;
+
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+
     font-weight: 900;
 }
 
@@ -208,6 +211,7 @@ button {
 
 .lobby-game-info {
     padding: 10px 7px;
+
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -217,6 +221,7 @@ button {
     display: flex;
     align-items: center;
     gap: 6px;
+
     color: #079443;
     font-size: 27px;
     font-weight: 900;
@@ -233,39 +238,28 @@ button {
     margin-top: 3px;
 }
 
-.lobby-jackpot-wrap {
-    width: 100%;
-    margin-top: 8px;
-}
-
-.lobby-jackpot-label {
-    background: #690078;
-    color: white;
-    height: 18px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 900;
-}
-
 .lobby-status-area {
     padding: 8px;
+
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+
     gap: 6px;
 }
 
 .lobby-status {
     min-width: 115px;
+
     text-align: center;
+
     background: #1877df;
     color: white;
+
     border-radius: 20px;
     padding: 7px 8px;
+
     font-size: 14px;
     font-weight: 900;
 }
@@ -279,10 +273,13 @@ button {
 .lobby-join {
     width: 100%;
     max-width: 150px;
+
     background: #0a9b45;
     color: white;
+
     border-radius: 10px;
     padding: 10px 8px;
+
     font-size: 19px;
     font-weight: 900;
 }
@@ -293,13 +290,18 @@ button {
 
 .lobby-bottom {
     width: calc(100% - 24px);
+
     margin: 12px;
+
     background: #dff6fa;
     border-radius: 13px;
+
     padding: 13px 15px;
+
     display: flex;
     align-items: center;
     justify-content: space-between;
+
     color: #690078;
 }
 
@@ -316,34 +318,52 @@ button {
 .lobby-demo-btn {
     background: #690078;
     color: white;
+
     border-radius: 9px;
     padding: 10px 20px;
+
     font-size: 15px;
     font-weight: 900;
 }
 
+
+/* =========================================================
+   BOTTOM NAVIGATION
+========================================================= */
+
 .lobby-nav {
     width: 100%;
+
     background: white;
+
     border-radius: 12px 12px 0 0;
+
     min-height: 82px;
+
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+
     align-items: center;
+
     margin-top: 8px;
+
     box-shadow: 0 -1px 4px rgba(0,0,0,0.08);
 }
 
 .lobby-nav-item {
     text-align: center;
+
     color: #4d4560;
+
     font-size: 13px;
     font-weight: 700;
 }
 
 .lobby-nav-icon {
     display: block;
+
     font-size: 27px;
+
     margin-bottom: 3px;
 }
 
@@ -357,48 +377,69 @@ button {
 
 
 /* =========================================================
-   EXISTING GAME
+   GAME / SELECTION
 ========================================================= */
 
 .top-title {
     width: 100%;
+
     text-align: center;
+
     font-size: 22px;
     font-weight: 900;
+
     color: #7a008f;
+
     margin: 3px 0 8px;
 }
 
 .game-info {
     width: 100%;
+
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+
     gap: 6px;
+
     margin-bottom: 8px;
 }
 
 .info-box {
     background: #fffdf0;
+
     border-radius: 8px;
+
     padding: 6px 3px;
+
     text-align: center;
+
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+
     min-height: 50px;
 }
 
 .info-label {
     color: #85008f;
+
     font-size: 12px;
     font-weight: 900;
+
     line-height: 15px;
 }
 
 .info-value {
     color: #111;
+
     font-size: 19px;
     font-weight: 900;
+
     line-height: 22px;
 }
+
+
+/* =========================================================
+   CARTELA SELECTION
+========================================================= */
 
 #selectionView {
     width: 100%;
@@ -406,22 +447,30 @@ button {
 
 .selection-header {
     background: #fffdf0;
+
     border-radius: 10px;
+
     padding: 9px;
+
     text-align: center;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+
     margin-bottom: 8px;
 }
 
 .selection-title {
     color: #85008f;
+
     font-size: 20px;
     font-weight: 900;
+
     margin-bottom: 4px;
 }
 
 .selection-timer {
     color: #e21b23;
+
     font-size: 24px;
     font-weight: 900;
 }
@@ -429,28 +478,38 @@ button {
 .selection-wallet {
     font-size: 14px;
     font-weight: 700;
+
     margin-top: 4px;
 }
 
 .selection-wallet span {
     color: #008a39;
+
     font-weight: 900;
 }
 
 .cartela-grid {
     display: grid;
+
     grid-template-columns: repeat(10, 1fr);
+
     gap: 4px;
+
     width: 100%;
+
     margin-bottom: 9px;
 }
 
 .cartela-btn {
     min-height: 34px;
+
     border-radius: 6px;
+
     background: #ffffff;
     color: #690078;
+
     border: 2px solid #b55fc0;
+
     font-size: 13px;
     font-weight: 900;
 }
@@ -461,66 +520,98 @@ button {
 
 .cartela-btn.taken {
     background: #e2e2e2;
+
     color: #999;
+
     border-color: #bbb;
 }
 
 .cartela-btn.selected {
     background: #690078;
+
     color: white;
+
     border-color: #690078;
 }
 
 .selected-area {
     background: #fffdf0;
+
     border-radius: 10px;
+
     padding: 9px;
+
     text-align: center;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+
     margin-bottom: 8px;
 }
 
 .selected-text {
     font-size: 16px;
     font-weight: 900;
+
     color: #85008f;
 }
 
 .proceed-btn {
     width: 100%;
+
     margin-top: 8px;
+
     padding: 13px;
+
     border-radius: 9px;
+
     background: #0a9b45;
+
     color: white;
+
     font-size: 18px;
     font-weight: 900;
 }
 
 .proceed-btn:disabled {
     background: #aaa;
+
     cursor: not-allowed;
 }
 
 .leave-selection-btn {
     width: 100%;
+
     margin-top: 6px;
+
     padding: 10px;
+
     border-radius: 8px;
+
     background: #e51c2a;
+
     color: white;
+
     font-size: 15px;
     font-weight: 900;
 }
 
 .starting-message {
     width: 100%;
+
     text-align: center;
+
     color: #00889a;
+
     font-size: 20px;
     font-weight: 900;
+
     margin: 5px 0 8px;
 }
+
+
+/* =========================================================
+   BINGO GAME
+========================================================= */
 
 #gameView {
     width: 100%;
@@ -528,49 +619,71 @@ button {
 
 .game-layout {
     width: 100%;
+
     display: grid;
+
     grid-template-columns: 42% 58%;
+
     gap: 5px;
+
     align-items: start;
 }
 
 .call-board {
     width: 100%;
+
     background: #ffffff;
+
     border-radius: 8px;
+
     overflow: hidden;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
 .call-board-title {
     text-align: center;
+
     background: #fffdf0;
+
     color: #85008f;
+
     font-size: 13px;
     font-weight: 900;
+
     padding: 5px 2px;
 }
 
 .bingo-columns {
     display: grid;
+
     grid-template-columns: repeat(5, 1fr);
+
     gap: 1px;
+
     background: #d5d5d5;
 }
 
 .bingo-column {
     display: flex;
+
     flex-direction: column;
+
     gap: 1px;
+
     background: #d5d5d5;
 }
 
 .bingo-letter {
     height: 27px;
+
     display: flex;
+
     align-items: center;
     justify-content: center;
+
     color: white;
+
     font-size: 15px;
     font-weight: 900;
 }
@@ -597,24 +710,33 @@ button {
 
 .call-number {
     width: 100%;
+
     height: 23px;
+
     display: flex;
+
     align-items: center;
     justify-content: center;
+
     background: #eadcf2;
+
     color: #4d4d4d;
+
     font-size: 11px;
     font-weight: 800;
 }
 
 .call-number.called {
     background: #1ca94c;
+
     color: white;
 }
 
 .call-number.current {
     background: #ff9700;
+
     color: white;
+
     font-weight: 900;
 }
 
@@ -624,74 +746,110 @@ button {
 
 .current-call-box {
     width: 100%;
+
     background: #a000a0;
+
     border-radius: 10px;
+
     padding: 7px;
+
     text-align: center;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
 .current-call-label {
     color: white;
+
     font-size: 15px;
     font-weight: 900;
+
     margin-bottom: 4px;
 }
 
 .current-call-circle {
     width: 65px;
     height: 65px;
+
     margin: 0 auto;
+
     border-radius: 50%;
+
     background: #ff9700;
+
     color: white;
+
     display: flex;
+
     align-items: center;
     justify-content: center;
+
     font-size: 29px;
     font-weight: 900;
+
     border: 4px solid white;
 }
 
 .last-call-box {
     width: 100%;
+
     background: white;
+
     border-radius: 9px;
+
     padding: 7px;
+
     margin-top: 6px;
+
     display: flex;
+
     justify-content: center;
     align-items: center;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
 .last-call-circle {
     width: 48px;
     height: 48px;
+
     border-radius: 50%;
+
     background: #2563d8;
+
     color: white;
+
     display: flex;
+
     align-items: center;
     justify-content: center;
+
     font-size: 21px;
     font-weight: 900;
 }
 
 .auto-box {
     width: 100%;
+
     background: white;
+
     border-radius: 9px;
+
     padding: 7px 10px;
+
     margin-top: 6px;
+
     display: flex;
+
     align-items: center;
     justify-content: space-between;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
 .auto-label {
     color: #222;
+
     font-size: 15px;
     font-weight: 900;
 }
@@ -699,54 +857,76 @@ button {
 .toggle {
     width: 49px;
     height: 27px;
+
     background: #12a447;
+
     border-radius: 20px;
+
     padding: 3px;
+
     display: flex;
+
     justify-content: flex-end;
 }
 
 .toggle.off {
     background: #aaa;
+
     justify-content: flex-start;
 }
 
 .toggle-knob {
     width: 21px;
     height: 21px;
+
     border-radius: 50%;
+
     background: white;
 }
 
 .chosen-card-box {
     width: 100%;
+
     background: white;
+
     border-radius: 9px;
+
     margin-top: 6px;
+
     padding: 6px;
+
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
 .chosen-card-title {
     text-align: center;
+
     color: #85008f;
+
     font-size: 14px;
     font-weight: 900;
+
     margin-bottom: 5px;
 }
 
 .bingo-card {
     width: 100%;
+
     border-collapse: separate;
+
     border-spacing: 1px;
+
     table-layout: fixed;
 }
 
 .bingo-card th {
     height: 27px;
+
     color: white;
+
     font-size: 13px;
     font-weight: 900;
+
     border-radius: 2px;
 }
 
@@ -772,29 +952,39 @@ button {
 
 .bingo-card td {
     height: 36px;
+
     text-align: center;
     vertical-align: middle;
+
     background: #eee8f1;
+
     color: #202020;
+
     font-size: 14px;
     font-weight: 900;
+
     border-radius: 3px;
+
     user-select: none;
 }
 
 .bingo-card td.called {
     background: #c8f1d5;
+
     color: #0a7e37;
 }
 
 .bingo-card td.marked {
     background: #16a34a;
+
     color: white;
 }
 
 .bingo-card td.free {
     background: #16a34a;
+
     color: white;
+
     font-size: 11px;
 }
 
@@ -804,73 +994,111 @@ button {
 
 .bingo-card td.winning {
     background: #ff9700 !important;
+
     color: white !important;
 }
 
 .card-number-box {
     width: 100%;
+
     text-align: center;
+
     margin-top: 6px;
+
     font-size: 15px;
     font-weight: 900;
+
     color: #85008f;
 }
 
 .bingo-win-btn {
     width: 100%;
+
     margin-top: 7px;
+
     padding: 12px;
+
     border-radius: 9px;
+
     background: #f39a19;
+
     color: white;
+
     font-size: 19px;
     font-weight: 900;
+
     box-shadow: 0 2px 3px rgba(0,0,0,0.15);
 }
 
 .game-actions {
     display: grid;
+
     grid-template-columns: 1fr 1fr;
+
     gap: 6px;
+
     margin-top: 7px;
 }
 
 .leave-btn {
     background: #e51c2a;
+
     color: white;
+
     padding: 11px;
+
     border-radius: 8px;
+
     font-size: 15px;
     font-weight: 900;
 }
 
 .refresh-btn {
     background: #1769d3;
+
     color: white;
+
     padding: 11px;
+
     border-radius: 8px;
+
     font-size: 15px;
     font-weight: 900;
 }
 
 .player-left-message {
     width: 100%;
+
     background: #fffdf0;
+
     border-radius: 10px;
+
     padding: 15px 8px;
+
     margin-top: 7px;
+
     text-align: center;
+
     color: #85008f;
+
     font-size: 17px;
     font-weight: 900;
 }
 
 .player-left-message small {
     display: block;
+
     margin-top: 5px;
+
     color: #555;
+
     font-size: 12px;
 }
+
+
+/* =========================================================
+   RESULT
+========================================================= */
 
 #resultView {
     width: 100%;
@@ -878,126 +1106,180 @@ button {
 
 .result-box {
     width: 100%;
+
     background: #fffdf0;
+
     border-radius: 12px;
+
     padding: 14px;
+
     text-align: center;
+
     box-shadow: 0 2px 7px rgba(0,0,0,0.16);
 }
 
 .result-title {
     color: #85008f;
+
     font-size: 27px;
     font-weight: 900;
+
     margin-bottom: 8px;
 }
 
 .result-winner {
     color: #0a9b45;
+
     font-size: 20px;
     font-weight: 900;
+
     margin-bottom: 5px;
 }
 
 .result-prize {
     color: #e98700;
+
     font-size: 23px;
     font-weight: 900;
+
     margin-bottom: 12px;
 }
 
 .result-card-wrap {
     max-width: 400px;
+
     margin: 0 auto;
 }
 
 .result-card {
     width: 100%;
+
     border-collapse: separate;
+
     border-spacing: 2px;
+
     table-layout: fixed;
 }
 
 .result-card th {
     height: 32px;
+
     color: white;
+
     font-weight: 900;
+
     border-radius: 3px;
 }
 
 .result-card td {
     height: 42px;
+
     background: #eee8f1;
+
     text-align: center;
+
     font-size: 15px;
     font-weight: 900;
+
     border-radius: 3px;
 }
 
 .result-card td.winner-number {
     background: #16a34a;
+
     color: white;
 }
 
 .result-card td.free {
     background: #16a34a;
+
     color: white;
 }
 
 .result-next {
     margin-top: 10px;
+
     color: #85008f;
+
     font-size: 14px;
     font-weight: 800;
 }
 
+
+/* =========================================================
+   WRONG CLAIM
+========================================================= */
+
 .wrong-overlay {
     position: fixed;
+
     z-index: 9999;
+
     inset: 0;
+
     background: rgba(0,0,0,0.62);
+
     display: flex;
+
     align-items: center;
     justify-content: center;
+
     padding: 20px;
 }
 
 .wrong-box {
     width: 100%;
+
     max-width: 380px;
+
     background: white;
+
     border-radius: 15px;
+
     padding: 22px 16px;
+
     text-align: center;
+
     box-shadow: 0 5px 25px rgba(0,0,0,0.35);
 }
 
 .wrong-icon {
     font-size: 48px;
+
     margin-bottom: 8px;
 }
 
 .wrong-title {
     color: #e51c2a;
+
     font-size: 24px;
     font-weight: 900;
+
     margin-bottom: 8px;
 }
 
 .wrong-message {
     color: #222;
+
     font-size: 16px;
     font-weight: 700;
+
     line-height: 23px;
 }
 
 .wrong-close {
     width: 100%;
+
     margin-top: 15px;
+
     padding: 12px;
+
     border-radius: 9px;
+
     background: #e51c2a;
+
     color: white;
+
     font-size: 17px;
     font-weight: 900;
 }
@@ -1015,20 +1297,12 @@ button {
 
     .lobby-header {
         min-height: 52px;
-        padding: 7px 8px;
-    }
 
-    .lobby-header-left {
-        font-size: 27px;
+        padding: 7px 8px;
     }
 
     .lobby-header-title {
         font-size: 17px;
-    }
-
-    .lobby-header-right {
-        gap: 10px;
-        font-size: 26px;
     }
 
     .lobby-top-info {
@@ -1049,27 +1323,35 @@ button {
 
     .lobby-section-title {
         font-size: 21px;
+
         padding-left: 12px;
     }
 
     .lobby-table-header {
         width: calc(100% - 16px);
+
         margin-left: 8px;
         margin-right: 8px;
+
         font-size: 13px;
+
         padding: 8px 4px;
     }
 
     .lobby-game-row {
         width: calc(100% - 16px);
+
         margin-left: 8px;
         margin-right: 8px;
+
         min-height: 100px;
+
         grid-template-columns: 18% 42% 40%;
     }
 
     .lobby-bet-number {
         font-size: 31px;
+
         line-height: 31px;
     }
 
@@ -1089,24 +1371,25 @@ button {
         font-size: 14px;
     }
 
-    .lobby-jackpot-label {
-        font-size: 9px;
-    }
-
     .lobby-status {
         min-width: 85px;
+
         font-size: 11px;
+
         padding: 6px 4px;
     }
 
     .lobby-join {
         max-width: 125px;
+
         padding: 9px 5px;
+
         font-size: 17px;
     }
 
     .lobby-bottom {
         width: calc(100% - 16px);
+
         margin-left: 8px;
         margin-right: 8px;
     }
@@ -1125,6 +1408,7 @@ button {
 
     .top-title {
         font-size: 19px;
+
         margin-bottom: 5px;
     }
 
@@ -1134,36 +1418,43 @@ button {
 
     .info-box {
         min-height: 45px;
+
         padding: 4px 2px;
     }
 
     .info-label {
         font-size: 10px;
+
         line-height: 13px;
     }
 
     .info-value {
         font-size: 16px;
+
         line-height: 19px;
     }
 
     .game-layout {
         grid-template-columns: 41% 59%;
+
         gap: 4px;
     }
 
     .call-board-title {
         font-size: 10px;
+
         padding: 4px 1px;
     }
 
     .bingo-letter {
         height: 23px;
+
         font-size: 12px;
     }
 
     .call-number {
         height: 20px;
+
         font-size: 9px;
     }
 
@@ -1174,12 +1465,14 @@ button {
     .current-call-circle {
         width: 56px;
         height: 56px;
+
         font-size: 25px;
     }
 
     .last-call-circle {
         width: 43px;
         height: 43px;
+
         font-size: 18px;
     }
 
@@ -1203,11 +1496,13 @@ button {
 
     .bingo-card th {
         height: 23px;
+
         font-size: 11px;
     }
 
     .bingo-card td {
         height: 31px;
+
         font-size: 12px;
     }
 
@@ -1221,12 +1516,14 @@ button {
 
     .bingo-win-btn {
         padding: 10px;
+
         font-size: 16px;
     }
 
     .leave-btn,
     .refresh-btn {
         padding: 9px;
+
         font-size: 13px;
     }
 
@@ -1236,6 +1533,7 @@ button {
 
     .cartela-btn {
         min-height: 30px;
+
         font-size: 11px;
     }
 }
@@ -1251,24 +1549,15 @@ button {
 
 
     <!-- =====================================================
-         NEW LOBBY
+         LOBBY
     ====================================================== -->
 
     <div id="lobbyView">
 
         <div class="lobby-header">
 
-            <div class="lobby-header-left">
-                ×
-            </div>
-
             <div class="lobby-header-title">
                 Rodas Friend Zone Bingo
-            </div>
-
-            <div class="lobby-header-right">
-                <span>⌄</span>
-                <span>⋮</span>
             </div>
 
         </div>
@@ -1280,12 +1569,9 @@ button {
 
                 <div class="live-status">
 
-                    <span
-                        id="lobbyLiveDot"
-                        class="live-dot"
-                    ></span>
+                    <span class="live-dot"></span>
 
-                    <span id="lobbyLiveText">
+                    <span>
                         Live
                     </span>
 
@@ -1375,18 +1661,6 @@ button {
                         0 players
                     </div>
 
-
-                    <div class="lobby-jackpot-wrap">
-
-                        <div
-                            id="lobbyJackpot"
-                            class="lobby-jackpot-label"
-                        >
-                            JACKPOT 0 / 1000
-                        </div>
-
-                    </div>
-
                 </div>
 
 
@@ -1426,6 +1700,7 @@ button {
 
                 </div>
 
+
                 <button
                     class="lobby-demo-btn"
                     onclick="showDemoMessage()"
@@ -1435,6 +1710,10 @@ button {
 
             </div>
 
+
+            <!-- =================================================
+                 BOTTOM NAV
+            ================================================== -->
 
             <div class="lobby-nav">
 
@@ -1449,7 +1728,10 @@ button {
                 </div>
 
 
-                <div class="lobby-nav-item">
+                <div
+                    class="lobby-nav-item"
+                    onclick="showScoresMessage()"
+                >
 
                     <span class="lobby-nav-icon">
                         🏆
@@ -1460,7 +1742,10 @@ button {
                 </div>
 
 
-                <div class="lobby-nav-item">
+                <div
+                    class="lobby-nav-item"
+                    onclick="showProfileMessage()"
+                >
 
                     <span class="lobby-nav-icon">
                         👤
@@ -1478,7 +1763,7 @@ button {
 
 
     <!-- =====================================================
-         SELECTION
+         CARTELA SELECTION
     ====================================================== -->
 
     <div id="selectionView" class="hidden">
@@ -1487,26 +1772,67 @@ button {
             🎱 Rodas Friend Zone Bingo
         </div>
 
+
         <div class="game-info">
 
             <div class="info-box">
-                <div class="info-label">Players</div>
-                <div id="selectionPlayers" class="info-value">0</div>
+
+                <div class="info-label">
+                    Players
+                </div>
+
+                <div
+                    id="selectionPlayers"
+                    class="info-value"
+                >
+                    0
+                </div>
+
             </div>
 
-            <div class="info-box">
-                <div class="info-label">Wallet</div>
-                <div id="selectionWallet" class="info-value">0</div>
-            </div>
 
             <div class="info-box">
-                <div class="info-label">Bet</div>
-                <div class="info-value">10</div>
+
+                <div class="info-label">
+                    Wallet
+                </div>
+
+                <div
+                    id="selectionWallet"
+                    class="info-value"
+                >
+                    0
+                </div>
+
             </div>
 
+
             <div class="info-box">
-                <div class="info-label">Time</div>
-                <div id="selectionTime" class="info-value">30</div>
+
+                <div class="info-label">
+                    Bet
+                </div>
+
+                <div class="info-value">
+                    10
+                </div>
+
+            </div>
+
+
+            <div class="info-box">
+
+                <div class="info-label">
+                    Time
+                </div>
+
+                <div
+                    id="selectionTime"
+                    class="info-value"
+                >
+                    30
+                </div>
+
             </div>
 
         </div>
@@ -1518,26 +1844,48 @@ button {
                 Choose Your Cartela
             </div>
 
+
             <div class="selection-timer">
-                <span id="selectionTimer">30</span> sec
+
+                <span id="selectionTimer">
+                    30
+                </span>
+
+                sec
+
             </div>
 
+
             <div class="selection-wallet">
+
                 Balance:
-                <span id="selectionBalance">0</span> birr
+
+                <span id="selectionBalance">
+                    0
+                </span>
+
+                birr
+
             </div>
 
         </div>
 
 
-        <div id="cartelaGrid" class="cartela-grid"></div>
+        <div
+            id="cartelaGrid"
+            class="cartela-grid"
+        ></div>
 
 
         <div class="selected-area">
 
-            <div id="selectedText" class="selected-text">
+            <div
+                id="selectedText"
+                class="selected-text"
+            >
                 Select a Cartela
             </div>
+
 
             <button
                 id="proceedBtn"
@@ -1547,6 +1895,7 @@ button {
             >
                 PROCEED
             </button>
+
 
             <button
                 class="leave-selection-btn"
@@ -1561,7 +1910,7 @@ button {
 
 
     <!-- =====================================================
-         GAME
+         BINGO GAME
     ====================================================== -->
 
     <div id="gameView" class="hidden">
@@ -1570,26 +1919,67 @@ button {
             🎱 Rodas Friend Zone Bingo
         </div>
 
+
         <div class="game-info">
 
             <div class="info-box">
-                <div class="info-label">Players</div>
-                <div id="playersValue" class="info-value">0</div>
+
+                <div class="info-label">
+                    Players
+                </div>
+
+                <div
+                    id="playersValue"
+                    class="info-value"
+                >
+                    0
+                </div>
+
             </div>
 
-            <div class="info-box">
-                <div class="info-label">Derash</div>
-                <div id="derashValue" class="info-value">0</div>
-            </div>
 
             <div class="info-box">
-                <div class="info-label">Bet</div>
-                <div class="info-value">10</div>
+
+                <div class="info-label">
+                    Derash
+                </div>
+
+                <div
+                    id="derashValue"
+                    class="info-value"
+                >
+                    0
+                </div>
+
             </div>
 
+
             <div class="info-box">
-                <div class="info-label">Call</div>
-                <div id="callCountValue" class="info-value">0</div>
+
+                <div class="info-label">
+                    Bet
+                </div>
+
+                <div class="info-value">
+                    10
+                </div>
+
+            </div>
+
+
+            <div class="info-box">
+
+                <div class="info-label">
+                    Call
+                </div>
+
+                <div
+                    id="callCountValue"
+                    class="info-value"
+                >
+                    0
+                </div>
+
             </div>
 
         </div>
@@ -1599,9 +1989,15 @@ button {
             id="startingMessage"
             class="starting-message hidden"
         >
+
             Game starting in
-            <span id="startingSeconds">30</span>
+
+            <span id="startingSeconds">
+                30
+            </span>
+
             sec
+
         </div>
 
 
@@ -1609,16 +2005,20 @@ button {
             id="playerLeftMessage"
             class="player-left-message hidden"
         >
+
             🚪 You left this game.
 
             <small>
                 The Bingo game continues for the other players.
             </small>
+
         </div>
 
 
         <div class="game-layout">
 
+
+            <!-- CALL BOARD -->
 
             <div class="call-board">
 
@@ -1626,7 +2026,9 @@ button {
                     BINGO CALLS
                 </div>
 
+
                 <div class="bingo-columns">
+
 
                     <div class="bingo-column">
 
@@ -1682,12 +2084,16 @@ button {
 
                     </div>
 
+
                 </div>
 
             </div>
 
 
+            <!-- RIGHT SIDE -->
+
             <div class="right-game">
+
 
                 <div class="current-call-box">
 
@@ -1742,19 +2148,37 @@ button {
                         Chosen Cartela
                     </div>
 
+
                     <table class="bingo-card">
 
                         <thead>
 
                             <tr>
-                                <th class="card-b">B</th>
-                                <th class="card-i">I</th>
-                                <th class="card-n">N</th>
-                                <th class="card-g">G</th>
-                                <th class="card-o">O</th>
+
+                                <th class="card-b">
+                                    B
+                                </th>
+
+                                <th class="card-i">
+                                    I
+                                </th>
+
+                                <th class="card-n">
+                                    N
+                                </th>
+
+                                <th class="card-g">
+                                    G
+                                </th>
+
+                                <th class="card-o">
+                                    O
+                                </th>
+
                             </tr>
 
                         </thead>
+
 
                         <tbody id="playerCardBody"></tbody>
 
@@ -1788,6 +2212,7 @@ button {
                             LEAVE
                         </button>
 
+
                         <button
                             class="refresh-btn"
                             onclick="refreshGame()"
@@ -1806,7 +2231,9 @@ button {
     </div>
 
 
-    <!-- RESULT -->
+    <!-- =====================================================
+         RESULT
+    ====================================================== -->
 
     <div id="resultView" class="hidden">
 
@@ -1816,12 +2243,14 @@ button {
                 🎉 BINGO RESULT
             </div>
 
+
             <div
                 id="resultWinner"
                 class="result-winner"
             >
                 —
             </div>
+
 
             <div
                 id="resultPrize"
@@ -1830,6 +2259,7 @@ button {
                 Prize: 0 birr
             </div>
 
+
             <div class="result-card-wrap">
 
                 <table class="result-card">
@@ -1837,20 +2267,38 @@ button {
                     <thead>
 
                         <tr>
-                            <th class="card-b">B</th>
-                            <th class="card-i">I</th>
-                            <th class="card-n">N</th>
-                            <th class="card-g">G</th>
-                            <th class="card-o">O</th>
+
+                            <th class="card-b">
+                                B
+                            </th>
+
+                            <th class="card-i">
+                                I
+                            </th>
+
+                            <th class="card-n">
+                                N
+                            </th>
+
+                            <th class="card-g">
+                                G
+                            </th>
+
+                            <th class="card-o">
+                                O
+                            </th>
+
                         </tr>
 
                     </thead>
+
 
                     <tbody id="resultCardBody"></tbody>
 
                 </table>
 
             </div>
+
 
             <div class="result-next">
                 Next game will start automatically.
@@ -1863,6 +2311,10 @@ button {
 </div>
 
 
+<!-- =========================================================
+     WRONG CLAIM OVERLAY
+========================================================= -->
+
 <div
     id="wrongOverlay"
     class="wrong-overlay hidden"
@@ -1874,9 +2326,11 @@ button {
             ❌
         </div>
 
+
         <div class="wrong-title">
             WRONG CARTELA
         </div>
+
 
         <div
             id="wrongMessage"
@@ -1885,6 +2339,7 @@ button {
             Wrong Cartela — You lose.
             Better luck next time!
         </div>
+
 
         <button
             class="wrong-close"
@@ -1908,8 +2363,11 @@ const tg =
     window.Telegram?.WebApp;
 
 if (tg) {
+
     tg.ready();
+
     tg.expand();
+
 }
 
 
@@ -1944,12 +2402,14 @@ try {
 
 }
 
+
 if (!userId) {
 
     let storedId =
         localStorage.getItem(
             "rodas_bingo_demo_user"
         );
+
 
     if (!storedId) {
 
@@ -1959,12 +2419,14 @@ if (!userId) {
                 .toString(36)
                 .substring(2, 12);
 
+
         localStorage.setItem(
             "rodas_bingo_demo_user",
             storedId
         );
 
     }
+
 
     userId =
         storedId;
@@ -1988,116 +2450,9 @@ let manuallyMarked = new Set();
 
 let returnedToSelection = false;
 
-
-/*
-   NEW:
-
-   The Mini App starts on the Lobby.
-
-   Once JOIN is pressed, this becomes false and the existing
-   Cartela Selection screen is shown.
-*/
-
 let inLobby = true;
 
-
-/*
-   Used for the LIVE indicator.
-
-   Green = this player is currently using the Mini App.
-   Red = Mini App is in the background/inactive.
-*/
-
-let playerIsOnline = true;
-
-
-/* =========================================================
-   LIVE STATUS
-========================================================= */
-
-function setLiveStatus(isOnline) {
-
-    playerIsOnline =
-        Boolean(isOnline);
-
-    const dot =
-        document.getElementById(
-            "lobbyLiveDot"
-        );
-
-    const text =
-        document.getElementById(
-            "lobbyLiveText"
-        );
-
-
-    if (!dot || !text) {
-        return;
-    }
-
-
-    if (playerIsOnline) {
-
-        dot.classList.remove(
-            "offline"
-        );
-
-        text.textContent =
-            "Live";
-
-    } else {
-
-        dot.classList.add(
-            "offline"
-        );
-
-        text.textContent =
-            "Offline";
-
-    }
-
-}
-
-
-/*
-   Telegram Mini App visibility.
-
-   When the player is actively inside the Mini App:
-   GREEN.
-
-   When Telegram hides the Mini App:
-   RED.
-*/
-
-document.addEventListener(
-    "visibilitychange",
-    function() {
-
-        setLiveStatus(
-            document.visibilityState ===
-            "visible"
-        );
-
-    }
-);
-
-window.addEventListener(
-    "focus",
-    function() {
-
-        setLiveStatus(true);
-
-    }
-);
-
-window.addEventListener(
-    "blur",
-    function() {
-
-        setLiveStatus(false);
-
-    }
-);
+let pollingTimer = null;
 
 
 /* =========================================================
@@ -2121,6 +2476,7 @@ async function api(
 
     };
 
+
     if (body !== null) {
 
         options.body =
@@ -2128,13 +2484,16 @@ async function api(
 
     }
 
+
     const response =
         await fetch(
             url,
             options
         );
 
+
     let data;
+
 
     try {
 
@@ -2151,46 +2510,63 @@ async function api(
 
     }
 
+
     return data;
 
 }
 
 
 /* =========================================================
-   LOBBY JOIN
+   LOBBY
 ========================================================= */
 
-function joinLobbyGame() {
+async function joinLobbyGame() {
 
-    /*
-       JOIN performs the same navigation purpose as
-       entering the game flow.
+    inLobby = false;
 
-       It does NOT choose a Cartela and does NOT call
-       /api/proceed.
+    returnedToSelection = false;
 
-       The player goes to the existing Cartela Selection
-       screen first.
-    */
+    proceeded = false;
 
-    inLobby =
-        false;
+    selectedCartela = null;
 
-    returnedToSelection =
-        false;
+    manuallyMarked.clear();
 
-    proceeded =
-        Boolean(
-            state?.proceeded
-        );
 
-    render();
+    await loadState(true);
+
+}
+
+
+function showDemoMessage() {
+
+    alert(
+        "FREE Practice Mode is coming soon."
+    );
+
+}
+
+
+function showScoresMessage() {
+
+    alert(
+        "Scores will be available here."
+    );
+
+}
+
+
+function showProfileMessage() {
+
+    alert(
+        "Profile will be available here."
+    );
 
 }
 
 
 /* =========================================================
-   LOBBY
+   LOBBY RENDER
 ========================================================= */
 
 function renderLobby() {
@@ -2218,15 +2594,13 @@ function renderLobby() {
         );
 
 
-    /*
-       Existing backend prize calculation:
+    const totalPool =
+        players * bet;
 
-       75% of total player bets.
-    */
 
-    const prize =
-        calculateDerash(
-            players
+    const derash =
+        Math.floor(
+            totalPool * 0.75
         );
 
 
@@ -2243,4 +2617,1958 @@ function renderLobby() {
 
 
     document.getElementById(
-        "
+        "lobbyPrize"
+    ).textContent =
+        derash;
+
+
+    document.getElementById(
+        "lobbyPlayers"
+    ).textContent =
+        players +
+        (
+            players === 1
+                ? " player"
+                : " players"
+        );
+
+
+    const status =
+        document.getElementById(
+            "lobbyStatus"
+        );
+
+
+    if (
+        state.phase === "playing"
+        ||
+        state.phase === "starting"
+    ) {
+
+        status.textContent =
+            "ACTIVE";
+
+        status.classList.remove(
+            "ready"
+        );
+
+    } else {
+
+        status.textContent =
+            "READY";
+
+        status.classList.add(
+            "ready"
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   SELECTION
+========================================================= */
+
+function renderSelection() {
+
+    document.getElementById(
+        "lobbyView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "selectionView"
+    ).classList.remove(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "gameView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "resultView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    renderSelectionStats();
+
+    renderCartelas();
+
+    updateSelectionCountdown();
+
+}
+
+
+function renderSelectionStats() {
+
+    if (!state) {
+        return;
+    }
+
+
+    document.getElementById(
+        "selectionPlayers"
+    ).textContent =
+        state.players || 0;
+
+
+    document.getElementById(
+        "selectionWallet"
+    ).textContent =
+        state.wallet || 0;
+
+
+    document.getElementById(
+        "selectionBalance"
+    ).textContent =
+        Number(
+            state.wallet || 0
+        ).toFixed(2);
+
+
+    document.getElementById(
+        "selectionTime"
+    ).textContent =
+        state.selection_remaining ?? 0;
+
+}
+
+
+/* =========================================================
+   CARTELA GRID
+========================================================= */
+
+function renderCartelas() {
+
+    const grid =
+        document.getElementById(
+            "cartelaGrid"
+        );
+
+
+    if (!grid) {
+        return;
+    }
+
+
+    grid.innerHTML = "";
+
+
+    const taken =
+        new Set(
+            state?.taken_cartelas
+            ||
+            state?.taken
+            ||
+            []
+        );
+
+
+    const serverSelected =
+        state?.selected
+        ??
+        state?.my_cartela
+        ??
+        null;
+
+
+    if (
+        selectedCartela === null
+        &&
+        serverSelected !== null
+    ) {
+
+        selectedCartela =
+            Number(
+                serverSelected
+            );
+
+    }
+
+
+    for (
+        let number = 1;
+        number <= 100;
+        number++
+    ) {
+
+        const button =
+            document.createElement(
+                "button"
+            );
+
+
+        button.type =
+            "button";
+
+
+        button.className =
+            "cartela-btn";
+
+
+        button.textContent =
+            number;
+
+
+        if (
+            taken.has(number)
+            &&
+            Number(
+                selectedCartela
+            ) !== number
+        ) {
+
+            button.classList.add(
+                "taken"
+            );
+
+            button.disabled =
+                true;
+
+        }
+
+
+        if (
+            Number(
+                selectedCartela
+            ) === number
+        ) {
+
+            button.classList.add(
+                "selected"
+            );
+
+        }
+
+
+        button.onclick =
+            function() {
+
+                selectCartela(
+                    number
+                );
+
+            };
+
+
+        grid.appendChild(
+            button
+        );
+
+    }
+
+
+    updateSelectedText();
+
+}
+
+
+/* =========================================================
+   SELECT CARTELA
+========================================================= */
+
+async function selectCartela(
+    number
+) {
+
+    if (
+        !state
+        ||
+        state.phase !== "selection"
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        Number(
+            state.selection_remaining || 0
+        ) <= 0
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        const result =
+            await api(
+                "/api/select",
+                "POST",
+                {
+                    cartela: number
+                }
+            );
+
+
+        if (
+            result.success
+        ) {
+
+            selectedCartela =
+                number;
+
+            proceeded =
+                false;
+
+            state =
+                result;
+
+            renderSelection();
+
+        } else {
+
+            if (
+                result.message
+            ) {
+
+                alert(
+                    result.message
+                );
+
+            }
+
+            state =
+                result;
+
+            renderSelection();
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Cartela selection error:",
+            error
+        );
+
+        alert(
+            "Unable to select Cartela. Please try again."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   SELECTED TEXT
+========================================================= */
+
+function updateSelectedText() {
+
+    const text =
+        document.getElementById(
+            "selectedText"
+        );
+
+
+    const button =
+        document.getElementById(
+            "proceedBtn"
+        );
+
+
+    if (
+        selectedCartela
+        !== null
+    ) {
+
+        text.textContent =
+            "Cartela " +
+            selectedCartela +
+            " selected";
+
+
+        button.disabled =
+            false;
+
+    } else {
+
+        text.textContent =
+            "Select a Cartela";
+
+
+        button.disabled =
+            true;
+
+    }
+
+}
+
+
+/* =========================================================
+   COUNTDOWN
+========================================================= */
+
+function updateSelectionCountdown() {
+
+    if (!state) {
+        return;
+    }
+
+
+    let seconds =
+        Number(
+            state.selection_remaining || 0
+        );
+
+
+    seconds =
+        Math.max(
+            0,
+            seconds
+        );
+
+
+    document.getElementById(
+        "selectionTimer"
+    ).textContent =
+        seconds;
+
+
+    document.getElementById(
+        "selectionTime"
+    ).textContent =
+        seconds;
+
+}
+
+
+/* =========================================================
+   PROCEED
+========================================================= */
+
+async function proceedToGame() {
+
+    if (
+        selectedCartela === null
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        const result =
+            await api(
+                "/api/proceed",
+                "POST"
+            );
+
+
+        if (
+            result.success
+        ) {
+
+            proceeded =
+                true;
+
+            state =
+                result;
+
+            render();
+
+        } else {
+
+            if (
+                result.message
+            ) {
+
+                alert(
+                    result.message
+                );
+
+            }
+
+            state =
+                result;
+
+            render();
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Proceed error:",
+            error
+        );
+
+        alert(
+            "Unable to proceed. Please try again."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   GAME RENDER
+========================================================= */
+
+function renderGame() {
+
+    document.getElementById(
+        "lobbyView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "selectionView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "gameView"
+    ).classList.remove(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "resultView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    if (!state) {
+        return;
+    }
+
+
+    document.getElementById(
+        "playersValue"
+    ).textContent =
+        state.players || 0;
+
+
+    document.getElementById(
+        "derashValue"
+    ).textContent =
+        state.prize || 0;
+
+
+    document.getElementById(
+        "callCountValue"
+    ).textContent =
+        (
+            state.drawn_numbers
+            ||
+            state.called
+            ||
+            []
+        ).length;
+
+
+    const starting =
+        document.getElementById(
+            "startingMessage"
+        );
+
+
+    const startingSeconds =
+        document.getElementById(
+            "startingSeconds"
+        );
+
+
+    if (
+        state.phase === "selection"
+        ||
+        state.view_phase === "starting"
+        ||
+        state.phase === "starting"
+    ) {
+
+        starting.classList.remove(
+            "hidden"
+        );
+
+
+        startingSeconds.textContent =
+            state.start_remaining
+            ??
+            state.selection_remaining
+            ??
+            0;
+
+    } else {
+
+        starting.classList.add(
+            "hidden"
+        );
+
+    }
+
+
+    const leftMessage =
+        document.getElementById(
+            "playerLeftMessage"
+        );
+
+
+    if (
+        state.left
+    ) {
+
+        leftMessage.classList.remove(
+            "hidden"
+        );
+
+    } else {
+
+        leftMessage.classList.add(
+            "hidden"
+        );
+
+    }
+
+
+    renderCallBoard();
+
+    renderCurrentCall();
+
+    renderPlayerCard();
+
+    updateAutoToggle();
+
+}
+
+
+/* =========================================================
+   CALL BOARD
+========================================================= */
+
+function renderCallBoard() {
+
+    const columns = {
+
+        B: document.getElementById(
+            "columnB"
+        ),
+
+        I: document.getElementById(
+            "columnI"
+        ),
+
+        N: document.getElementById(
+            "columnN"
+        ),
+
+        G: document.getElementById(
+            "columnG"
+        ),
+
+        O: document.getElementById(
+            "columnO"
+        )
+
+    };
+
+
+    Object.values(
+        columns
+    ).forEach(
+        element => {
+            element.innerHTML = "";
+        }
+    );
+
+
+    const called =
+        new Set(
+            state?.drawn_numbers
+            ||
+            state?.called
+            ||
+            []
+        );
+
+
+    const current =
+        Number(
+            state?.current_number
+            ??
+            state?.current
+            ??
+            0
+        );
+
+
+    const groups = {
+
+        B: [1, 16],
+
+        I: [16, 31],
+
+        N: [31, 46],
+
+        G: [46, 61],
+
+        O: [61, 76]
+
+    };
+
+
+    Object.entries(
+        groups
+    ).forEach(
+        function([
+            letter,
+            range
+        ]) {
+
+            for (
+                let number =
+                    range[0];
+
+                number <
+                    range[1];
+
+                number++
+            ) {
+
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                item.className =
+                    "call-number";
+
+
+                item.textContent =
+                    number;
+
+
+                if (
+                    called.has(
+                        number
+                    )
+                ) {
+
+                    item.classList.add(
+                        "called"
+                    );
+
+                }
+
+
+                if (
+                    current === number
+                ) {
+
+                    item.classList.add(
+                        "current"
+                    );
+
+                }
+
+
+                columns[
+                    letter
+                ].appendChild(
+                    item
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   CURRENT CALL
+========================================================= */
+
+function renderCurrentCall() {
+
+    const current =
+        Number(
+            state?.current_number
+            ??
+            state?.current
+            ??
+            0
+        );
+
+
+    const called =
+        state?.drawn_numbers
+        ||
+        state?.called
+        ||
+        [];
+
+
+    const currentElement =
+        document.getElementById(
+            "currentCall"
+        );
+
+
+    const lastElement =
+        document.getElementById(
+            "lastCall"
+        );
+
+
+    currentElement.textContent =
+        current || "—";
+
+
+    if (
+        called.length >= 2
+    ) {
+
+        lastElement.textContent =
+            called[
+                called.length - 2
+            ];
+
+    } else {
+
+        lastElement.textContent =
+            "—";
+
+    }
+
+}
+
+
+/* =========================================================
+   PLAYER CARD
+========================================================= */
+
+function renderPlayerCard() {
+
+    const body =
+        document.getElementById(
+            "playerCardBody"
+        );
+
+
+    body.innerHTML = "";
+
+
+    const card =
+        state?.card;
+
+
+    if (
+        !card
+        ||
+        !Array.isArray(card)
+    ) {
+
+        document.getElementById(
+            "cardNumber"
+        ).textContent =
+            "Card Number: " +
+            (
+                state?.selected
+                ??
+                state?.my_cartela
+                ??
+                "—"
+            );
+
+        return;
+
+    }
+
+
+    const called =
+        new Set(
+            state?.drawn_numbers
+            ||
+            state?.called
+            ||
+            []
+        );
+
+
+    for (
+        let row = 0;
+        row < 5;
+        row++
+    ) {
+
+        const tr =
+            document.createElement(
+                "tr"
+            );
+
+
+        for (
+            let col = 0;
+            col < 5;
+            col++
+        ) {
+
+            const td =
+                document.createElement(
+                    "td"
+                );
+
+
+            const number =
+                card[row][col];
+
+
+            if (
+                number === 0
+            ) {
+
+                td.textContent =
+                    "FREE";
+
+                td.classList.add(
+                    "free"
+                );
+
+            } else {
+
+                td.textContent =
+                    number;
+
+
+                if (
+                    called.has(
+                        number
+                    )
+                ) {
+
+                    td.classList.add(
+                        "called"
+                    );
+
+                }
+
+
+                if (
+                    manuallyMarked.has(
+                        number
+                    )
+                ) {
+
+                    td.classList.add(
+                        "marked"
+                    );
+
+                }
+
+
+                if (
+                    !autoMode
+                    &&
+                    called.has(
+                        number
+                    )
+                ) {
+
+                    td.classList.add(
+                        "clickable"
+                    );
+
+
+                    td.onclick =
+                        function() {
+
+                            toggleManualMark(
+                                number
+                            );
+
+                        };
+
+                }
+
+            }
+
+
+            tr.appendChild(
+                td
+            );
+
+        }
+
+
+        body.appendChild(
+            tr
+        );
+
+    }
+
+
+    document.getElementById(
+        "cardNumber"
+    ).textContent =
+        "Card Number: " +
+        (
+            state?.selected
+            ??
+            state?.my_cartela
+            ??
+            "—"
+        );
+
+}
+
+
+/* =========================================================
+   MANUAL MARK
+========================================================= */
+
+function toggleManualMark(
+    number
+) {
+
+    if (
+        manuallyMarked.has(
+            number
+        )
+    ) {
+
+        manuallyMarked.delete(
+            number
+        );
+
+    } else {
+
+        manuallyMarked.add(
+            number
+        );
+
+    }
+
+
+    renderPlayerCard();
+
+}
+
+
+/* =========================================================
+   AUTO
+========================================================= */
+
+function toggleAuto() {
+
+    autoMode =
+        !autoMode;
+
+
+    if (
+        autoMode
+    ) {
+
+        manuallyMarked.clear();
+
+    }
+
+
+    updateAutoToggle();
+
+    renderPlayerCard();
+
+}
+
+
+function updateAutoToggle() {
+
+    const toggle =
+        document.getElementById(
+            "autoToggle"
+        );
+
+
+    if (!toggle) {
+        return;
+    }
+
+
+    if (
+        autoMode
+    ) {
+
+        toggle.classList.remove(
+            "off"
+        );
+
+    } else {
+
+        toggle.classList.add(
+            "off"
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   BINGO CLAIM
+========================================================= */
+
+async function claimBingo() {
+
+    if (
+        !state
+        ||
+        state.left
+    ) {
+
+        return;
+
+    }
+
+
+    const marked =
+        Array.from(
+            manuallyMarked
+        );
+
+
+    const card =
+        state.card;
+
+
+    if (
+        autoMode
+        &&
+        Array.isArray(card)
+    ) {
+
+        const called =
+            new Set(
+                state.drawn_numbers
+                ||
+                state.called
+                ||
+                []
+            );
+
+
+        for (
+            const row of card
+        ) {
+
+            for (
+                const number of row
+            ) {
+
+                if (
+                    number !== 0
+                    &&
+                    called.has(
+                        number
+                    )
+                ) {
+
+                    marked.push(
+                        number
+                    );
+
+                }
+
+            }
+
+        }
+
+    }
+
+
+    try {
+
+        const result =
+            await api(
+                "/api/claim",
+                "POST",
+                {
+                    marked: Array.from(
+                        new Set(
+                            marked
+                        )
+                    )
+                }
+            );
+
+
+        state =
+            result;
+
+
+        if (
+            result.wrong
+        ) {
+
+            showWrongOverlay(
+                result.message
+                ||
+                "Wrong Cartela — You lose. Better luck next time!"
+            );
+
+            renderGame();
+
+            return;
+
+        }
+
+
+        if (
+            result.winner
+            ||
+            result.success
+        ) {
+
+            render();
+
+            return;
+
+        }
+
+
+        renderGame();
+
+    } catch (error) {
+
+        console.error(
+            "Bingo claim error:",
+            error
+        );
+
+        alert(
+            "Unable to send Bingo claim."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   LEAVE
+========================================================= */
+
+async function leaveGame() {
+
+    try {
+
+        returnedToSelection =
+            true;
+
+        inLobby =
+            false;
+
+        proceeded =
+            false;
+
+        selectedCartela =
+            null;
+
+        manuallyMarked.clear();
+
+
+        const result =
+            await api(
+                "/api/leave",
+                "POST"
+            );
+
+
+        state =
+            result;
+
+
+        /*
+           IMPORTANT:
+
+           The player is immediately returned to the
+           Cartela Selection screen.
+
+           The shared Bingo game itself continues on
+           the server for the other players.
+        */
+
+        renderSelection();
+
+    } catch (error) {
+
+        console.error(
+            "Leave error:",
+            error
+        );
+
+
+        returnedToSelection =
+            true;
+
+        proceeded =
+            false;
+
+        selectedCartela =
+            null;
+
+        manuallyMarked.clear();
+
+
+        renderSelection();
+
+    }
+
+}
+
+
+/* =========================================================
+   REFRESH
+========================================================= */
+
+function refreshGame() {
+
+    window.location.reload();
+
+}
+
+
+/* =========================================================
+   RESULT
+========================================================= */
+
+function renderResult() {
+
+    document.getElementById(
+        "lobbyView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "selectionView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "gameView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "resultView"
+    ).classList.remove(
+        "hidden"
+    );
+
+
+    if (!state) {
+        return;
+    }
+
+
+    const winner =
+        state.winner;
+
+
+    const winnerElement =
+        document.getElementById(
+            "resultWinner"
+        );
+
+
+    const prizeElement =
+        document.getElementById(
+            "resultPrize"
+        );
+
+
+    if (
+        winner
+    ) {
+
+        winnerElement.textContent =
+            "Winner: Cartela " +
+            (
+                winner.cartela
+                ??
+                "—"
+            );
+
+
+        prizeElement.textContent =
+            "Derash: " +
+            (
+                winner.amount
+                ??
+                state.prize
+                ??
+                0
+            ) +
+            " birr";
+
+    } else {
+
+        winnerElement.textContent =
+            "No winner";
+
+
+        prizeElement.textContent =
+            "Prize: 0 birr";
+
+    }
+
+
+    renderResultCard();
+
+}
+
+
+/* =========================================================
+   RESULT CARD
+========================================================= */
+
+function renderResultCard() {
+
+    const body =
+        document.getElementById(
+            "resultCardBody"
+        );
+
+
+    body.innerHTML = "";
+
+
+    const card =
+        state?.card;
+
+
+    if (
+        !card
+        ||
+        !Array.isArray(card)
+    ) {
+
+        return;
+
+    }
+
+
+    const called =
+        new Set(
+            state?.drawn_numbers
+            ||
+            state?.called
+            ||
+            []
+        );
+
+
+    for (
+        let row = 0;
+        row < 5;
+        row++
+    ) {
+
+        const tr =
+            document.createElement(
+                "tr"
+            );
+
+
+        for (
+            let col = 0;
+            col < 5;
+            col++
+        ) {
+
+            const td =
+                document.createElement(
+                    "td"
+                );
+
+
+            const number =
+                card[row][col];
+
+
+            if (
+                number === 0
+            ) {
+
+                td.textContent =
+                    "FREE";
+
+                td.classList.add(
+                    "free"
+                );
+
+            } else {
+
+                td.textContent =
+                    number;
+
+
+                if (
+                    called.has(
+                        number
+                    )
+                ) {
+
+                    td.classList.add(
+                        "winner-number"
+                    );
+
+                }
+
+            }
+
+
+            tr.appendChild(
+                td
+            );
+
+        }
+
+
+        body.appendChild(
+            tr
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   WRONG OVERLAY
+========================================================= */
+
+function showWrongOverlay(
+    message
+) {
+
+    document.getElementById(
+        "wrongMessage"
+    ).textContent =
+        message
+        ||
+        "Wrong Cartela — You lose. Better luck next time!";
+
+
+    document.getElementById(
+        "wrongOverlay"
+    ).classList.remove(
+        "hidden"
+    );
+
+}
+
+
+function closeWrongOverlay() {
+
+    document.getElementById(
+        "wrongOverlay"
+    ).classList.add(
+        "hidden"
+    );
+
+}
+
+
+/* =========================================================
+   MAIN RENDER
+========================================================= */
+
+function render() {
+
+    if (!state) {
+        return;
+    }
+
+
+    /*
+       If the player has explicitly left,
+       always show Cartela Selection.
+    */
+
+    if (
+        returnedToSelection
+    ) {
+
+        renderSelection();
+
+        return;
+
+    }
+
+
+    /*
+       Lobby is the first screen.
+    */
+
+    if (
+        inLobby
+    ) {
+
+        renderLobby();
+
+        document.getElementById(
+            "lobbyView"
+        ).classList.remove(
+            "hidden"
+        );
+
+        document.getElementById(
+            "selectionView"
+        ).classList.add(
+            "hidden"
+        );
+
+        document.getElementById(
+            "gameView"
+        ).classList.add(
+            "hidden"
+        );
+
+        document.getElementById(
+            "resultView"
+        ).classList.add(
+            "hidden"
+        );
+
+        return;
+
+    }
+
+
+    /*
+       Finished result.
+    */
+
+    if (
+        state.phase ===
+        "finished"
+    ) {
+
+        renderResult();
+
+        return;
+
+    }
+
+
+    /*
+       Selection.
+
+       If the player has not proceeded yet,
+       show Cartela Selection.
+    */
+
+    if (
+        state.phase ===
+        "selection"
+        &&
+        !proceeded
+    ) {
+
+        renderSelection();
+
+        return;
+
+    }
+
+
+    /*
+       If the player is in selection but has
+       no Cartela yet, keep them on selection.
+    */
+
+    if (
+        state.phase ===
+        "selection"
+        &&
+        !(
+            state.selected
+            ??
+            state.my_cartela
+        )
+    ) {
+
+        renderSelection();
+
+        return;
+
+    }
+
+
+    /*
+       Starting / Playing.
+    */
+
+    if (
+        state.phase === "starting"
+        ||
+        state.phase === "playing"
+        ||
+        state.view_phase === "starting"
+        ||
+        state.view_phase === "playing"
+    ) {
+
+        renderGame();
+
+        return;
+
+    }
+
+
+    /*
+       Safe fallback.
+    */
+
+    renderSelection();
+
+}
+
+
+/* =========================================================
+   LOAD STATE
+========================================================= */
+
+async function loadState(
+    renderNow = true
+) {
+
+    try {
+
+        const data =
+            await api(
+                "/api/state",
+                "GET"
+            );
+
+
+        state =
+            data;
+
+
+        /*
+           Do not overwrite the explicit local
+           selection state unnecessarily.
+        */
+
+        const serverSelected =
+            data?.selected
+            ??
+            data?.my_cartela
+            ??
+            null;
+
+
+        if (
+            serverSelected !== null
+            &&
+            selectedCartela === null
+        ) {
+
+            selectedCartela =
+                Number(
+                    serverSelected
+                );
+
+        }
+
+
+        proceeded =
+            Boolean(
+                data?.proceeded
+            );
+
+
+        /*
+           When the player deliberately left,
+           keep them on Cartela Selection until
+           they select a new Cartela.
+        */
+
+        if (
+            returnedToSelection
+        ) {
+
+            proceeded =
+                false;
+
+        }
+
+
+        if (
+            renderNow
+        ) {
+
+            render();
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "State loading error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   POLLING
+========================================================= */
+
+async function pollState() {
+
+    try {
+
+        const data =
+            await api(
+                "/api/state",
+                "GET"
+            );
+
+
+        state =
+            data;
+
+
+        /*
+           If user has left, don't automatically
+           force them into the Bingo game again.
+        */
+
+        if (
+            returnedToSelection
+        ) {
+
+            renderSelection();
+
+            return;
+
+        }
+
+
+        proceeded =
+            Boolean(
+                data?.proceeded
+            );
+
+
+        render();
+
+    } catch (error) {
+
+        console.error(
+            "Polling error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   START POLLING
+========================================================= */
+
+function startPolling() {
+
+    if (
+        pollingTimer
+    ) {
+
+        clearInterval(
+            pollingTimer
+        );
+
+    }
+
+
+    pollingTimer =
+        setInterval(
+            pollState,
+            1000
+        );
+
+}
+
+
+/* =========================================================
+   INITIAL START
+========================================================= */
+
+async function initialize() {
+
+    inLobby =
+        true;
+
+    returnedToSelection =
+        false;
+
+    proceeded =
+        false;
+
+    selectedCartela =
+        null;
+
+
+    await loadState(
+        false
+    );
+
+
+    render();
+
+    startPolling();
+
+}
+
+
+/* =========================================================
+   START
+========================================================= */
+
+initialize();
+
+</script>
+
+</body>
+
+</html>
