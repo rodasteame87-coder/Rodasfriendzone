@@ -263,12 +263,14 @@ class BingoGame:
         # -------------------------------------------------
         # Shared 30-second timer
         # -------------------------------------------------
+
         self.selection_end = now() + SELECTION_SECONDS
         self.start_end = None
 
         # -------------------------------------------------
         # Players
         # -------------------------------------------------
+
         self.player_cartelas = {}
         self.player_names = {}
 
@@ -278,11 +280,13 @@ class BingoGame:
         # -------------------------------------------------
         # Cartela boards
         # -------------------------------------------------
+
         self.cartela_boards = {}
 
         # -------------------------------------------------
         # Bingo drawing
         # -------------------------------------------------
+
         self.call_order = []
         self.called_numbers = []
 
@@ -294,6 +298,7 @@ class BingoGame:
         # -------------------------------------------------
         # Winner
         # -------------------------------------------------
+
         self.winner_user_id = None
         self.winner_name = None
         self.winning_pattern = None
@@ -305,6 +310,7 @@ class BingoGame:
         # -------------------------------------------------
         # Prize
         # -------------------------------------------------
+
         self.total_bets = 0
         self.prize = 0
 
@@ -472,18 +478,10 @@ class BingoGame:
         ):
             return False, "Invalid Cartela."
 
-        # -------------------------------------------------
-        # Already selected by this player
-        # -------------------------------------------------
-
         current = self.player_cartelas.get(user_id)
 
         if current == cartela:
             return False, "Cartela already selected."
-
-        # -------------------------------------------------
-        # Cartela occupied by another player
-        # -------------------------------------------------
 
         owner = None
 
@@ -495,16 +493,8 @@ class BingoGame:
         if owner is not None and owner != user_id:
             return False, "This Cartela is already taken."
 
-        # -------------------------------------------------
-        # If player had another Cartela, free it
-        # -------------------------------------------------
-
         if current is not None:
             self.player_cartelas.pop(user_id, None)
-
-        # -------------------------------------------------
-        # Assign new Cartela
-        # -------------------------------------------------
 
         self.player_cartelas[user_id] = cartela
 
@@ -523,14 +513,6 @@ class BingoGame:
     # =====================================================
 
     def deselect_cartela(self, user_id):
-        """
-        Called when the frontend sends:
-
-            {"cartela": null}
-
-        This is the important second-tap behavior.
-        """
-
         user_id = str(user_id)
 
         if self.phase != "selection":
@@ -610,11 +592,6 @@ class BingoGame:
                 user_id,
                 old_cartela,
             )
-
-        # -------------------------------------------------
-        # If everybody leaves during selection/starting,
-        # restart the selection timer.
-        # -------------------------------------------------
 
         if (
             self.phase in ("selection", "starting")
@@ -731,10 +708,6 @@ class BingoGame:
         taken = sorted(
             self.taken_cartelas
         )
-
-        # -------------------------------------------------
-        # Winner information
-        # -------------------------------------------------
 
         winner_cartela = None
 
@@ -936,12 +909,6 @@ async def game_loop():
 
                     elif game.phase == "playing":
 
-                        # Draw every 3 seconds.
-                        #
-                        # The timestamp is stored on the
-                        # game object dynamically.
-                        #
-
                         last_draw = getattr(
                             game,
                             "_last_draw_time",
@@ -984,10 +951,6 @@ async def game_loop():
                     # -------------------------------------
 
                     elif game.phase == "finished":
-
-                        # Keep the game available as
-                        # history for a short time, but
-                        # create a new active game below.
                         pass
 
                 # -----------------------------------------
@@ -1085,18 +1048,6 @@ async def api_select(request):
             },
             status=400,
         )
-
-    # =====================================================
-    # IMPORTANT:
-    #
-    # cartela == null means DESELECT.
-    #
-    # This is what allows:
-    #
-    # tap once  -> select
-    # tap twice -> deselect
-    #
-    # =====================================================
 
     if "cartela" not in data:
         return web.json_response(
@@ -1196,15 +1147,6 @@ async def api_proceed(request):
         success, message = game.proceed(
             user_id
         )
-
-        # -------------------------------------------------
-        # Important shared timer behavior:
-        #
-        # The player can press PROCEED while the original
-        # 30-second countdown is still running.
-        #
-        # We do NOT create a new 30-second timer here.
-        # -------------------------------------------------
 
         if (
             success
@@ -1385,6 +1327,25 @@ async def api_claim_bingo(request):
 
 
 # =========================================================
+# TELEGRAM COMMAND KEYBOARD
+# =========================================================
+
+def open_bingo_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎮 OPEN BINGO",
+                    web_app=WebAppInfo(
+                        url=RENDER_EXTERNAL_URL
+                    ),
+                )
+            ]
+        ]
+    )
+
+
+# =========================================================
 # TELEGRAM COMMANDS
 # =========================================================
 
@@ -1399,25 +1360,15 @@ async def command_start(message: Message):
         or "Player"
     )
 
-    game = get_current_game()
+    async with game_lock:
+        game = get_current_game()
 
-    game.add_player(
-        user_id,
-        name,
-    )
+        game.add_player(
+            user_id,
+            name,
+        )
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🎮 OPEN BINGO",
-                    web_app=WebAppInfo(
-                        url=RENDER_EXTERNAL_URL
-                    ),
-                )
-            ]
-        ]
-    )
+    keyboard = open_bingo_keyboard()
 
     await message.answer(
         (
@@ -1431,24 +1382,79 @@ async def command_start(message: Message):
     )
 
 
-@dp.message(Command("bingo"))
-async def command_bingo(message: Message):
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🎮 OPEN BINGO",
-                    web_app=WebAppInfo(
-                        url=RENDER_EXTERNAL_URL
-                    ),
-                )
-            ]
-        ]
-    )
-
+@dp.message(Command("play"))
+async def command_play(message: Message):
     await message.answer(
         "Open Rodas Friend Zone Bingo:",
-        reply_markup=keyboard,
+        reply_markup=open_bingo_keyboard(),
+    )
+
+
+@dp.message(Command("bingo"))
+async def command_bingo(message: Message):
+    await message.answer(
+        "Open Rodas Friend Zone Bingo:",
+        reply_markup=open_bingo_keyboard(),
+    )
+
+
+@dp.message(Command("deposit"))
+async def command_deposit(message: Message):
+    await message.answer(
+        "💰 Deposit\n\n"
+        "Use the Deposit option to add BIRR to your balance."
+    )
+
+
+@dp.message(Command("balance"))
+async def command_balance(message: Message):
+    await message.answer(
+        "💰 Balance\n\n"
+        "Your balance information is available in the Rodas Friend Zone menu."
+    )
+
+
+@dp.message(Command("withdraw"))
+async def command_withdraw(message: Message):
+    await message.answer(
+        "💸 Withdraw\n\n"
+        "Use the Withdraw option to request a withdrawal."
+    )
+
+
+@dp.message(Command("transfer"))
+async def command_transfer(message: Message):
+    await message.answer(
+        "🔄 Transfer\n\n"
+        "Use the Transfer option to send BIRR."
+    )
+
+
+@dp.message(Command("instruction"))
+async def command_instruction(message: Message):
+    await message.answer(
+        "📖 How to play\n\n"
+        "1. Open Bingo.\n"
+        "2. Choose one Cartela from 1–100.\n"
+        "3. Press PROCEED.\n"
+        "4. Wait for the Bingo numbers to be called.\n"
+        "5. Complete a winning pattern and press BINGO WIN."
+    )
+
+
+@dp.message(Command("invite"))
+async def command_invite(message: Message):
+    await message.answer(
+        "👥 Invite Friends\n\n"
+        "Share Rodas Friend Zone Bingo with your friends."
+    )
+
+
+@dp.message(Command("support"))
+async def command_support(message: Message):
+    await message.answer(
+        "🆘 Support\n\n"
+        "Please contact the Rodas Friend Zone support team for assistance."
     )
 
 
@@ -1498,6 +1504,10 @@ async def on_startup(app):
     )
 
     try:
+        # -------------------------------------------------
+        # RESTORE THE TELEGRAM BOT MENU
+        # -------------------------------------------------
+
         await bot.set_my_commands(
             [
                 BotCommand(
@@ -1505,15 +1515,51 @@ async def on_startup(app):
                     description="Open Rodas Friend Zone Bingo",
                 ),
                 BotCommand(
-                    command="bingo",
-                    description="Open Bingo",
+                    command="play",
+                    description="Play Bingo",
+                ),
+                BotCommand(
+                    command="deposit",
+                    description="Deposit",
+                ),
+                BotCommand(
+                    command="balance",
+                    description="Check balance",
+                ),
+                BotCommand(
+                    command="withdraw",
+                    description="Withdraw",
+                ),
+                BotCommand(
+                    command="transfer",
+                    description="Transfer",
+                ),
+                BotCommand(
+                    command="instruction",
+                    description="How to play",
+                ),
+                BotCommand(
+                    command="invite",
+                    description="Invite friends",
+                ),
+                BotCommand(
+                    command="support",
+                    description="Support",
                 ),
             ]
         )
 
+        # -------------------------------------------------
+        # KEEP TELEGRAM MENU AS COMMANDS
+        # -------------------------------------------------
+
         await bot.set_chat_menu_button(
             menu_button=MenuButtonCommands()
         )
+
+        # -------------------------------------------------
+        # WEBHOOK
+        # -------------------------------------------------
 
         await bot.set_webhook(
             WEBHOOK_URL
