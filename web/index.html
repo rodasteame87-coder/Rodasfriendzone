@@ -967,8 +967,6 @@ button {
         <div class="game-layout">
 
 
-            <!-- LEFT -->
-
             <div class="call-board">
 
                 <div class="call-board-title">
@@ -1035,8 +1033,6 @@ button {
 
             </div>
 
-
-            <!-- RIGHT -->
 
             <div class="right-game">
 
@@ -1214,8 +1210,6 @@ button {
 </div>
 
 
-<!-- WRONG -->
-
 <div
     id="wrongOverlay"
     class="wrong-overlay hidden"
@@ -1260,13 +1254,9 @@ button {
 const tg =
     window.Telegram?.WebApp;
 
-
 if (tg) {
-
     tg.ready();
-
     tg.expand();
-
 }
 
 
@@ -1275,7 +1265,6 @@ if (tg) {
 ========================================================= */
 
 let userId = null;
-
 
 try {
 
@@ -1302,14 +1291,12 @@ try {
 
 }
 
-
 if (!userId) {
 
     let storedId =
         localStorage.getItem(
             "rodas_bingo_demo_user"
         );
-
 
     if (!storedId) {
 
@@ -1319,14 +1306,12 @@ if (!userId) {
                 .toString(36)
                 .substring(2, 12);
 
-
         localStorage.setItem(
             "rodas_bingo_demo_user",
             storedId
         );
 
     }
-
 
     userId =
         storedId;
@@ -1346,8 +1331,17 @@ let proceeded = false;
 
 let autoMode = true;
 
-let manuallyMarked =
-    new Set();
+let manuallyMarked = new Set();
+
+/*
+   IMPORTANT:
+   This becomes TRUE immediately after the player leaves
+   the current game.
+
+   It forces the Mini App to show the Cartela selection
+   screen instead of showing the old Bingo game screen.
+*/
+let returnedToSelection = false;
 
 
 /* =========================================================
@@ -1371,16 +1365,12 @@ async function api(
 
     };
 
-
     if (body !== null) {
 
         options.body =
-            JSON.stringify(
-                body
-            );
+            JSON.stringify(body);
 
     }
-
 
     const response =
         await fetch(
@@ -1388,9 +1378,7 @@ async function api(
             options
         );
 
-
     let data;
-
 
     try {
 
@@ -1406,7 +1394,6 @@ async function api(
         };
 
     }
-
 
     return data;
 
@@ -1426,39 +1413,65 @@ async function loadState() {
                 "/api/state"
             );
 
-
         if (!newState) {
-
             return;
-
         }
-
 
         state =
             newState;
 
 
+        /*
+           If the player has just left and the server has
+           already moved to a NEW selection phase, we can
+           completely reset the local leave state.
+        */
+
         if (
-            state.selected !== undefined &&
-            state.selected !== null
+            returnedToSelection &&
+            state.phase === "selection"
         ) {
 
-            selectedCartela =
-                Number(
-                    state.selected
-                );
+            returnedToSelection =
+                false;
 
         }
 
 
-        proceeded =
-            Boolean(
-                state.proceeded
-            );
+        /*
+           Do not restore the old Cartela after leaving.
+        */
 
+        if (returnedToSelection) {
+
+            selectedCartela =
+                null;
+
+            proceeded =
+                false;
+
+        } else {
+
+            if (
+                state.selected !== undefined &&
+                state.selected !== null
+            ) {
+
+                selectedCartela =
+                    Number(
+                        state.selected
+                    );
+
+            }
+
+            proceeded =
+                Boolean(
+                    state.proceeded
+                );
+
+        }
 
         render();
-
 
     } catch (error) {
 
@@ -1483,10 +1496,8 @@ function renderCartelaGrid() {
             "cartelaGrid"
         );
 
-
     grid.innerHTML =
         "";
-
 
     const taken =
         new Set(
@@ -1505,14 +1516,20 @@ function renderCartelaGrid() {
                 "button"
             );
 
-
         button.className =
             "cartela-btn";
-
 
         button.textContent =
             number;
 
+
+        /*
+           During the period after leaving, the current game
+           may still be running.
+
+           We still show all 1–100 Cartelas, but selection
+           remains disabled until the next selection phase.
+        */
 
         if (
             taken.has(number) &&
@@ -1540,11 +1557,21 @@ function renderCartelaGrid() {
         }
 
 
+        if (
+            returnedToSelection &&
+            state.phase !== "selection"
+        ) {
+
+            button.disabled =
+                true;
+
+        }
+
+
         button.onclick =
             () => selectCartela(
                 number
             );
-
 
         grid.appendChild(
             button
@@ -1562,9 +1589,7 @@ function renderCartelaGrid() {
 async function selectCartela(number) {
 
     if (!state) {
-
         return;
-
     }
 
 
@@ -1572,15 +1597,17 @@ async function selectCartela(number) {
         state.phase !== "selection"
     ) {
 
+        alert(
+            "The current game is still running. Please wait for the next Cartela selection."
+        );
+
         return;
 
     }
 
 
     if (proceeded) {
-
         return;
-
     }
 
 
@@ -1600,19 +1627,19 @@ async function selectCartela(number) {
             result.success
         ) {
 
+            returnedToSelection =
+                false;
+
             selectedCartela =
                 number;
 
-
             state =
                 result;
-
 
             proceeded =
                 Boolean(
                     result.proceeded
                 );
-
 
             render();
 
@@ -1622,7 +1649,6 @@ async function selectCartela(number) {
                 result.message ||
                 "Could not select Cartela."
             );
-
 
             if (result) {
 
@@ -1679,6 +1705,9 @@ async function proceedToGame() {
         if (
             result.success
         ) {
+
+            returnedToSelection =
+                false;
 
             state =
                 result;
@@ -1763,23 +1792,39 @@ async function leaveGame() {
             result.success
         ) {
 
+            /*
+               IMPORTANT FIX
+
+               Tell the frontend that this player has left
+               the current game.
+
+               We do NOT allow render() to use the current
+               playing phase to put the player back into the
+               Bingo screen.
+            */
+
+            returnedToSelection =
+                true;
+
             state =
                 result;
-
 
             selectedCartela =
                 null;
 
-
             proceeded =
                 false;
-
 
             manuallyMarked =
                 new Set();
 
 
-            render();
+            /*
+               Immediately display the Cartela screen.
+            */
+
+            showSelectionAfterLeave();
+
 
         } else {
 
@@ -1808,7 +1853,6 @@ async function leaveGame() {
             error
         );
 
-
         alert(
             "Connection error. Please try again."
         );
@@ -1830,15 +1874,98 @@ async function leaveGame() {
 
 
 /* =========================================================
+   SHOW SELECTION AFTER LEAVE
+========================================================= */
+
+function showSelectionAfterLeave() {
+
+    const selectionView =
+        document.getElementById(
+            "selectionView"
+        );
+
+    const gameView =
+        document.getElementById(
+            "gameView"
+        );
+
+    const resultView =
+        document.getElementById(
+            "resultView"
+        );
+
+
+    /*
+       Hide Bingo and result.
+    */
+
+    gameView.classList.add(
+        "hidden"
+    );
+
+    resultView.classList.add(
+        "hidden"
+    );
+
+
+    /*
+       Show Cartela selection immediately.
+    */
+
+    selectionView.classList.remove(
+        "hidden"
+    );
+
+
+    /*
+       Update the selection screen with the
+       current server state.
+    */
+
+    renderSelectionInfo();
+
+    renderCartelaGrid();
+
+    renderSelection();
+
+
+    /*
+       If the current game is still running, tell the player
+       why they cannot select another Cartela yet.
+    */
+
+    const selectedText =
+        document.getElementById(
+            "selectedText"
+        );
+
+    const proceedBtn =
+        document.getElementById(
+            "proceedBtn"
+        );
+
+
+    if (
+        state &&
+        state.phase !== "selection"
+    ) {
+
+        selectedText.textContent =
+            "You left the game. Waiting for the next Cartela selection...";
+
+        proceedBtn.disabled =
+            true;
+
+    }
+
+}
+
+
+/* =========================================================
    REFRESH
 ========================================================= */
 
 function refreshGame() {
-
-    /*
-       Force the browser to reload the Mini App.
-       This makes the REFRESH button reliable.
-    */
 
     window.location.reload();
 
@@ -1854,10 +1981,8 @@ function calculateDerash(players) {
     const BET_AMOUNT =
         10;
 
-
     const DERASH_PERCENT =
         0.75;
-
 
     return Math.floor(
         Number(players || 0) *
@@ -1875,18 +2000,11 @@ function calculateDerash(players) {
 function render() {
 
     if (!state) {
-
         return;
-
     }
 
 
     renderSelectionInfo();
-
-
-    const viewPhase =
-        state.view_phase ||
-        state.phase;
 
 
     const selectionView =
@@ -1894,12 +2012,10 @@ function render() {
             "selectionView"
         );
 
-
     const gameView =
         document.getElementById(
             "gameView"
         );
-
 
     const resultView =
         document.getElementById(
@@ -1911,32 +2027,40 @@ function render() {
         "hidden"
     );
 
-
     gameView.classList.add(
         "hidden"
     );
-
 
     resultView.classList.add(
         "hidden"
     );
 
 
-    if (
-        state.left
-    ) {
+    /*
+       MOST IMPORTANT PART
 
-        gameView.classList.remove(
+       If the player has pressed LEAVE, always show
+       Cartela selection instead of the current game.
+    */
+
+    if (returnedToSelection) {
+
+        selectionView.classList.remove(
             "hidden"
         );
 
+        renderCartelaGrid();
 
-        renderGame();
-
+        renderSelection();
 
         return;
 
     }
+
+
+    const viewPhase =
+        state.view_phase ||
+        state.phase;
 
 
     if (
@@ -1948,11 +2072,9 @@ function render() {
             "hidden"
         );
 
-
         renderCartelaGrid();
 
         renderSelection();
-
 
         return;
 
@@ -1968,9 +2090,7 @@ function render() {
             "hidden"
         );
 
-
         renderGame();
-
 
         return;
 
@@ -1985,9 +2105,7 @@ function render() {
             "hidden"
         );
 
-
         renderGame();
-
 
         return;
 
@@ -2002,9 +2120,7 @@ function render() {
             "hidden"
         );
 
-
         renderGame();
-
 
         return;
 
@@ -2019,9 +2135,7 @@ function render() {
             "hidden"
         );
 
-
         renderResult();
-
 
         return;
 
@@ -2031,7 +2145,6 @@ function render() {
     gameView.classList.remove(
         "hidden"
     );
-
 
     renderGame();
 
@@ -2049,12 +2162,10 @@ function renderSelectionInfo() {
             state.players || 0
         );
 
-
     const wallet =
         Number(
             state.wallet || 0
         );
-
 
     const remaining =
         Number(
@@ -2105,11 +2216,27 @@ function renderSelection() {
             "selectedText"
         );
 
-
     const proceedBtn =
         document.getElementById(
             "proceedBtn"
         );
+
+
+    if (
+        returnedToSelection &&
+        state &&
+        state.phase !== "selection"
+    ) {
+
+        selectedText.textContent =
+            "You left the game. Waiting for the next Cartela selection...";
+
+        proceedBtn.disabled =
+            true;
+
+        return;
+
+    }
 
 
     if (selectedCartela) {
@@ -2118,7 +2245,6 @@ function renderSelection() {
             "Selected Cartela: " +
             selectedCartela;
 
-
         proceedBtn.disabled =
             false;
 
@@ -2126,7 +2252,6 @@ function renderSelection() {
 
         selectedText.textContent =
             "Select a Cartela";
-
 
         proceedBtn.disabled =
             true;
@@ -2147,12 +2272,10 @@ function renderGameHeader() {
             state.players || 0
         );
 
-
     const derash =
         calculateDerash(
             players
         );
-
 
     const called =
         Array.isArray(
@@ -2193,7 +2316,6 @@ function renderStartingMessage() {
             "startingMessage"
         );
 
-
     const seconds =
         document.getElementById(
             "startingSeconds"
@@ -2201,14 +2323,12 @@ function renderStartingMessage() {
 
 
     if (
-        state.view_phase === "starting" &&
-        !state.left
+        state.view_phase === "starting"
     ) {
 
         message.classList.remove(
             "hidden"
         );
-
 
         seconds.textContent =
             Math.max(
@@ -2240,12 +2360,10 @@ function renderLeftMessage() {
             "playerLeftMessage"
         );
 
-
     const bingoButton =
         document.getElementById(
             "bingoWinBtn"
         );
-
 
     const leaveButton =
         document.getElementById(
@@ -2553,8 +2671,7 @@ function renderAutoToggle() {
 function toggleAuto() {
 
     if (
-        state &&
-        state.left
+        returnedToSelection
     ) {
 
         return;
@@ -2564,7 +2681,6 @@ function toggleAuto() {
 
     autoMode =
         !autoMode;
-
 
     renderAutoToggle();
 
@@ -2756,8 +2872,7 @@ function renderPlayerCard() {
 function toggleManualNumber(number) {
 
     if (
-        state &&
-        state.left
+        returnedToSelection
     ) {
 
         return;
@@ -2909,8 +3024,7 @@ function getMarkedNumbers() {
 async function claimBingo() {
 
     if (
-        state &&
-        state.left
+        returnedToSelection
     ) {
 
         return;
@@ -2943,9 +3057,7 @@ async function claimBingo() {
             state =
                 result;
 
-
             render();
-
 
             return;
 
@@ -2968,7 +3080,6 @@ async function claimBingo() {
 
             render();
 
-
             return;
 
         }
@@ -2984,7 +3095,6 @@ async function claimBingo() {
 
             state =
                 result;
-
 
             render();
 
@@ -3030,7 +3140,7 @@ function renderGame() {
 
 
 /* =========================================================
-   RESULT
+   RESULT CARD
 ========================================================= */
 
 function renderResultCard() {
@@ -3106,7 +3216,6 @@ function renderResultCard() {
                 td.textContent =
                     "FREE";
 
-
                 td.classList.add(
                     "free"
                 );
@@ -3118,9 +3227,7 @@ function renderResultCard() {
 
 
                 if (
-                    called.has(
-                        number
-                    )
+                    called.has(number)
                 ) {
 
                     td.classList.add(
