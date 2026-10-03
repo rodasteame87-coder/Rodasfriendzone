@@ -89,7 +89,12 @@ button {
     width: 100%;
     background: #c9edf4;
     min-height: calc(100vh - 63px);
-    padding-bottom: 0;
+
+    /*
+     * Space at the bottom prevents the fixed navigation
+     * from covering the lobby content.
+     */
+    padding-bottom: 100px;
 }
 
 .lobby-top-info {
@@ -328,11 +333,21 @@ button {
 
 
 /* =========================================================
-   BOTTOM NAVIGATION
+   FIXED BOTTOM NAVIGATION
 ========================================================= */
 
 .lobby-nav {
+    position: fixed;
+
+    left: 50%;
+
+    bottom: 0;
+
+    transform: translateX(-50%);
+
     width: 100%;
+
+    max-width: 900px;
 
     background: white;
 
@@ -345,12 +360,25 @@ button {
 
     align-items: center;
 
-    margin-top: 8px;
+    margin: 0;
 
-    box-shadow: 0 -1px 4px rgba(0,0,0,0.08);
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
+
+    z-index: 1000;
+
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
 .lobby-nav-item {
+    height: 82px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
     text-align: center;
 
     color: #4d4560;
@@ -1425,16 +1453,22 @@ button {
         margin-right: 8px;
     }
 
+    .lobby-page {
+        padding-bottom: 90px;
+    }
+
     .lobby-nav {
         min-height: 72px;
     }
 
-    .lobby-nav-icon {
-        font-size: 24px;
+    .lobby-nav-item {
+        height: 72px;
+
+        font-size: 11px;
     }
 
-    .lobby-nav-item {
-        font-size: 11px;
+    .lobby-nav-icon {
+        font-size: 24px;
     }
 
     .top-title {
@@ -1754,46 +1788,47 @@ button {
 
             </div>
 
+        </div>
 
-            <div class="lobby-nav">
+        <!-- FIXED BOTTOM NAVIGATION -->
 
-                <div class="lobby-nav-item active">
+        <div class="lobby-nav">
 
-                    <span class="lobby-nav-icon">
-                        🎮
-                    </span>
+            <div class="lobby-nav-item active">
 
-                    Game
+                <span class="lobby-nav-icon">
+                    🎮
+                </span>
 
-                </div>
+                Game
 
-
-                <div
-                    class="lobby-nav-item"
-                    onclick="showScoresMessage()"
-                >
-
-                    <span class="lobby-nav-icon">
-                        🏆
-                    </span>
-
-                    Scores
-
-                </div>
+            </div>
 
 
-                <div
-                    class="lobby-nav-item"
-                    onclick="showProfileMessage()"
-                >
+            <div
+                class="lobby-nav-item"
+                onclick="showScoresMessage()"
+            >
 
-                    <span class="lobby-nav-icon">
-                        👤
-                    </span>
+                <span class="lobby-nav-icon">
+                    🏆
+                </span>
 
-                    Profile
+                Scores
 
-                </div>
+            </div>
+
+
+            <div
+                class="lobby-nav-item"
+                onclick="showProfileMessage()"
+            >
+
+                <span class="lobby-nav-icon">
+                    👤
+                </span>
+
+                Profile
 
             </div>
 
@@ -2502,14 +2537,6 @@ let pollingTimer = null;
 /* =========================================================
    REFRESH SCREEN MEMORY
 ========================================================= */
-
-/*
- * This value remembers which screen the player was viewing
- * immediately before pressing REFRESH.
- *
- * sessionStorage survives a page reload, but is cleared
- * when the Mini App session is fully closed.
- */
 
 const REFRESH_SCREEN_KEY =
     "rodas_bingo_refresh_screen";
@@ -3372,22 +3399,9 @@ async function leaveToLobby() {
 
 function refreshSelection() {
 
-    /*
-     * Remember that the player is on the Cartela
-     * Selection screen BEFORE reloading.
-     */
-
     rememberRefreshScreen(
         "selection"
     );
-
-
-    /*
-     * This reloads the Mini App.
-     *
-     * sessionStorage survives the reload, so initialize()
-     * can restore the Cartela Selection screen.
-     */
 
     window.location.reload();
 
@@ -4238,25 +4252,9 @@ async function leaveGame() {
 
 function refreshGame() {
 
-    /*
-     * Remember that the player is on the Bingo Game
-     * screen BEFORE reloading.
-     */
-
     rememberRefreshScreen(
         "game"
     );
-
-
-    /*
-     * Reload only.
-     *
-     * The server keeps the actual game participation,
-     * Cartela and game state.
-     *
-     * sessionStorage tells initialize() to restore
-     * the Bingo Game screen after the reload.
-     */
 
     window.location.reload();
 
@@ -4644,11 +4642,6 @@ function restoreScreenAfterRefresh() {
         getRefreshScreen();
 
 
-    /*
-     * Nothing was saved.
-     * Start normally in Lobby.
-     */
-
     if (!savedScreen) {
 
         inLobby =
@@ -4661,10 +4654,6 @@ function restoreScreenAfterRefresh() {
 
     }
 
-
-    /*
-     * The player refreshed Cartela Selection.
-     */
 
     if (
         savedScreen ===
@@ -4685,10 +4674,6 @@ function restoreScreenAfterRefresh() {
     }
 
 
-    /*
-     * The player refreshed Bingo Game.
-     */
-
     if (
         savedScreen ===
         "game"
@@ -4700,20 +4685,10 @@ function restoreScreenAfterRefresh() {
         returnedToSelection =
             false;
 
-        /*
-         * Do not force proceeded here.
-         * loadState() gets the real value from
-         * the server.
-         */
-
         return;
 
     }
 
-
-    /*
-     * Lobby refresh.
-     */
 
     if (
         savedScreen ===
@@ -4730,10 +4705,6 @@ function restoreScreenAfterRefresh() {
 
     }
 
-
-    /*
-     * Unknown saved screen.
-     */
 
     inLobby =
         true;
@@ -4857,11 +4828,6 @@ async function pollState() {
             returnedToSelection
         ) {
 
-            /*
-             * Keep the player on Cartela Selection
-             * while they are there.
-             */
-
             const serverSelected =
                 data?.selected
                 ??
@@ -4943,26 +4909,12 @@ function startPolling() {
 
 async function initialize() {
 
-    /*
-     * Check whether this page load happened because
-     * the player pressed REFRESH.
-     */
-
     const savedScreen =
         getRefreshScreen();
 
 
-    /*
-     * Restore the correct screen before asking
-     * the server for the latest state.
-     */
-
     restoreScreenAfterRefresh();
 
-
-    /*
-     * If this was a normal new opening, use Lobby.
-     */
 
     if (!savedScreen) {
 
@@ -4986,22 +4938,10 @@ async function initialize() {
     );
 
 
-    /*
-     * The server state is now loaded.
-     *
-     * We intentionally do NOT reset inLobby here.
-     * This is the important part that prevents
-     * REFRESH from sending the player back to Lobby.
-     */
-
     if (
         savedScreen ===
         "selection"
     ) {
-
-        /*
-         * Stay on Cartela Selection after refresh.
-         */
 
         inLobby =
             false;
@@ -5016,12 +4956,6 @@ async function initialize() {
         savedScreen ===
         "game"
     ) {
-
-        /*
-         * Stay in the Bingo Game after refresh,
-         * provided the server still has the player
-         * in the active game.
-         */
 
         inLobby =
             false;
@@ -5042,12 +4976,6 @@ async function initialize() {
 
     }
 
-
-    /*
-     * The saved refresh instruction has now been
-     * consumed. Remove it so a future normal opening
-     * does not accidentally restore an old screen.
-     */
 
     clearRefreshScreen();
 
