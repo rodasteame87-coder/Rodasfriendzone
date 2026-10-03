@@ -553,14 +553,28 @@ button {
     font-weight: 900;
 
     color: #85008f;
+
+    margin-bottom: 4px;
+}
+
+.selection-actions {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns: 1fr 1fr 1fr;
+
+    gap: 6px;
+
+    margin-top: 8px;
 }
 
 .proceed-btn {
     width: 100%;
 
-    margin-top: 8px;
+    margin-top: 0;
 
-    padding: 13px;
+    padding: 13px 6px;
 
     border-radius: 9px;
 
@@ -568,7 +582,7 @@ button {
 
     color: white;
 
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 900;
 }
 
@@ -581,17 +595,34 @@ button {
 .leave-selection-btn {
     width: 100%;
 
-    margin-top: 6px;
+    margin-top: 0;
 
-    padding: 10px;
+    padding: 13px 6px;
 
-    border-radius: 8px;
+    border-radius: 9px;
 
     background: #e51c2a;
 
     color: white;
 
-    font-size: 15px;
+    font-size: 16px;
+    font-weight: 900;
+}
+
+.selection-refresh-btn {
+    width: 100%;
+
+    margin-top: 0;
+
+    padding: 13px 6px;
+
+    border-radius: 9px;
+
+    background: #1769d3;
+
+    color: white;
+
+    font-size: 16px;
     font-weight: 900;
 }
 
@@ -1536,6 +1567,19 @@ button {
 
         font-size: 11px;
     }
+
+    .selection-actions {
+        gap: 4px;
+    }
+
+    .proceed-btn,
+    .leave-selection-btn,
+    .selection-refresh-btn {
+        padding: 11px 3px;
+
+        font-size: 13px;
+    }
+
 }
 
 </style>
@@ -1883,22 +1927,34 @@ button {
             </div>
 
 
-            <button
-                id="proceedBtn"
-                class="proceed-btn"
-                disabled
-                onclick="proceedToGame()"
-            >
-                PROCEED
-            </button>
+            <div class="selection-actions">
+
+                <button
+                    id="proceedBtn"
+                    class="proceed-btn"
+                    disabled
+                    onclick="proceedToGame()"
+                >
+                    PROCEED
+                </button>
 
 
-            <button
-                class="leave-selection-btn"
-                onclick="leaveGame()"
-            >
-                LEAVE
-            </button>
+                <button
+                    class="leave-selection-btn"
+                    onclick="leaveToLobby()"
+                >
+                    LEAVE
+                </button>
+
+
+                <button
+                    class="selection-refresh-btn"
+                    onclick="refreshSelection()"
+                >
+                    REFRESH
+                </button>
+
+            </div>
 
         </div>
 
@@ -2697,6 +2753,10 @@ function renderSelection() {
 }
 
 
+/* =========================================================
+   SELECTION STATS
+========================================================= */
+
 function renderSelectionStats() {
 
     if (!state) {
@@ -2900,19 +2960,6 @@ async function selectCartela(
 
 
     try {
-
-        /*
-         * SAME NUMBER TAPPED AGAIN
-         *
-         * First tap:
-         *     25 -> selected
-         *
-         * Second tap:
-         *     25 -> unselected
-         *
-         * A different number still switches
-         * the selection normally.
-         */
 
         const result =
             await api(
@@ -3143,6 +3190,112 @@ async function proceedToGame() {
         );
 
     }
+
+}
+
+
+/* =========================================================
+   LEAVE FROM CARTELA SELECTION -> LOBBY
+========================================================= */
+
+async function leaveToLobby() {
+
+    try {
+
+        const result =
+            await api(
+                "/api/leave",
+                "POST"
+            );
+
+
+        state =
+            result;
+
+    } catch (error) {
+
+        console.error(
+            "Leave to lobby error:",
+            error
+        );
+
+    }
+
+
+    returnedToSelection =
+        false;
+
+    proceeded =
+        false;
+
+    selectedCartela =
+        null;
+
+    manuallyMarked.clear();
+
+    inLobby =
+        true;
+
+
+    /*
+     * Always show the Lobby after pressing
+     * LEAVE on the Cartela Selection screen.
+     */
+
+    if (!state) {
+
+        await loadState(
+            false
+        );
+
+    }
+
+
+    renderLobby();
+
+
+    document.getElementById(
+        "lobbyView"
+    ).classList.remove(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "selectionView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "gameView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "resultView"
+    ).classList.add(
+        "hidden"
+    );
+
+}
+
+
+/* =========================================================
+   REFRESH CARTELA SELECTION
+========================================================= */
+
+function refreshSelection() {
+
+    /*
+     * Reload the whole Mini App so the Cartela screen
+     * gets the newest server state.
+     */
+
+    window.location.reload();
 
 }
 
@@ -3899,27 +4052,12 @@ async function claimBingo() {
 
 
 /* =========================================================
-   LEAVE
+   LEAVE FROM BINGO GAME
 ========================================================= */
 
 async function leaveGame() {
 
     try {
-
-        returnedToSelection =
-            true;
-
-        inLobby =
-            false;
-
-        proceeded =
-            false;
-
-        selectedCartela =
-            null;
-
-        manuallyMarked.clear();
-
 
         const result =
             await api(
@@ -3931,9 +4069,6 @@ async function leaveGame() {
         state =
             result;
 
-
-        renderSelection();
-
     } catch (error) {
 
         console.error(
@@ -3941,28 +4076,73 @@ async function leaveGame() {
             error
         );
 
-
-        returnedToSelection =
-            true;
-
-        proceeded =
-            false;
-
-        selectedCartela =
-            null;
-
-        manuallyMarked.clear();
+    }
 
 
-        renderSelection();
+    returnedToSelection =
+        false;
+
+    proceeded =
+        false;
+
+    selectedCartela =
+        null;
+
+    manuallyMarked.clear();
+
+    inLobby =
+        true;
+
+
+    /*
+     * LEAVE from the Bingo game also returns
+     * the player to the Lobby.
+     */
+
+    if (!state) {
+
+        await loadState(
+            false
+        );
 
     }
+
+
+    renderLobby();
+
+
+    document.getElementById(
+        "lobbyView"
+    ).classList.remove(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "selectionView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "gameView"
+    ).classList.add(
+        "hidden"
+    );
+
+
+    document.getElementById(
+        "resultView"
+    ).classList.add(
+        "hidden"
+    );
 
 }
 
 
 /* =========================================================
-   REFRESH
+   REFRESH BINGO GAME
 ========================================================= */
 
 function refreshGame() {
@@ -4232,17 +4412,6 @@ function render() {
 
 
     if (
-        returnedToSelection
-    ) {
-
-        renderSelection();
-
-        return;
-
-    }
-
-
-    if (
         inLobby
     ) {
 
@@ -4271,6 +4440,17 @@ function render() {
         ).classList.add(
             "hidden"
         );
+
+        return;
+
+    }
+
+
+    if (
+        returnedToSelection
+    ) {
+
+        renderSelection();
 
         return;
 
@@ -4439,6 +4619,17 @@ async function pollState() {
 
         state =
             data;
+
+
+        if (
+            inLobby
+        ) {
+
+            renderLobby();
+
+            return;
+
+        }
 
 
         if (
