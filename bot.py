@@ -1453,3 +1453,219 @@ async def command_bingo(message: Message):
 
 
 # =========================================================
+# TELEGRAM WEBHOOK
+# =========================================================
+
+async def telegram_webhook(request):
+    try:
+        data = await request.json()
+
+        update = Update.model_validate(
+            data
+        )
+
+        await dp.feed_update(
+            bot,
+            update,
+        )
+
+        return web.json_response(
+            {
+                "ok": True,
+            }
+        )
+
+    except Exception:
+        logger.exception(
+            "Telegram webhook error."
+        )
+
+        return web.json_response(
+            {
+                "ok": False,
+            },
+            status=500,
+        )
+
+
+# =========================================================
+# APPLICATION SETUP
+# =========================================================
+
+async def on_startup(app):
+    logger.info(
+        "Starting Rodas Friend Zone Bingo..."
+    )
+
+    try:
+        await bot.set_my_commands(
+            [
+                BotCommand(
+                    command="start",
+                    description="Open Rodas Friend Zone Bingo",
+                ),
+                BotCommand(
+                    command="bingo",
+                    description="Open Bingo",
+                ),
+            ]
+        )
+
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonCommands()
+        )
+
+        await bot.set_webhook(
+            WEBHOOK_URL
+        )
+
+        logger.info(
+            "Telegram webhook set to %s",
+            WEBHOOK_URL,
+        )
+
+    except Exception:
+        logger.exception(
+            "Unable to configure Telegram."
+        )
+
+    game = BingoGame(
+        generate_game_number()
+    )
+
+    games[game.game_number] = game
+
+    logger.info(
+        "Initial Bingo game created: %s",
+        game.game_number,
+    )
+
+    app["game_loop_task"] = asyncio.create_task(
+        game_loop()
+    )
+
+
+async def on_cleanup(app):
+    logger.info(
+        "Stopping Rodas Friend Zone Bingo..."
+    )
+
+    task = app.get(
+        "game_loop_task"
+    )
+
+    if task:
+        task.cancel()
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    try:
+        await bot.delete_webhook(
+            drop_pending_updates=False
+        )
+    except Exception:
+        logger.exception(
+            "Unable to delete Telegram webhook."
+        )
+
+    try:
+        await bot.session.close()
+    except Exception:
+        logger.exception(
+            "Unable to close Telegram bot session."
+        )
+
+
+# =========================================================
+# CREATE APP
+# =========================================================
+
+def create_app():
+    app = web.Application()
+
+    # -----------------------------------------------------
+    # Web frontend
+    # -----------------------------------------------------
+
+    app.router.add_get(
+        "/",
+        index,
+    )
+
+    # -----------------------------------------------------
+    # Health
+    # -----------------------------------------------------
+
+    app.router.add_get(
+        "/health",
+        health,
+    )
+
+    # -----------------------------------------------------
+    # Bingo API
+    # -----------------------------------------------------
+
+    app.router.add_get(
+        "/api/state",
+        api_state,
+    )
+
+    app.router.add_post(
+        "/api/select",
+        api_select,
+    )
+
+    app.router.add_post(
+        "/api/proceed",
+        api_proceed,
+    )
+
+    app.router.add_post(
+        "/api/leave",
+        api_leave,
+    )
+
+    app.router.add_post(
+        "/api/claim-bingo",
+        api_claim_bingo,
+    )
+
+    # -----------------------------------------------------
+    # Telegram
+    # -----------------------------------------------------
+
+    app.router.add_post(
+        WEBHOOK_PATH,
+        telegram_webhook,
+    )
+
+    # -----------------------------------------------------
+    # Lifecycle
+    # -----------------------------------------------------
+
+    app.on_startup.append(
+        on_startup
+    )
+
+    app.on_cleanup.append(
+        on_cleanup
+    )
+
+    return app
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+if __name__ == "__main__":
+    application = create_app()
+
+    web.run_app(
+        application,
+        host="0.0.0.0",
+        port=PORT,
+    )
