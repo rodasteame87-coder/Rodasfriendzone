@@ -1,9 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
+
 <meta name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      content="width=device-width,
+               initial-scale=1.0,
+               maximum-scale=1.0,
+               user-scalable=no">
 
 <title>Rodas Friend Zone</title>
 
@@ -12,7 +18,7 @@
 <style>
 
 /* =========================================================
-   GENERAL
+   GLOBAL
 ========================================================= */
 
 * {
@@ -26,8 +32,11 @@ body {
     padding: 0;
     width: 100%;
     min-height: 100%;
+
     font-family: Arial, Helvetica, sans-serif;
+
     background: #c9f0f7;
+
     color: #5428a8;
 }
 
@@ -56,135 +65,157 @@ button {
 
 #lobbyScreen {
     min-height: 100vh;
+
     background: #c9f0f7;
-    padding-bottom: 105px;
+
+    padding-bottom: 82px;
 }
 
-/* Purple header */
+
+/* ---------------------------------------------------------
+   PURPLE HEADER
+--------------------------------------------------------- */
 
 .lobby-header {
-    height: 95px;
+
+    height: 58px;
+
     background: #760080;
+
     color: white;
 
     display: flex;
+
     align-items: center;
 
+    justify-content: center;
+
     padding: 0 10px;
-    gap: 5px;
 }
 
 .header-title {
-    flex: 1;
 
     text-align: center;
 
-    font-size: 25px;
+    font-size: 22px;
+
     font-weight: 900;
+
+    line-height: 1.1;
 }
 
-.header-icon {
-    background: transparent;
-    border: none;
-    color: white;
 
-    font-size: 34px;
-    font-weight: 300;
-
-    width: 42px;
-    height: 52px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Live and balance */
+/* ---------------------------------------------------------
+   LIVE / BALANCE
+--------------------------------------------------------- */
 
 .live-balance {
+
     display: flex;
+
     justify-content: space-between;
+
     align-items: center;
 
-    padding: 28px 25px 12px;
+    padding: 22px 24px 10px;
 }
 
 .live-status {
+
     display: flex;
+
     align-items: center;
 
-    gap: 13px;
+    gap: 11px;
 
     color: #641078;
 
-    font-size: 28px;
+    font-size: 25px;
+
     font-weight: 900;
 }
 
 .live-dot {
-    width: 27px;
-    height: 27px;
+
+    width: 23px;
+    height: 23px;
 
     background: #0ca94f;
 
     border-radius: 50%;
 
-    box-shadow: 0 2px 5px rgba(0,0,0,.15);
+    box-shadow:
+        0 2px 5px rgba(0,0,0,.15);
 }
 
 .balance {
+
     display: flex;
+
     align-items: center;
 
-    gap: 7px;
+    gap: 6px;
 
     color: #641078;
 
-    font-size: 21px;
+    font-size: 18px;
+
     font-weight: 800;
 }
 
 .balance strong {
-    font-size: 26px;
+
+    font-size: 22px;
 }
 
 .card-icon {
-    font-size: 30px;
+
+    font-size: 27px;
 }
 
-/* Bingo games */
+
+/* ---------------------------------------------------------
+   BINGO TITLE
+--------------------------------------------------------- */
 
 .bingo-title {
+
     display: flex;
+
     align-items: center;
 
-    gap: 9px;
+    gap: 8px;
 
-    padding: 7px 30px 19px;
+    padding: 5px 27px 15px;
 
     color: #641078;
 
-    font-size: 30px;
+    font-size: 27px;
+
     font-weight: 900;
 }
 
-/* Column header */
+
+/* ---------------------------------------------------------
+   COLUMN HEADER
+--------------------------------------------------------- */
 
 .game-columns {
-    margin: 0 22px;
+
+    margin: 0 18px;
 
     background: #fffef5;
 
-    border-radius: 32px;
+    border-radius: 28px;
 
-    min-height: 57px;
+    min-height: 50px;
 
     display: grid;
 
     grid-template-columns:
         1fr
-        1.55fr
-        1.55fr;
+        1.5fr
+        1.5fr;
 
     align-items: center;
 
@@ -192,16 +223,21 @@ button {
 
     color: #641078;
 
-    font-size: 18px;
+    font-size: 15px;
+
     font-weight: 900;
 }
 
-/* Game card */
+
+/* ---------------------------------------------------------
+   MAIN GAME CARD
+--------------------------------------------------------- */
 
 .game-card {
-    margin: 14px 22px;
 
-    min-height: 180px;
+    margin: 12px 18px;
+
+    min-height: 150px;
 
     background: #fffef5;
 
@@ -210,7 +246,7 @@ button {
     display: grid;
 
     grid-template-columns:
-        115px
+        105px
         1fr
         1.25fr;
 
@@ -220,9 +256,13 @@ button {
         0 3px 7px rgba(0,0,0,.08);
 }
 
-/* Bet section */
+
+/* ---------------------------------------------------------
+   BET
+--------------------------------------------------------- */
 
 .bet-section {
+
     background: #760080;
 
     color: white;
@@ -237,90 +277,114 @@ button {
 }
 
 .bet-number {
-    font-size: 52px;
+
+    font-size: 46px;
+
     font-weight: 900;
 
     line-height: 1;
 }
 
 .bet-currency {
-    font-size: 22px;
+
+    font-size: 19px;
+
     font-weight: 900;
 
-    margin-top: 8px;
+    margin-top: 7px;
 }
 
-/* Player info */
+
+/* ---------------------------------------------------------
+   PLAYER INFO
+--------------------------------------------------------- */
 
 .game-info {
-    padding: 20px 10px;
+
+    padding: 15px 8px;
 
     display: flex;
+
     flex-direction: column;
 
     justify-content: center;
 }
 
 .winner {
+
     display: flex;
+
     align-items: center;
 
-    gap: 8px;
+    gap: 7px;
 }
 
 .trophy {
-    font-size: 40px;
+
+    font-size: 34px;
 }
 
 .winner-number {
+
     color: #079443;
 
-    font-size: 34px;
+    font-size: 30px;
+
     font-weight: 900;
 }
 
 .players {
+
     color: #641078;
 
-    font-size: 20px;
+    font-size: 18px;
+
     font-weight: 800;
 
     margin-top: 2px;
 }
 
-/* Join section */
+
+/* ---------------------------------------------------------
+   JOIN
+--------------------------------------------------------- */
 
 .join-section {
+
     display: flex;
 
     flex-direction: column;
 
     justify-content: center;
+
     align-items: center;
 
-    padding: 15px;
+    padding: 12px;
 }
 
 .ready {
+
     width: 100%;
 
     background: #d9f3df;
 
     color: #238649;
 
-    border-radius: 15px;
+    border-radius: 14px;
 
     text-align: center;
 
-    padding: 10px 0;
+    padding: 9px 0;
 
-    font-size: 17px;
+    font-size: 16px;
+
     font-weight: 900;
 
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .join-button {
+
     width: 100%;
 
     background: #08a348;
@@ -329,79 +393,99 @@ button {
 
     border: none;
 
-    border-radius: 19px;
+    border-radius: 17px;
 
-    padding: 17px 10px;
+    padding: 14px 8px;
 
-    font-size: 24px;
+    font-size: 22px;
+
     font-weight: 900;
 
     cursor: pointer;
 }
 
 .join-button:active {
+
     transform: scale(.97);
 }
 
-/* Free mode */
+
+/* ---------------------------------------------------------
+   FREE CARD
+--------------------------------------------------------- */
 
 .free-card {
-    margin: 20px 22px;
 
-    min-height: 120px;
+    margin: 17px 18px;
+
+    min-height: 105px;
 
     background: #dff8fc;
 
-    border-radius: 27px;
+    border-radius: 25px;
 
     display: flex;
 
     align-items: center;
+
     justify-content: space-between;
 
-    padding: 20px 24px;
+    padding: 16px 20px;
 }
 
 .free-title {
+
     color: #641078;
 
-    font-size: 27px;
+    font-size: 24px;
+
     font-weight: 900;
 
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .free-description {
+
     color: #641078;
 
-    font-size: 19px;
+    font-size: 16px;
+
+    line-height: 1.3;
 }
 
 .open-button {
+
     background: #760080;
 
     color: white;
 
     border: none;
 
-    border-radius: 18px;
+    border-radius: 17px;
 
-    padding: 17px 29px;
+    padding: 15px 25px;
 
-    font-size: 22px;
+    font-size: 21px;
+
     font-weight: 900;
 }
 
-/* Bottom navigation */
+
+/* ---------------------------------------------------------
+   BOTTOM NAVIGATION
+--------------------------------------------------------- */
 
 .bottom-navigation {
+
     position: fixed;
 
     left: 0;
+
     right: 0;
+
     bottom: 0;
 
-    height: 105px;
+    height: 82px;
 
     background: white;
 
@@ -417,6 +501,7 @@ button {
 }
 
 .nav-item {
+
     background: white;
 
     border: none;
@@ -426,122 +511,139 @@ button {
     flex-direction: column;
 
     align-items: center;
+
     justify-content: center;
 
-    gap: 3px;
+    gap: 1px;
 
     color: #4d4d4d;
 
-    font-size: 17px;
+    font-size: 15px;
+
     font-weight: 800;
 }
 
 .nav-item.active {
+
     color: #760080;
 }
 
 .nav-icon {
-    font-size: 36px;
+
+    font-size: 31px;
 }
 
 
 /* =========================================================
-   SELECTION SCREEN
+   CARTELA SELECTION
 ========================================================= */
 
 #selectionScreen {
+
     background: #c9f0f7;
 
-    padding: 15px;
+    padding: 12px;
 }
 
 .selection-container {
+
     max-width: 650px;
+
     margin: auto;
 }
 
 .main-card {
+
     background: white;
 
-    border-radius: 22px;
+    border-radius: 20px;
 
-    padding: 20px;
+    padding: 17px;
 
     box-shadow:
         0 3px 10px rgba(0,0,0,.08);
 }
 
 .app-title {
+
     text-align: center;
 
     color: #5428a8;
 
-    font-size: 27px;
+    font-size: 25px;
+
     font-weight: 900;
 
-    margin-bottom: 8px;
+    margin-bottom: 7px;
 }
 
 .selection-subtitle {
+
     text-align: center;
 
     color: #666;
 
-    font-size: 16px;
+    font-size: 15px;
 
-    margin-bottom: 20px;
+    margin-bottom: 17px;
 }
 
 .selected-display {
+
     background: #f3edff;
 
     border: 2px solid #5428a8;
 
-    border-radius: 14px;
+    border-radius: 13px;
 
-    padding: 13px;
+    padding: 11px;
 
     text-align: center;
 
-    margin-bottom: 20px;
+    margin-bottom: 17px;
 
     color: #5428a8;
 
-    font-size: 18px;
+    font-size: 17px;
+
     font-weight: 800;
 }
 
 .cartela-grid {
+
     display: grid;
 
     grid-template-columns:
         repeat(5, 1fr);
 
-    gap: 8px;
+    gap: 7px;
 
     max-height: 55vh;
 
     overflow-y: auto;
 
-    padding: 4px;
+    padding: 3px;
 }
 
 .cartela-button {
+
     border: 2px solid #ddd;
 
     background: white;
 
     color: #5428a8;
 
-    border-radius: 10px;
+    border-radius: 9px;
 
-    padding: 13px 4px;
+    padding: 11px 4px;
 
-    font-size: 16px;
+    font-size: 15px;
+
     font-weight: 800;
 }
 
 .cartela-button.selected {
+
     background: #5428a8;
 
     color: white;
@@ -550,13 +652,15 @@ button {
 }
 
 .cartela-button:active {
+
     transform: scale(.95);
 }
 
 .proceed-button {
+
     width: 100%;
 
-    margin-top: 20px;
+    margin-top: 17px;
 
     background: #5428a8;
 
@@ -564,15 +668,17 @@ button {
 
     border: none;
 
-    border-radius: 15px;
+    border-radius: 14px;
 
-    padding: 17px;
+    padding: 15px;
 
-    font-size: 20px;
+    font-size: 19px;
+
     font-weight: 900;
 }
 
 .proceed-button:disabled {
+
     opacity: .45;
 }
 
@@ -582,27 +688,28 @@ button {
 ========================================================= */
 
 #gameScreen {
+
     background: #c9f0f7;
 
     padding: 10px;
 }
 
 .game-container {
+
     max-width: 700px;
 
     margin: auto;
 }
 
-/* Game top */
-
 .game-topbar {
+
     background: #5428a8;
 
     color: white;
 
-    border-radius: 15px;
+    border-radius: 14px;
 
-    padding: 14px;
+    padding: 12px;
 
     display: flex;
 
@@ -612,29 +719,32 @@ button {
 }
 
 .game-name {
-    font-size: 19px;
+
+    font-size: 18px;
+
     font-weight: 900;
 }
 
 .game-stats {
+
     display: flex;
 
-    gap: 10px;
+    gap: 8px;
 
-    font-size: 13px;
+    font-size: 12px;
+
     font-weight: 800;
 }
 
-/* Current call */
-
 .current-call-card {
+
     background: white;
 
-    border-radius: 18px;
+    border-radius: 17px;
 
-    margin-top: 10px;
+    margin-top: 9px;
 
-    padding: 15px;
+    padding: 13px;
 
     text-align: center;
 
@@ -643,31 +753,34 @@ button {
 }
 
 .current-call-label {
+
     color: #666;
 
-    font-size: 14px;
+    font-size: 13px;
+
     font-weight: 800;
 }
 
 .current-call {
+
     color: #f27c00;
 
-    font-size: 54px;
+    font-size: 48px;
+
     font-weight: 900;
 
-    margin-top: 4px;
+    margin-top: 3px;
 }
 
-/* Number board */
-
 .number-board {
+
     background: white;
 
-    border-radius: 18px;
+    border-radius: 17px;
 
-    padding: 10px;
+    padding: 9px;
 
-    margin-top: 10px;
+    margin-top: 9px;
 
     box-shadow:
         0 2px 7px rgba(0,0,0,.08);
@@ -675,55 +788,63 @@ button {
 
 .number-header,
 .number-row {
+
     display: grid;
 
     grid-template-columns:
         repeat(5, 1fr);
 
-    gap: 5px;
+    gap: 4px;
 }
 
 .number-header {
-    margin-bottom: 5px;
+
+    margin-bottom: 4px;
 }
 
 .number-header div {
+
     background: #5428a8;
 
     color: white;
 
     text-align: center;
 
-    border-radius: 7px;
+    border-radius: 6px;
 
-    padding: 8px 2px;
+    padding: 7px 2px;
 
-    font-size: 15px;
+    font-size: 14px;
+
     font-weight: 900;
 }
 
 .number-cell {
+
     text-align: center;
 
     background: #f3f3f3;
 
     color: #444;
 
-    border-radius: 7px;
+    border-radius: 6px;
 
-    padding: 7px 2px;
+    padding: 6px 2px;
 
-    font-size: 13px;
+    font-size: 12px;
+
     font-weight: 800;
 }
 
 .number-cell.called {
+
     background: #0ca94f;
 
     color: white;
 }
 
 .number-cell.current {
+
     background: #f27c00;
 
     color: white;
@@ -731,29 +852,29 @@ button {
     transform: scale(1.05);
 }
 
-/* Player card */
-
 .player-card-container {
+
     background: white;
 
-    border-radius: 18px;
+    border-radius: 17px;
 
-    padding: 12px;
+    padding: 10px;
 
-    margin-top: 10px;
+    margin-top: 9px;
 
     box-shadow:
         0 2px 7px rgba(0,0,0,.08);
 }
 
 .player-card-title {
+
     display: flex;
 
     justify-content: space-between;
 
     align-items: center;
 
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 
     color: #5428a8;
 
@@ -761,84 +882,92 @@ button {
 }
 
 .player-board {
+
     width: 100%;
 
     border-collapse: separate;
 
-    border-spacing: 5px;
+    border-spacing: 4px;
 }
 
 .player-board th {
+
     background: #5428a8;
 
     color: white;
 
-    border-radius: 7px;
+    border-radius: 6px;
 
-    padding: 9px;
+    padding: 7px;
 
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .player-board td {
+
     background: #f2f2f2;
 
     color: #333;
 
-    border-radius: 8px;
+    border-radius: 7px;
 
     text-align: center;
 
-    padding: 11px 3px;
+    padding: 9px 3px;
 
-    font-size: 14px;
+    font-size: 13px;
+
     font-weight: 900;
 
     cursor: pointer;
 }
 
 .player-board td.called {
+
     background: #d9f3df;
 
     color: #168943;
 }
 
 .player-board td.marked {
+
     background: #0ca94f;
 
     color: white;
 }
 
 .player-board td.free {
+
     background: #0ca94f;
 
     color: white;
 }
 
 .player-board td.winning {
+
     background: #f27c00;
 
     color: white;
 }
 
-/* Controls */
-
 .game-controls {
+
     display: flex;
 
-    gap: 10px;
+    gap: 8px;
 
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
 .auto-control {
+
     flex: 1;
 
     background: white;
 
-    border-radius: 14px;
+    border-radius: 13px;
 
-    padding: 13px;
+    padding: 11px;
 
     display: flex;
 
@@ -846,7 +975,7 @@ button {
 
     justify-content: center;
 
-    gap: 8px;
+    gap: 7px;
 
     font-weight: 900;
 
@@ -854,11 +983,14 @@ button {
 }
 
 .auto-control input {
-    width: 20px;
-    height: 20px;
+
+    width: 19px;
+
+    height: 19px;
 }
 
 .bingo-button {
+
     flex: 1;
 
     background: #5428a8;
@@ -867,99 +999,110 @@ button {
 
     border: none;
 
-    border-radius: 14px;
+    border-radius: 13px;
 
-    padding: 14px;
+    padding: 12px;
 
-    font-size: 18px;
+    font-size: 17px;
 
     font-weight: 900;
 }
 
 .bingo-button:disabled {
+
     opacity: .45;
 }
 
 
 /* =========================================================
-   RESULT SCREEN
+   RESULT
 ========================================================= */
 
 #resultScreen {
+
     background: #c9f0f7;
 
-    padding: 15px;
+    padding: 12px;
 }
 
 .result-container {
+
     max-width: 650px;
 
     margin: auto;
 
     background: white;
 
-    border-radius: 22px;
+    border-radius: 20px;
 
-    padding: 22px;
+    padding: 20px;
 
     text-align: center;
 }
 
 .result-icon {
-    font-size: 70px;
+
+    font-size: 60px;
 }
 
 .result-title {
+
     color: #5428a8;
 
-    font-size: 30px;
-    font-weight: 900;
+    font-size: 28px;
 
-    margin-top: 5px;
+    font-weight: 900;
 }
 
 .result-name {
+
     color: #333;
 
-    font-size: 23px;
+    font-size: 21px;
+
     font-weight: 900;
 
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .result-pattern {
+
     color: #666;
 
-    font-size: 17px;
+    font-size: 16px;
 
-    margin-top: 7px;
+    margin-top: 6px;
 }
 
 .result-prize {
+
     background: #d9f3df;
 
     color: #168943;
 
-    border-radius: 15px;
+    border-radius: 14px;
 
-    padding: 15px;
+    padding: 13px;
 
-    margin-top: 18px;
+    margin-top: 16px;
 
-    font-size: 23px;
+    font-size: 21px;
+
     font-weight: 900;
 }
 
 .result-board-wrapper {
-    margin-top: 20px;
+
+    margin-top: 17px;
 }
 
 .result-message {
-    margin-top: 20px;
+
+    margin-top: 17px;
 
     color: #666;
 
-    font-size: 15px;
+    font-size: 14px;
 }
 
 
@@ -968,11 +1111,12 @@ button {
 ========================================================= */
 
 .toast {
+
     position: fixed;
 
     left: 50%;
 
-    bottom: 25px;
+    bottom: 20px;
 
     transform: translateX(-50%);
 
@@ -980,9 +1124,9 @@ button {
 
     color: white;
 
-    padding: 12px 18px;
+    padding: 11px 17px;
 
-    border-radius: 12px;
+    border-radius: 11px;
 
     font-size: 14px;
 
@@ -997,91 +1141,126 @@ button {
 
 
 /* =========================================================
-   MOBILE
+   SMALL PHONES
 ========================================================= */
 
-@media (max-width: 430px) {
+@media (max-width: 390px) {
+
+    .lobby-header {
+        height: 55px;
+    }
 
     .header-title {
-        font-size: 22px;
-    }
-
-    .live-balance {
-        padding-left: 22px;
-        padding-right: 22px;
-    }
-
-    .live-status {
-        font-size: 25px;
-    }
-
-    .balance {
-        font-size: 17px;
-    }
-
-    .balance strong {
-        font-size: 22px;
-    }
-
-    .bingo-title {
-        font-size: 27px;
-    }
-
-    .game-columns {
-        font-size: 15px;
-    }
-
-    .game-card {
-        grid-template-columns:
-            105px
-            1fr
-            1.15fr;
-    }
-
-    .bet-number {
-        font-size: 45px;
-    }
-
-    .bet-currency {
-        font-size: 19px;
-    }
-
-    .trophy {
-        font-size: 34px;
-    }
-
-    .winner-number {
-        font-size: 30px;
-    }
-
-    .players {
-        font-size: 18px;
-    }
-
-    .ready {
-        font-size: 15px;
-    }
-
-    .join-button {
-        font-size: 21px;
-    }
-
-    .free-title {
-        font-size: 23px;
-    }
-
-    .free-description {
-        font-size: 16px;
-    }
-
-    .open-button {
-        padding: 15px 22px;
         font-size: 20px;
     }
 
-    .cartela-grid {
+    .live-balance {
+        padding: 19px 20px 8px;
+    }
+
+    .live-status {
+        font-size: 23px;
+    }
+
+    .live-dot {
+        width: 21px;
+        height: 21px;
+    }
+
+    .balance {
+        font-size: 16px;
+    }
+
+    .balance strong {
+        font-size: 20px;
+    }
+
+    .card-icon {
+        font-size: 24px;
+    }
+
+    .bingo-title {
+        font-size: 25px;
+        padding-left: 23px;
+    }
+
+    .game-columns {
+        margin-left: 16px;
+        margin-right: 16px;
+        font-size: 13px;
+    }
+
+    .game-card {
+        margin-left: 16px;
+        margin-right: 16px;
+
         grid-template-columns:
-            repeat(5, 1fr);
+            96px
+            1fr
+            1.15fr;
+
+        min-height: 140px;
+    }
+
+    .bet-number {
+        font-size: 42px;
+    }
+
+    .bet-currency {
+        font-size: 18px;
+    }
+
+    .trophy {
+        font-size: 31px;
+    }
+
+    .winner-number {
+        font-size: 28px;
+    }
+
+    .players {
+        font-size: 16px;
+    }
+
+    .ready {
+        font-size: 14px;
+        padding: 8px 0;
+    }
+
+    .join-button {
+        font-size: 20px;
+        padding: 13px 5px;
+    }
+
+    .free-card {
+        margin-left: 16px;
+        margin-right: 16px;
+        padding: 14px 17px;
+    }
+
+    .free-title {
+        font-size: 22px;
+    }
+
+    .free-description {
+        font-size: 15px;
+    }
+
+    .open-button {
+        padding: 14px 21px;
+        font-size: 19px;
+    }
+
+    .bottom-navigation {
+        height: 76px;
+    }
+
+    .nav-icon {
+        font-size: 28px;
+    }
+
+    .nav-item {
+        font-size: 14px;
     }
 }
 
@@ -1093,29 +1272,19 @@ button {
 
 
 <!-- =====================================================
-     LOBBY SCREEN
+     LOBBY
 ===================================================== -->
 
 <div id="lobbyScreen" class="screen">
 
-    <div class="lobby-header">
+    <!-- ONLY TITLE
+         X / V / THREE DOTS REMOVED -->
 
-        <button class="header-icon"
-                onclick="telegramBack()">
-            ×
-        </button>
+    <div class="lobby-header">
 
         <div class="header-title">
             Rodas Friend Zone Bingo
         </div>
-
-        <button class="header-icon">
-            ⌄
-        </button>
-
-        <button class="header-icon">
-            ⋮
-        </button>
 
     </div>
 
@@ -1186,9 +1355,10 @@ button {
     </div>
 
 
-    <!-- GAME CARD -->
+    <!-- GAME -->
 
     <div class="game-card">
+
 
         <!-- BET -->
 
@@ -1205,7 +1375,7 @@ button {
         </div>
 
 
-        <!-- PLAYERS -->
+        <!-- WIN / PLAYER -->
 
         <div class="game-info">
 
@@ -1215,9 +1385,12 @@ button {
                     🏆
                 </span>
 
-                <span class="winner-number"
-                      id="lobbyWinner">
+                <span
+                    id="lobbyWinner"
+                    class="winner-number">
+
                     0
+
                 </span>
 
             </div>
@@ -1235,7 +1408,7 @@ button {
         </div>
 
 
-        <!-- JOIN -->
+        <!-- STATUS / JOIN -->
 
         <div class="join-section">
 
@@ -1243,8 +1416,9 @@ button {
                 READY
             </div>
 
-            <button class="join-button"
-                    onclick="joinGame()">
+            <button
+                class="join-button"
+                onclick="joinGame()">
 
                 JOIN
 
@@ -1255,11 +1429,11 @@ button {
     </div>
 
 
-    <!-- FREE MODE -->
+    <!-- FREE -->
 
     <div class="free-card">
 
-        <div class="free-info">
+        <div>
 
             <div class="free-title">
                 🎮 FREE
@@ -1272,8 +1446,9 @@ button {
         </div>
 
 
-        <button class="open-button"
-                onclick="openFreeGame()">
+        <button
+            class="open-button"
+            onclick="openFreeGame()">
 
             OPEN
 
@@ -1282,12 +1457,13 @@ button {
     </div>
 
 
-    <!-- BOTTOM NAVIGATION -->
+    <!-- BOTTOM -->
 
     <div class="bottom-navigation">
 
-        <button class="nav-item active"
-                onclick="showLobby()">
+        <button
+            class="nav-item active"
+            onclick="showLobby()">
 
             <span class="nav-icon">
                 🎮
@@ -1349,7 +1525,6 @@ button {
                 Choose your cartela
             </div>
 
-
             <div class="selected-display">
 
                 Selected Cartela:
@@ -1360,16 +1535,16 @@ button {
 
             </div>
 
-
-            <div id="cartelaGrid"
-                 class="cartela-grid">
+            <div
+                id="cartelaGrid"
+                class="cartela-grid">
             </div>
 
-
-            <button id="proceedButton"
-                    class="proceed-button"
-                    disabled
-                    onclick="proceedGame()">
+            <button
+                id="proceedButton"
+                class="proceed-button"
+                disabled
+                onclick="proceedGame()">
 
                 PROCEED
 
@@ -1384,15 +1559,13 @@ button {
 
 
 <!-- =====================================================
-     GAME SCREEN
+     GAME
 ===================================================== -->
 
 <div id="gameScreen" class="screen">
 
     <div class="game-container">
 
-
-        <!-- TOP BAR -->
 
         <div class="game-topbar">
 
@@ -1404,24 +1577,18 @@ button {
 
                 <span>
                     Players:
-                    <b id="gamePlayers">
-                        0
-                    </b>
+                    <b id="gamePlayers">0</b>
                 </span>
 
                 <span>
                     Bet:
-                    <b id="gameBet">
-                        10
-                    </b>
+                    <b id="gameBet">10</b>
                 </span>
 
             </div>
 
         </div>
 
-
-        <!-- CURRENT CALL -->
 
         <div class="current-call-card">
 
@@ -1429,8 +1596,9 @@ button {
                 CURRENT CALL
             </div>
 
-            <div id="currentCall"
-                 class="current-call">
+            <div
+                id="currentCall"
+                class="current-call">
 
                 —
 
@@ -1438,8 +1606,6 @@ button {
 
         </div>
 
-
-        <!-- NUMBER BOARD -->
 
         <div class="number-board">
 
@@ -1453,23 +1619,23 @@ button {
 
             </div>
 
-            <div id="numberBoardRows">
-            </div>
+            <div id="numberBoardRows"></div>
 
         </div>
 
-
-        <!-- PLAYER CARD -->
 
         <div class="player-card-container">
 
             <div class="player-card-title">
 
                 <span>
+
                     CARTELA
+
                     <span id="gameCartela">
                         -
                     </span>
+
                 </span>
 
                 <span id="playerName">
@@ -1484,11 +1650,13 @@ button {
                 <thead>
 
                     <tr>
+
                         <th>B</th>
                         <th>I</th>
                         <th>N</th>
                         <th>G</th>
                         <th>O</th>
+
                     </tr>
 
                 </thead>
@@ -1501,24 +1669,24 @@ button {
         </div>
 
 
-        <!-- CONTROLS -->
-
         <div class="game-controls">
 
             <label class="auto-control">
 
-                <input type="checkbox"
-                       id="autoToggle"
-                       onchange="toggleAuto()">
+                <input
+                    type="checkbox"
+                    id="autoToggle"
+                    onchange="toggleAuto()">
 
                 AUTO
 
             </label>
 
 
-            <button id="bingoButton"
-                    class="bingo-button"
-                    onclick="claimBingo()">
+            <button
+                id="bingoButton"
+                class="bingo-button"
+                onclick="claimBingo()">
 
                 BINGO WIN
 
@@ -1533,7 +1701,7 @@ button {
 
 
 <!-- =====================================================
-     RESULT SCREEN
+     RESULT
 ===================================================== -->
 
 <div id="resultScreen" class="screen">
@@ -1544,27 +1712,32 @@ button {
             🏆
         </div>
 
-
         <div class="result-title">
             BINGO WINNER
         </div>
 
+        <div
+            id="winnerName"
+            class="result-name">
 
-        <div id="winnerName"
-             class="result-name">
             Player
+
         </div>
 
+        <div
+            id="winnerPattern"
+            class="result-pattern">
 
-        <div id="winnerPattern"
-             class="result-pattern">
             Pattern
+
         </div>
 
+        <div
+            id="winnerPrize"
+            class="result-prize">
 
-        <div id="winnerPrize"
-             class="result-prize">
             Prize: 0
+
         </div>
 
 
@@ -1575,11 +1748,13 @@ button {
                 <thead>
 
                     <tr>
+
                         <th>B</th>
                         <th>I</th>
                         <th>N</th>
                         <th>G</th>
                         <th>O</th>
+
                     </tr>
 
                 </thead>
@@ -1593,7 +1768,9 @@ button {
 
 
         <div class="result-message">
+
             New game will start after 30 seconds.
+
         </div>
 
     </div>
@@ -1602,11 +1779,7 @@ button {
 
 
 
-<!-- TOAST -->
-
-<div id="toast"
-     class="toast">
-</div>
+<div id="toast" class="toast"></div>
 
 
 
@@ -1667,8 +1840,6 @@ let pollTimer = null;
 
 let manuallyMarked = new Set();
 
-let previousPhase = null;
-
 let freeMode = false;
 
 
@@ -1676,10 +1847,7 @@ let freeMode = false;
    API
 ========================================================= */
 
-async function api(
-    endpoint,
-    options = {}
-) {
+async function api(endpoint, options = {}) {
 
     try {
 
@@ -1702,6 +1870,7 @@ async function api(
                 endpoint,
                 {
                     ...options,
+
                     headers: {
                         ...headers,
                         ...(options.headers || {})
@@ -1734,7 +1903,9 @@ async function api(
 
         };
 
-    } catch (error) {
+    }
+
+    catch (error) {
 
         console.error(
             "API error:",
@@ -1757,7 +1928,7 @@ async function api(
 
 
 /* =========================================================
-   SCREEN CONTROL
+   SCREEN
 ========================================================= */
 
 function showScreen(id) {
@@ -1766,7 +1937,9 @@ function showScreen(id) {
         .querySelectorAll(".screen")
         .forEach(screen => {
 
-            screen.classList.remove("active");
+            screen.classList.remove(
+                "active"
+            );
 
         });
 
@@ -1777,7 +1950,9 @@ function showScreen(id) {
 
     if (screen) {
 
-        screen.classList.add("active");
+        screen.classList.add(
+            "active"
+        );
 
     }
 
@@ -1786,22 +1961,9 @@ function showScreen(id) {
 
 function showLobby() {
 
-    showScreen("lobbyScreen");
-
-}
-
-
-/* =========================================================
-   TELEGRAM BACK
-========================================================= */
-
-function telegramBack() {
-
-    if (tg && tg.close) {
-
-        tg.close();
-
-    }
+    showScreen(
+        "lobbyScreen"
+    );
 
 }
 
@@ -1813,24 +1975,32 @@ function telegramBack() {
 function showToast(message) {
 
     const toast =
-        document.getElementById("toast");
+        document.getElementById(
+            "toast"
+        );
 
-    toast.textContent = message;
+    toast.textContent =
+        message;
 
-    toast.style.display = "block";
+    toast.style.display =
+        "block";
 
 
-    setTimeout(() => {
+    setTimeout(
+        () => {
 
-        toast.style.display = "none";
+            toast.style.display =
+                "none";
 
-    }, 2500);
+        },
+        2500
+    );
 
 }
 
 
 /* =========================================================
-   LOBBY JOIN
+   JOIN
 ========================================================= */
 
 function joinGame() {
@@ -1841,14 +2011,18 @@ function joinGame() {
 
     document.getElementById(
         "selectedCartelaText"
-    ).textContent = "None";
+    ).textContent =
+        "None";
 
     document.getElementById(
         "proceedButton"
-    ).disabled = true;
+    ).disabled =
+        true;
 
 
-    showScreen("selectionScreen");
+    showScreen(
+        "selectionScreen"
+    );
 
 }
 
@@ -1861,20 +2035,24 @@ function openFreeGame() {
 
     document.getElementById(
         "selectedCartelaText"
-    ).textContent = "None";
+    ).textContent =
+        "None";
 
     document.getElementById(
         "proceedButton"
-    ).disabled = true;
+    ).disabled =
+        true;
 
 
-    showScreen("selectionScreen");
+    showScreen(
+        "selectionScreen"
+    );
 
 }
 
 
 /* =========================================================
-   CARTELA BUTTONS
+   CARTELAS
 ========================================================= */
 
 function createCartelaButtons() {
@@ -1898,20 +2076,18 @@ function createCartelaButtons() {
                 "button"
             );
 
-
         button.className =
             "cartela-button";
-
 
         button.textContent =
             i;
 
-
         button.onclick =
             () => selectCartela(i);
 
-
-        grid.appendChild(button);
+        grid.appendChild(
+            button
+        );
 
     }
 
@@ -1924,7 +2100,8 @@ function createCartelaButtons() {
 
 async function selectCartela(number) {
 
-    selectedCartela = number;
+    selectedCartela =
+        number;
 
 
     document
@@ -1958,12 +2135,14 @@ async function selectCartela(number) {
 
     document.getElementById(
         "selectedCartelaText"
-    ).textContent = number;
+    ).textContent =
+        number;
 
 
     document.getElementById(
         "proceedButton"
-    ).disabled = false;
+    ).disabled =
+        false;
 
 
     if (!freeMode) {
@@ -1974,13 +2153,16 @@ async function selectCartela(number) {
                 {
                     method: "POST",
 
-                    body: JSON.stringify({
+                    body:
+                        JSON.stringify({
 
-                        cartela: number,
+                            cartela:
+                                number,
 
-                        name: USER_NAME
+                            name:
+                                USER_NAME
 
-                    })
+                        })
 
                 }
             );
@@ -2025,33 +2207,25 @@ async function proceedGame() {
     }
 
 
-    if (freeMode) {
-
-        showToast(
-            "Free mode will start shortly."
-        );
-
-    }
-
-
     const result =
         await api(
             "/api/proceed",
             {
                 method: "POST",
 
-                body: JSON.stringify({
+                body:
+                    JSON.stringify({
 
-                    cartela:
-                        selectedCartela,
+                        cartela:
+                            selectedCartela,
 
-                    name:
-                        USER_NAME,
+                        name:
+                            USER_NAME,
 
-                    free:
-                        freeMode
+                        free:
+                            freeMode
 
-                })
+                    })
 
             }
         );
@@ -2083,7 +2257,9 @@ async function proceedGame() {
     }
 
 
-    showScreen("gameScreen");
+    showScreen(
+        "gameScreen"
+    );
 
 }
 
@@ -2139,18 +2315,14 @@ function buildNumberBoard() {
                     "div"
                 );
 
-
             cell.className =
                 "number-cell";
-
 
             cell.dataset.number =
                 number;
 
-
             cell.textContent =
                 number;
-
 
             rowElement.appendChild(
                 cell
@@ -2169,7 +2341,7 @@ function buildNumberBoard() {
 
 
 /* =========================================================
-   UPDATE NUMBER BOARD
+   NUMBER BOARD RENDER
 ========================================================= */
 
 function renderNumberBoard(state) {
@@ -2342,7 +2514,9 @@ function renderPlayerBoard(
                     "free"
                 );
 
-            } else {
+            }
+
+            else {
 
                 const number =
                     Number(value);
@@ -2359,12 +2533,6 @@ function renderPlayerBoard(
                 }
 
 
-                const key =
-                    row +
-                    "," +
-                    col;
-
-
                 if (
                     manuallyMarked.has(
                         String(value)
@@ -2376,6 +2544,12 @@ function renderPlayerBoard(
                     );
 
                 }
+
+
+                const key =
+                    row +
+                    "," +
+                    col;
 
 
                 if (
@@ -2390,9 +2564,10 @@ function renderPlayerBoard(
 
 
                 td.onclick =
-                    () => touchPlayerNumber(
-                        value
-                    );
+                    () =>
+                        touchPlayerNumber(
+                            value
+                        );
 
             }
 
@@ -2410,7 +2585,7 @@ function renderPlayerBoard(
 
 
 /* =========================================================
-   MANUAL PLAYER NUMBER
+   MANUAL MARK
 ========================================================= */
 
 function touchPlayerNumber(value) {
@@ -2467,7 +2642,9 @@ function touchPlayerNumber(value) {
 
         manuallyMarked.delete(key);
 
-    } else {
+    }
+
+    else {
 
         manuallyMarked.add(key);
 
@@ -2475,15 +2652,18 @@ function touchPlayerNumber(value) {
 
 
     renderPlayerBoard(
+
         latestState.board,
+
         latestState.called || []
+
     );
 
 }
 
 
 /* =========================================================
-   AUTO TOGGLE
+   AUTO
 ========================================================= */
 
 async function toggleAuto() {
@@ -2507,12 +2687,13 @@ async function toggleAuto() {
             {
                 method: "POST",
 
-                body: JSON.stringify({
+                body:
+                    JSON.stringify({
 
-                    enabled:
-                        enabled
+                        enabled:
+                            enabled
 
-                })
+                    })
 
             }
         );
@@ -2551,7 +2732,7 @@ async function toggleAuto() {
 
 
 /* =========================================================
-   CLAIM BINGO
+   BINGO
 ========================================================= */
 
 async function claimBingo() {
@@ -2585,7 +2766,8 @@ async function claimBingo() {
         );
 
 
-    button.disabled = true;
+    button.disabled =
+        true;
 
     button.textContent =
         "CHECKING...";
@@ -2597,17 +2779,18 @@ async function claimBingo() {
             {
                 method: "POST",
 
-                body: JSON.stringify({
+                body:
+                    JSON.stringify({
 
-                    cartela:
-                        selectedCartela,
+                        cartela:
+                            selectedCartela,
 
-                    marked:
-                        Array.from(
-                            manuallyMarked
-                        )
+                        marked:
+                            Array.from(
+                                manuallyMarked
+                            )
 
-                })
+                    })
 
             }
         );
@@ -2615,7 +2798,8 @@ async function claimBingo() {
 
     if (!result.ok) {
 
-        button.disabled = false;
+        button.disabled =
+            false;
 
         button.textContent =
             "BINGO WIN";
@@ -2634,11 +2818,11 @@ async function claimBingo() {
         result.data.success === false
     ) {
 
-        button.disabled = false;
+        button.disabled =
+            false;
 
         button.textContent =
             "BINGO WIN";
-
 
         showToast(
             result.data.message ||
@@ -2657,7 +2841,7 @@ async function claimBingo() {
 
 
 /* =========================================================
-   GAME RENDER
+   GAME
 ========================================================= */
 
 function renderGame(state) {
@@ -2665,15 +2849,13 @@ function renderGame(state) {
     document.getElementById(
         "gamePlayers"
     ).textContent =
-        state.players ??
-        0;
+        state.players ?? 0;
 
 
     document.getElementById(
         "gameBet"
     ).textContent =
-        state.bet ??
-        10;
+        state.bet ?? 10;
 
 
     document.getElementById(
@@ -2702,7 +2884,8 @@ function renderGame(state) {
 
 
     if (
-        typeof state.auto === "boolean"
+        typeof state.auto ===
+        "boolean"
     ) {
 
         autoToggle.checked =
@@ -2728,17 +2911,12 @@ function renderGame(state) {
         bingoButton.textContent =
             "AUTO ON";
 
-    } else {
+    }
 
-        if (
-            bingoButton.textContent !==
-            "CLAIMED"
-        ) {
+    else {
 
-            bingoButton.textContent =
-                "BINGO WIN";
-
-        }
+        bingoButton.textContent =
+            "BINGO WIN";
 
     }
 
@@ -2763,7 +2941,7 @@ function renderGame(state) {
 
 
 /* =========================================================
-   RESULT BOARD
+   RESULT
 ========================================================= */
 
 function renderResultBoard(
@@ -2856,14 +3034,10 @@ function renderResultBoard(
             }
 
 
-            const key =
-                row +
-                "," +
-                col;
-
-
             if (
-                winningSet.has(key)
+                winningSet.has(
+                    row + "," + col
+                )
             ) {
 
                 td.classList.add(
@@ -2884,10 +3058,6 @@ function renderResultBoard(
 
 }
 
-
-/* =========================================================
-   RESULT
-========================================================= */
 
 function renderResult(state) {
 
@@ -2932,7 +3102,7 @@ function renderResult(state) {
 
 
 /* =========================================================
-   STATE RENDER
+   STATE
 ========================================================= */
 
 function renderState(state) {
@@ -2947,8 +3117,6 @@ function renderState(state) {
     latestState =
         state;
 
-
-    /* Lobby statistics */
 
     if (
         state.players !== undefined
@@ -2976,13 +3144,13 @@ function renderState(state) {
     }
 
 
-    /* Result */
-
     if (
         state.phase === "result"
     ) {
 
-        renderResult(state);
+        renderResult(
+            state
+        );
 
         showScreen(
             "resultScreen"
@@ -2993,13 +3161,13 @@ function renderState(state) {
     }
 
 
-    /* Playing */
-
     if (
         state.phase === "playing"
     ) {
 
-        renderGame(state);
+        renderGame(
+            state
+        );
 
         showScreen(
             "gameScreen"
@@ -3009,25 +3177,23 @@ function renderState(state) {
 
     }
 
-
-    /* Starting */
 
     if (
         state.phase === "starting"
     ) {
 
+        renderGame(
+            state
+        );
+
         showScreen(
             "gameScreen"
         );
-
-        renderGame(state);
 
         return;
 
     }
 
-
-    /* Finished / Selection */
 
     if (
         state.phase === "finished" ||
@@ -3079,7 +3245,7 @@ async function pollState() {
 
 
 /* =========================================================
-   INITIALIZE
+   START
 ========================================================= */
 
 createCartelaButtons();
@@ -3094,7 +3260,7 @@ pollState();
 
 
 /* =========================================================
-   TELEGRAM THEME
+   TELEGRAM
 ========================================================= */
 
 if (tg) {
@@ -3109,7 +3275,9 @@ if (tg) {
             "#c9f0f7"
         );
 
-    } catch (e) {
+    }
+
+    catch (e) {
 
         console.log(
             "Telegram theme setup skipped"
