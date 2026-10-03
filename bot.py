@@ -46,6 +46,16 @@ RESULT_SECONDS = 10
 
 BET_AMOUNT = 10
 
+# ---------------------------------------------------------
+# ONLINE STATUS
+# ---------------------------------------------------------
+#
+# The frontend sends a heartbeat periodically.
+# If the server has not received one for this many seconds,
+# the user is considered offline.
+#
+ONLINE_TIMEOUT_SECONDS = 12
+
 WEB_FOLDER = Path(__file__).resolve().parent / "web"
 
 
@@ -78,6 +88,96 @@ balances = {}
 
 def get_balance(user_id):
     return balances.setdefault(user_id, 1000)
+
+
+# =========================================================
+# SERVER-SIDE ONLINE USERS
+# =========================================================
+#
+# user_id -> last heartbeat time
+#
+# This is intentionally stored in memory for now.
+# It works while the Render instance is running.
+#
+# A future database can make this persistent across restarts
+# and multiple server instances.
+# =========================================================
+
+user_last_seen = {}
+
+
+def mark_user_online(user_id):
+    """
+    Record that this user is currently active.
+    """
+    if not user_id:
+        return
+
+    user_last_seen[user_id] = time.monotonic()
+
+
+def is_user_online(user_id):
+    """
+    Return True if the user's last heartbeat is recent.
+    """
+    if not user_id:
+        return False
+
+    last_seen = user_last_seen.get(user_id)
+
+    if last_seen is None:
+        return False
+
+    return (
+        time.monotonic() - last_seen
+        <= ONLINE_TIMEOUT_SECONDS
+    )
+
+
+def online_user_count():
+    """
+    Return the number of users currently considered online.
+    """
+    now = time.monotonic()
+
+    return sum(
+        1
+        for last_seen in user_last_seen.values()
+        if now - last_seen <= ONLINE_TIMEOUT_SECONDS
+    )
+
+
+def cleanup_offline_users():
+    """
+    Remove users whose heartbeat has expired.
+    """
+    now = time.monotonic()
+
+    offline_users = [
+        user_id
+        for user_id, last_seen in user_last_seen.items()
+        if now - last_seen > ONLINE_TIMEOUT_SECONDS
+    ]
+
+    for user_id in offline_users:
+        user_last_seen.pop(user_id, None)
+
+
+def game_player_online_status():
+    """
+    Return server-side online/offline status for players
+    currently participating in the Bingo game.
+
+    Example:
+        {
+            "12345": True,
+            "67890": False
+        }
+    """
+    return {
+        user_id: is_user_online(user_id)
+        for user_id in game.player_cartelas.keys()
+    }
 
 
 # =========================================================
@@ -468,7 +568,19 @@ class BingoGame:
 
             "creator_amount": self.creator_amount(),
 
+            # -------------------------------------------------
+            # CURRENT USER BALANCE
+            # -------------------------------------------------
             "wallet": get_balance(user_id),
+
+            # -------------------------------------------------
+            # SERVER-SIDE ONLINE STATUS
+            # -------------------------------------------------
+            "online": is_user_online(user_id),
+
+            "online_count": online_user_count(),
+
+            "player_online_status": game_player_online_status(),
 
             "taken": sorted(self.taken_cartelas),
             "taken_cartelas": sorted(self.taken_cartelas),
@@ -693,9 +805,44 @@ def get_api_user_id(request):
     return request.headers.get("X-User-ID") or "demo-user"
 
 
+# =========================================================
+# HEARTBEAT API
+# =========================================================
+
+async def api_heartbeat(request):
+
+    user_id = get_api_user_id(request)
+
+    mark_user_online(user_id)
+
+    cleanup_offline_users()
+
+    async with game.lock:
+
+        state = game.state_for_user(user_id)
+
+    return web.json_response(
+        {
+            "success": True,
+            "online": True,
+            "online_count": online_user_count(),
+            **state,
+        }
+    )
+
+
+# =========================================================
+# STATE
+# =========================================================
+
 async def api_state(request):
 
     user_id = get_api_user_id(request)
+
+    # Reading state also confirms that the client is active.
+    mark_user_online(user_id)
+
+    cleanup_offline_users()
 
     async with game.lock:
 
@@ -706,9 +853,15 @@ async def api_state(request):
     return web.json_response(state)
 
 
+# =========================================================
+# SELECT CARTELA
+# =========================================================
+
 async def api_select(request):
 
     user_id = get_api_user_id(request)
+
+    mark_user_online(user_id)
 
     try:
         data = await request.json()
@@ -825,9 +978,15 @@ async def api_select(request):
         )
 
 
+# =========================================================
+# PROCEED
+# =========================================================
+
 async def api_proceed(request):
 
     user_id = get_api_user_id(request)
+
+    mark_user_online(user_id)
 
     async with game.lock:
 
@@ -892,6 +1051,8 @@ async def api_proceed(request):
 async def api_leave(request):
 
     user_id = get_api_user_id(request)
+
+    mark_user_online(user_id)
 
     async with game.lock:
 
@@ -978,6 +1139,8 @@ async def api_leave(request):
 async def api_claim_bingo(request):
 
     user_id = get_api_user_id(request)
+
+    mark_user_online(user_id)
 
     try:
 
@@ -1240,12 +1403,15 @@ async def handle_index(request):
 
 async def health(request):
 
+    cleanup_offline_users()
+
     return web.json_response(
         {
             "status": "ok",
             "service": "Rodas Friend Zone Bingo",
             "game": game.game_number,
             "phase": game.phase,
+            "online_count": online_user_count(),
         }
     )
 
@@ -1465,6 +1631,9 @@ async def game_loop():
 
         try:
 
+            # Clean online status regularly.
+            cleanup_offline_users()
+
             async with game.lock:
 
                 now = time.monotonic()
@@ -1657,6 +1826,11 @@ app.router.add_post(
 app.router.add_get(
     "/api/state",
     api_state,
+)
+
+app.router.add_post(
+    "/api/heartbeat",
+    api_heartbeat,
 )
 
 app.router.add_post(
