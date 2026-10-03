@@ -2500,6 +2500,87 @@ let pollingTimer = null;
 
 
 /* =========================================================
+   REFRESH SCREEN MEMORY
+========================================================= */
+
+/*
+ * This value remembers which screen the player was viewing
+ * immediately before pressing REFRESH.
+ *
+ * sessionStorage survives a page reload, but is cleared
+ * when the Mini App session is fully closed.
+ */
+
+const REFRESH_SCREEN_KEY =
+    "rodas_bingo_refresh_screen";
+
+
+function rememberRefreshScreen(
+    screen
+) {
+
+    try {
+
+        sessionStorage.setItem(
+            REFRESH_SCREEN_KEY,
+            screen
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Unable to remember refresh screen:",
+            error
+        );
+
+    }
+
+}
+
+
+function getRefreshScreen() {
+
+    try {
+
+        return sessionStorage.getItem(
+            REFRESH_SCREEN_KEY
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Unable to read refresh screen:",
+            error
+        );
+
+        return null;
+
+    }
+
+}
+
+
+function clearRefreshScreen() {
+
+    try {
+
+        sessionStorage.removeItem(
+            REFRESH_SCREEN_KEY
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Unable to clear refresh screen:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
    API
 ========================================================= */
 
@@ -2565,6 +2646,8 @@ async function api(
 ========================================================= */
 
 async function joinLobbyGame() {
+
+    clearRefreshScreen();
 
     inLobby = false;
 
@@ -3157,6 +3240,8 @@ async function proceedToGame() {
             state =
                 result;
 
+            clearRefreshScreen();
+
             render();
 
         } else {
@@ -3200,6 +3285,8 @@ async function proceedToGame() {
 
 async function leaveToLobby() {
 
+    clearRefreshScreen();
+
     try {
 
         const result =
@@ -3236,11 +3323,6 @@ async function leaveToLobby() {
     inLobby =
         true;
 
-
-    /*
-     * Always show the Lobby after pressing
-     * LEAVE on the Cartela Selection screen.
-     */
 
     if (!state) {
 
@@ -3291,8 +3373,20 @@ async function leaveToLobby() {
 function refreshSelection() {
 
     /*
-     * Reload the whole Mini App so the Cartela screen
-     * gets the newest server state.
+     * Remember that the player is on the Cartela
+     * Selection screen BEFORE reloading.
+     */
+
+    rememberRefreshScreen(
+        "selection"
+    );
+
+
+    /*
+     * This reloads the Mini App.
+     *
+     * sessionStorage survives the reload, so initialize()
+     * can restore the Cartela Selection screen.
      */
 
     window.location.reload();
@@ -4057,6 +4151,8 @@ async function claimBingo() {
 
 async function leaveGame() {
 
+    clearRefreshScreen();
+
     try {
 
         const result =
@@ -4093,11 +4189,6 @@ async function leaveGame() {
     inLobby =
         true;
 
-
-    /*
-     * LEAVE from the Bingo game also returns
-     * the player to the Lobby.
-     */
 
     if (!state) {
 
@@ -4146,6 +4237,26 @@ async function leaveGame() {
 ========================================================= */
 
 function refreshGame() {
+
+    /*
+     * Remember that the player is on the Bingo Game
+     * screen BEFORE reloading.
+     */
+
+    rememberRefreshScreen(
+        "game"
+    );
+
+
+    /*
+     * Reload only.
+     *
+     * The server keeps the actual game participation,
+     * Cartela and game state.
+     *
+     * sessionStorage tells initialize() to restore
+     * the Bingo Game screen after the reload.
+     */
 
     window.location.reload();
 
@@ -4524,6 +4635,116 @@ function render() {
 
 
 /* =========================================================
+   RESTORE SCREEN AFTER REFRESH
+========================================================= */
+
+function restoreScreenAfterRefresh() {
+
+    const savedScreen =
+        getRefreshScreen();
+
+
+    /*
+     * Nothing was saved.
+     * Start normally in Lobby.
+     */
+
+    if (!savedScreen) {
+
+        inLobby =
+            true;
+
+        returnedToSelection =
+            false;
+
+        return;
+
+    }
+
+
+    /*
+     * The player refreshed Cartela Selection.
+     */
+
+    if (
+        savedScreen ===
+        "selection"
+    ) {
+
+        inLobby =
+            false;
+
+        returnedToSelection =
+            true;
+
+        proceeded =
+            false;
+
+        return;
+
+    }
+
+
+    /*
+     * The player refreshed Bingo Game.
+     */
+
+    if (
+        savedScreen ===
+        "game"
+    ) {
+
+        inLobby =
+            false;
+
+        returnedToSelection =
+            false;
+
+        /*
+         * Do not force proceeded here.
+         * loadState() gets the real value from
+         * the server.
+         */
+
+        return;
+
+    }
+
+
+    /*
+     * Lobby refresh.
+     */
+
+    if (
+        savedScreen ===
+        "lobby"
+    ) {
+
+        inLobby =
+            true;
+
+        returnedToSelection =
+            false;
+
+        return;
+
+    }
+
+
+    /*
+     * Unknown saved screen.
+     */
+
+    inLobby =
+        true;
+
+    returnedToSelection =
+        false;
+
+}
+
+
+/* =========================================================
    LOAD STATE
 ========================================================= */
 
@@ -4636,6 +4857,33 @@ async function pollState() {
             returnedToSelection
         ) {
 
+            /*
+             * Keep the player on Cartela Selection
+             * while they are there.
+             */
+
+            const serverSelected =
+                data?.selected
+                ??
+                data?.my_cartela
+                ??
+                null;
+
+
+            if (
+                serverSelected !== null
+                &&
+                selectedCartela === null
+            ) {
+
+                selectedCartela =
+                    Number(
+                        serverSelected
+                    );
+
+            }
+
+
             renderSelection();
 
             return;
@@ -4695,22 +4943,113 @@ function startPolling() {
 
 async function initialize() {
 
-    inLobby =
-        true;
+    /*
+     * Check whether this page load happened because
+     * the player pressed REFRESH.
+     */
 
-    returnedToSelection =
-        false;
+    const savedScreen =
+        getRefreshScreen();
 
-    proceeded =
-        false;
 
-    selectedCartela =
-        null;
+    /*
+     * Restore the correct screen before asking
+     * the server for the latest state.
+     */
+
+    restoreScreenAfterRefresh();
+
+
+    /*
+     * If this was a normal new opening, use Lobby.
+     */
+
+    if (!savedScreen) {
+
+        inLobby =
+            true;
+
+        returnedToSelection =
+            false;
+
+        proceeded =
+            false;
+
+        selectedCartela =
+            null;
+
+    }
 
 
     await loadState(
         false
     );
+
+
+    /*
+     * The server state is now loaded.
+     *
+     * We intentionally do NOT reset inLobby here.
+     * This is the important part that prevents
+     * REFRESH from sending the player back to Lobby.
+     */
+
+    if (
+        savedScreen ===
+        "selection"
+    ) {
+
+        /*
+         * Stay on Cartela Selection after refresh.
+         */
+
+        inLobby =
+            false;
+
+        returnedToSelection =
+            true;
+
+        proceeded =
+            false;
+
+    } else if (
+        savedScreen ===
+        "game"
+    ) {
+
+        /*
+         * Stay in the Bingo Game after refresh,
+         * provided the server still has the player
+         * in the active game.
+         */
+
+        inLobby =
+            false;
+
+        returnedToSelection =
+            false;
+
+    } else if (
+        savedScreen ===
+        "lobby"
+    ) {
+
+        inLobby =
+            true;
+
+        returnedToSelection =
+            false;
+
+    }
+
+
+    /*
+     * The saved refresh instruction has now been
+     * consumed. Remove it so a future normal opening
+     * does not accidentally restore an old screen.
+     */
+
+    clearRefreshScreen();
 
 
     render();
