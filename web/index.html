@@ -1286,8 +1286,6 @@ button:disabled {
 
             <div class="game-layout">
 
-                <!-- LEFT -->
-
                 <div class="call-panel">
 
                     <div class="call-board">
@@ -1400,8 +1398,6 @@ button:disabled {
                 </div>
 
 
-                <!-- RIGHT -->
-
                 <div class="right-game">
 
                     <div class="card-panel">
@@ -1508,10 +1504,6 @@ button:disabled {
     </main>
 
 
-    <!-- =====================================================
-         BOTTOM NAV
-    ====================================================== -->
-
     <nav class="bottom-nav">
 
         <div
@@ -1549,10 +1541,6 @@ button:disabled {
 
 </div>
 
-
-<!-- =========================================================
-     WRONG CLAIM
-========================================================= -->
 
 <div
     id="wrongClaimOverlay"
@@ -1647,19 +1635,12 @@ if (!userId) {
 ========================================================= */
 
 let state = null;
-
 let selectedCartela = null;
-
 let proceeded = false;
-
 let autoMode = true;
-
 let manuallyMarked = new Set();
-
 let returnedToSelection = false;
-
 let inLobby = true;
-
 let pollingTimer = null;
 
 
@@ -1725,37 +1706,19 @@ async function api(path, options = {}) {
 function escapeHtml(value) {
 
     return String(value ?? "")
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-        .replace(
-            /</g,
-            "&lt;"
-        )
-        .replace(
-            />/g,
-            "&gt;"
-        )
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-        .replace(
-            /'/g,
-            "&#039;"
-        );
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 
 function formatNumber(value) {
 
-    const number =
-        Number(value);
+    const number = Number(value);
 
-    if (
-        !Number.isFinite(number)
-    ) {
+    if (!Number.isFinite(number)) {
         return "0";
     }
 
@@ -1771,47 +1734,34 @@ function getRemainingSeconds(deadline) {
 
     let end = deadline;
 
-    if (
-        typeof end === "string"
-    ) {
+    if (typeof end === "string") {
 
-        const numeric =
-            Number(end);
+        const numeric = Number(end);
 
-        if (
-            Number.isFinite(numeric)
-        ) {
+        if (Number.isFinite(numeric)) {
 
             end = numeric;
 
         } else {
 
-            const parsed =
-                Date.parse(end);
+            const parsed = Date.parse(end);
 
-            if (
-                Number.isFinite(parsed)
-            ) {
+            if (Number.isFinite(parsed)) {
                 end = parsed;
             }
         }
     }
 
-    if (
-        typeof end === "number"
-    ) {
+    if (typeof end === "number") {
 
-        if (
-            end < 100000000000
-        ) {
+        if (end < 100000000000) {
             end *= 1000;
         }
 
         return Math.max(
             0,
             Math.ceil(
-                (end - Date.now()) /
-                1000
+                (end - Date.now()) / 1000
             )
         );
     }
@@ -1826,24 +1776,12 @@ function getRemainingSeconds(deadline) {
 
 function renderLobby() {
 
-    document.getElementById(
-        "lobbyView"
-    ).style.display = "block";
-
-    document.getElementById(
-        "selectionView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "gameView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "resultView"
-    ).style.display = "none";
+    document.getElementById("lobbyView").style.display = "block";
+    document.getElementById("selectionView").style.display = "none";
+    document.getElementById("gameView").style.display = "none";
+    document.getElementById("resultView").style.display = "none";
 
     renderLobbyBalance();
-
     renderGames();
 
     inLobby = true;
@@ -1911,12 +1849,9 @@ function renderGames() {
                 "READY";
 
             const row =
-                document.createElement(
-                    "div"
-                );
+                document.createElement("div");
 
-            row.className =
-                "game-row";
+            row.className = "game-row";
 
             row.innerHTML = `
 
@@ -1952,10 +1887,7 @@ function renderGames() {
                                 width:
                                 ${Math.min(
                                     100,
-                                    Math.max(
-                                        5,
-                                        players
-                                    )
+                                    Math.max(5, players)
                                 )}%
                             "
                         ></div>
@@ -1999,14 +1931,9 @@ async function joinGame() {
 
     try {
 
-        returnedToSelection =
-            false;
-
-        proceeded =
-            false;
-
-        selectedCartela =
-            null;
+        returnedToSelection = false;
+        proceeded = false;
+        selectedCartela = null;
 
         await api(
             "/api/join",
@@ -2030,33 +1957,20 @@ async function joinGame() {
 
 
 /* =========================================================
-   SELECTION
+   CARTELA SELECTION
 ========================================================= */
 
 function renderSelection() {
 
-    document.getElementById(
-        "lobbyView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "selectionView"
-    ).style.display = "block";
-
-    document.getElementById(
-        "gameView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "resultView"
-    ).style.display = "none";
+    document.getElementById("lobbyView").style.display = "none";
+    document.getElementById("selectionView").style.display = "block";
+    document.getElementById("gameView").style.display = "none";
+    document.getElementById("resultView").style.display = "none";
 
     inLobby = false;
 
     renderSelectionBalance();
-
     renderCartelas();
-
     updateSelectionCountdown();
 }
 
@@ -2102,9 +2016,7 @@ function renderCartelas() {
         current != null &&
         !returnedToSelection
     ) {
-
-        selectedCartela =
-            Number(current);
+        selectedCartela = Number(current);
     }
 
     for (
@@ -2114,9 +2026,7 @@ function renderCartelas() {
     ) {
 
         const button =
-            document.createElement(
-                "button"
-            );
+            document.createElement("button");
 
         button.className =
             "cartela-button";
@@ -2125,25 +2035,17 @@ function renderCartelas() {
             number;
 
         if (
-            Number(selectedCartela) ===
-            number
+            Number(selectedCartela) === number
         ) {
-
-            button.classList.add(
-                "selected"
-            );
+            button.classList.add("selected");
         }
 
         if (
             taken.has(number) &&
-            Number(selectedCartela) !==
-            number
+            Number(selectedCartela) !== number
         ) {
 
-            button.classList.add(
-                "taken"
-            );
-
+            button.classList.add("taken");
             button.disabled = true;
         }
 
@@ -2162,11 +2064,8 @@ function renderCartelas() {
 
 async function selectCartela(number) {
 
-    returnedToSelection =
-        false;
-
-    selectedCartela =
-        Number(number);
+    returnedToSelection = false;
+    selectedCartela = Number(number);
 
     renderCartelas();
 
@@ -2177,8 +2076,7 @@ async function selectCartela(number) {
             {
                 method: "POST",
                 body: JSON.stringify({
-                    cartela:
-                        selectedCartela
+                    cartela: selectedCartela
                 })
             }
         );
@@ -2187,8 +2085,7 @@ async function selectCartela(number) {
 
     } catch (error) {
 
-        selectedCartela =
-            null;
+        selectedCartela = null;
 
         renderCartelas();
 
@@ -2206,8 +2103,7 @@ async function proceedGame() {
         return;
     }
 
-    returnedToSelection =
-        false;
+    returnedToSelection = false;
 
     const button =
         document.getElementById(
@@ -2223,8 +2119,7 @@ async function proceedGame() {
             {
                 method: "POST",
                 body: JSON.stringify({
-                    cartela:
-                        selectedCartela
+                    cartela: selectedCartela
                 })
             }
         );
@@ -2265,9 +2160,7 @@ function updateSelectionCountdown() {
         state?.selectionEnd;
 
     element.textContent =
-        getRemainingSeconds(
-            deadline
-        );
+        getRemainingSeconds(deadline);
 }
 
 
@@ -2289,9 +2182,7 @@ function updateGameCountdown() {
         state?.selectionEnd;
 
     element.textContent =
-        getRemainingSeconds(
-            deadline
-        );
+        getRemainingSeconds(deadline);
 }
 
 
@@ -2301,30 +2192,16 @@ function updateGameCountdown() {
 
 function renderGame() {
 
-    document.getElementById(
-        "lobbyView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "selectionView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "gameView"
-    ).style.display = "block";
-
-    document.getElementById(
-        "resultView"
-    ).style.display = "none";
+    document.getElementById("lobbyView").style.display = "none";
+    document.getElementById("selectionView").style.display = "none";
+    document.getElementById("gameView").style.display = "block";
+    document.getElementById("resultView").style.display = "none";
 
     inLobby = false;
 
     renderGameStats();
-
     renderGamePhase();
-
     renderCallBoard();
-
     renderPlayerCard();
 }
 
@@ -2391,19 +2268,15 @@ function renderGamePhase() {
             "playerLeftBox"
         );
 
-    startingBox.style.display =
-        "none";
-
-    leftBox.style.display =
-        "none";
+    startingBox.style.display = "none";
+    leftBox.style.display = "none";
 
     if (
         phase === "selection" ||
         phase === "starting"
     ) {
 
-        startingBox.style.display =
-            "block";
+        startingBox.style.display = "block";
 
         updateGameCountdown();
 
@@ -2415,8 +2288,7 @@ function renderGamePhase() {
         state?.player_left === true
     ) {
 
-        leftBox.style.display =
-            "block";
+        leftBox.style.display = "block";
     }
 }
 
@@ -2436,10 +2308,7 @@ function getCalledNumbers() {
 }
 
 
-function createCallNumbers(
-    start,
-    end
-) {
+function createCallNumbers(start, end) {
 
     const called =
         getCalledNumbers();
@@ -2470,45 +2339,20 @@ function createCallNumbers(
 
 function renderCallBoard() {
 
-    document.getElementById(
-        "bCalls"
-    ).innerHTML =
-        createCallNumbers(
-            1,
-            15
-        );
+    document.getElementById("bCalls").innerHTML =
+        createCallNumbers(1, 15);
 
-    document.getElementById(
-        "iCalls"
-    ).innerHTML =
-        createCallNumbers(
-            16,
-            30
-        );
+    document.getElementById("iCalls").innerHTML =
+        createCallNumbers(16, 30);
 
-    document.getElementById(
-        "nCalls"
-    ).innerHTML =
-        createCallNumbers(
-            31,
-            45
-        );
+    document.getElementById("nCalls").innerHTML =
+        createCallNumbers(31, 45);
 
-    document.getElementById(
-        "gCalls"
-    ).innerHTML =
-        createCallNumbers(
-            46,
-            60
-        );
+    document.getElementById("gCalls").innerHTML =
+        createCallNumbers(46, 60);
 
-    document.getElementById(
-        "oCalls"
-    ).innerHTML =
-        createCallNumbers(
-            61,
-            75
-        );
+    document.getElementById("oCalls").innerHTML =
+        createCallNumbers(61, 75);
 
     const current =
         state?.current_number ??
@@ -2521,9 +2365,7 @@ function renderCallBoard() {
 
     const last =
         called.length
-            ? called[
-                called.length - 1
-              ]
+            ? called[called.length - 1]
             : null;
 
     document.getElementById(
@@ -2557,8 +2399,7 @@ function renderAutoToggle() {
 
 function toggleAuto() {
 
-    autoMode =
-        !autoMode;
+    autoMode = !autoMode;
 
     renderAutoToggle();
 }
@@ -2586,25 +2427,15 @@ function normalizeCard(card) {
         return null;
     }
 
-    if (
-        Array.isArray(card)
-    ) {
+    if (Array.isArray(card)) {
         return card;
     }
 
-    if (
-        Array.isArray(
-            card?.numbers
-        )
-    ) {
+    if (Array.isArray(card?.numbers)) {
         return card.numbers;
     }
 
-    if (
-        Array.isArray(
-            card?.grid
-        )
-    ) {
+    if (Array.isArray(card?.grid)) {
         return card.grid;
     }
 
@@ -2653,13 +2484,11 @@ function renderPlayerCard() {
             <thead>
 
                 <tr>
-
                     <th>B</th>
                     <th>I</th>
                     <th>N</th>
                     <th>G</th>
                     <th>O</th>
-
                 </tr>
 
             </thead>
@@ -2698,9 +2527,7 @@ function renderPlayerCard() {
                 `${row}-${col}`;
 
             const isManual =
-                manuallyMarked.has(
-                    key
-                );
+                manuallyMarked.has(key);
 
             let classes = "";
 
@@ -2742,8 +2569,7 @@ function renderPlayerCard() {
         </table>
     `;
 
-    container.innerHTML =
-        html;
+    container.innerHTML = html;
 
     const cardNumber =
         state?.cartela ??
@@ -2759,10 +2585,7 @@ function renderPlayerCard() {
 }
 
 
-function toggleManualMark(
-    row,
-    col
-) {
+function toggleManualMark(row, col) {
 
     if (
         row === 2 &&
@@ -2777,11 +2600,8 @@ function toggleManualMark(
     if (
         manuallyMarked.has(key)
     ) {
-
         manuallyMarked.delete(key);
-
     } else {
-
         manuallyMarked.add(key);
     }
 
@@ -2858,8 +2678,7 @@ async function claimBingo() {
 
     } finally {
 
-        button.disabled =
-            false;
+        button.disabled = false;
     }
 }
 
@@ -2868,9 +2687,7 @@ async function claimBingo() {
    WRONG CLAIM
 ========================================================= */
 
-function showWrongClaim(
-    message
-) {
+function showWrongClaim(message) {
 
     document.getElementById(
         "wrongClaimMessage"
@@ -2879,9 +2696,7 @@ function showWrongClaim(
 
     document.getElementById(
         "wrongClaimOverlay"
-    ).classList.add(
-        "show"
-    );
+    ).classList.add("show");
 }
 
 
@@ -2889,45 +2704,33 @@ function closeWrongClaim() {
 
     document.getElementById(
         "wrongClaimOverlay"
-    ).classList.remove(
-        "show"
-    );
+    ).classList.remove("show");
 }
 
 
 /* =========================================================
-   LEAVE GAME
-   IMPORTANT:
-   The player leaves ONLY themselves.
-   The game continues for everyone else.
-   The player is immediately returned to
-   the Cartela Selection screen.
+   LEAVE
+   Player leaves only themselves.
+   The shared game continues for other players.
+   Player returns to Cartela Selection.
 ========================================================= */
 
 async function leaveGame() {
 
+    returnedToSelection = true;
+    proceeded = false;
+    selectedCartela = null;
+    manuallyMarked.clear();
+
+    /*
+     * Show Cartela Selection immediately.
+     * This prevents the player from remaining
+     * on the Bingo screen while the request runs.
+     */
+    renderSelection();
+
     try {
 
-        /*
-         * Immediately tell the frontend that
-         * this player is going back to cartela
-         * selection.
-         */
-        returnedToSelection =
-            true;
-
-        proceeded =
-            false;
-
-        selectedCartela =
-            null;
-
-        manuallyMarked.clear();
-
-        /*
-         * Ask backend to remove this player
-         * from the current game.
-         */
         await api(
             "/api/leave",
             {
@@ -2936,41 +2739,31 @@ async function leaveGame() {
         );
 
         /*
-         * Get the newest game state.
-         * The game itself is NOT stopped.
+         * Refresh the state after leaving so
+         * the freed cartela and other players'
+         * information are updated.
          */
         await loadState(false);
 
         /*
-         * Force this player's screen to
-         * Cartela Selection immediately.
+         * Always keep this player on the
+         * Cartela Selection screen.
          */
         renderSelection();
 
     } catch (error) {
 
         /*
-         * Even if the state refresh has a problem,
-         * don't leave the player stuck on the
-         * Bingo screen.
+         * Even if the request has an error,
+         * keep the player on Cartela Selection
+         * instead of returning them to Bingo.
          */
-        returnedToSelection =
-            true;
-
-        proceeded =
-            false;
-
-        selectedCartela =
-            null;
-
-        manuallyMarked.clear();
-
-        renderSelection();
-
         console.error(
             "Leave error:",
             error
         );
+
+        renderSelection();
     }
 }
 
@@ -2993,26 +2786,21 @@ function renderResult() {
 
     document.getElementById(
         "lobbyView"
-    ).style.display =
-        "none";
+    ).style.display = "none";
 
     document.getElementById(
         "selectionView"
-    ).style.display =
-        "none";
+    ).style.display = "none";
 
     document.getElementById(
         "gameView"
-    ).style.display =
-        "none";
+    ).style.display = "none";
 
     document.getElementById(
         "resultView"
-    ).style.display =
-        "block";
+    ).style.display = "block";
 
-    inLobby =
-        false;
+    inLobby = false;
 
     const winner =
         state?.winner || {};
@@ -3064,8 +2852,7 @@ function renderResultCard() {
 
     if (!card) {
 
-        container.innerHTML =
-            "";
+        container.innerHTML = "";
 
         return;
     }
@@ -3147,8 +2934,7 @@ function renderResultCard() {
         </table>
     `;
 
-    container.innerHTML =
-        html;
+    container.innerHTML = html;
 }
 
 
@@ -3170,31 +2956,24 @@ function openPractice() {
 
 function goLobby() {
 
-    returnedToSelection =
-        false;
-
-    inLobby =
-        true;
+    returnedToSelection = false;
+    inLobby = true;
 
     document.getElementById(
         "lobbyView"
-    ).style.display =
-        "block";
+    ).style.display = "block";
 
     document.getElementById(
         "selectionView"
-    ).style.display =
-        "none";
+    ).style.display = "none";
 
     document.getElementById(
         "gameView"
-    ).style.display =
-        "none";
+    ).style.display = "none";
 
     document.getElementById(
         "resultView"
-    ).style.display =
-        "none";
+    ).style.display = "none";
 
     renderLobby();
 }
@@ -3202,15 +2981,9 @@ function goLobby() {
 
 function backToLobby() {
 
-    selectedCartela =
-        null;
-
-    proceeded =
-        false;
-
-    returnedToSelection =
-        false;
-
+    selectedCartela = null;
+    proceeded = false;
+    returnedToSelection = false;
     manuallyMarked.clear();
 
     goLobby();
@@ -3221,9 +2994,7 @@ function backToLobby() {
    STATE
 ========================================================= */
 
-async function loadState(
-    renderNow = true
-) {
+async function loadState(renderNow = true) {
 
     try {
 
@@ -3235,20 +3006,16 @@ async function loadState(
                 }
             );
 
-        state =
-            newState;
+        state = newState;
 
         /*
          * IMPORTANT:
          *
-         * When the player has pressed LEAVE,
-         * do NOT restore their Bingo screen
-         * just because the shared game is still
-         * in "playing".
+         * Once this player has left,
+         * polling must never put this player
+         * back into the Bingo screen.
          */
-        if (
-            returnedToSelection
-        ) {
+        if (returnedToSelection) {
 
             if (renderNow) {
                 renderSelection();
@@ -3289,24 +3056,17 @@ async function loadState(
 function render() {
 
     /*
-     * HIGHEST PRIORITY:
-     *
-     * If this player has left the game,
-     * always show Cartela Selection.
-     *
-     * This is independent from the shared
-     * game phase, so the game can continue
-     * for the other players.
+     * Highest priority:
+     * player has left, therefore show
+     * Cartela Selection regardless of
+     * the shared game phase.
      */
-    if (
-        returnedToSelection
-    ) {
+    if (returnedToSelection) {
 
         renderSelection();
 
         return;
     }
-
 
     if (!state) {
 
@@ -3315,10 +3075,8 @@ function render() {
         return;
     }
 
-
     const phase =
         state.phase;
-
 
     if (
         state.finished === true ||
@@ -3331,7 +3089,6 @@ function render() {
         return;
     }
 
-
     if (
         phase === "selection" &&
         !proceeded
@@ -3341,7 +3098,6 @@ function render() {
 
         return;
     }
-
 
     if (
         phase === "selection" &&
@@ -3354,7 +3110,6 @@ function render() {
         return;
     }
 
-
     if (
         phase === "starting" ||
         phase === "playing"
@@ -3365,14 +3120,12 @@ function render() {
         return;
     }
 
-
     if (inLobby) {
 
         renderLobby();
 
         return;
     }
-
 
     renderSelection();
 }
@@ -3397,7 +3150,6 @@ async function pollState() {
         ) {
 
             updateSelectionCountdown();
-
             updateGameCountdown();
         }
     }
