@@ -47,10 +47,6 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* =========================================================
-   APP
-========================================================= */
-
 #app {
     width: 100%;
     min-height: 100vh;
@@ -58,7 +54,7 @@ button:disabled {
 }
 
 /* =========================================================
-   TOP HEADER
+   HEADER
 ========================================================= */
 
 .top-header {
@@ -107,7 +103,6 @@ button:disabled {
 
 .header-menu {
     font-size: 30px;
-    transform: translateY(-2px);
 }
 
 /* =========================================================
@@ -124,10 +119,6 @@ button:disabled {
 .view {
     width: 100%;
 }
-
-/* =========================================================
-   COMMON PANELS
-========================================================= */
 
 .panel {
     background: #ffffff;
@@ -372,7 +363,7 @@ button:disabled {
 }
 
 /* =========================================================
-   SELECTION
+   CARTELA SELECTION
 ========================================================= */
 
 .selection-header {
@@ -1019,6 +1010,10 @@ button:disabled {
 
 <div id="app">
 
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
     <div class="top-header">
 
         <div class="header-left">
@@ -1035,6 +1030,7 @@ button:disabled {
         </div>
 
     </div>
+
 
     <main id="content">
 
@@ -1053,7 +1049,12 @@ button:disabled {
 
                 <div class="balance-box">
                     💰 Balance:
-                    <span id="lobbyBalance" class="balance-value">0</span>
+                    <span
+                        id="lobbyBalance"
+                        class="balance-value"
+                    >
+                        0
+                    </span>
                 </div>
 
             </div>
@@ -1077,17 +1078,25 @@ button:disabled {
             <div class="free-panel">
 
                 <div>
-                    <div class="free-title">FREE</div>
-                    <div class="free-sub">Practice</div>
+                    <div class="free-title">
+                        FREE
+                    </div>
+
+                    <div class="free-sub">
+                        Practice
+                    </div>
                 </div>
 
                 <div>
+
                     <div class="practice-title">
                         ▶ Practice Mode
                     </div>
+
                     <div class="practice-sub">
                         No Real Money
                     </div>
+
                 </div>
 
                 <button
@@ -1131,6 +1140,7 @@ button:disabled {
 
             </div>
 
+
             <div class="wallet-row">
 
                 <div class="wallet-label">
@@ -1146,10 +1156,12 @@ button:disabled {
 
             </div>
 
+
             <div
                 id="cartelaGrid"
                 class="cartela-grid"
             ></div>
+
 
             <div class="selection-actions">
 
@@ -1186,43 +1198,66 @@ button:disabled {
             <div class="game-stats">
 
                 <div class="stat-box">
-                    <div class="stat-label">Players</div>
+
+                    <div class="stat-label">
+                        Players
+                    </div>
+
                     <div
                         id="playersValue"
                         class="stat-value"
                     >
                         0
                     </div>
+
                 </div>
 
+
                 <div class="stat-box">
-                    <div class="stat-label">Derash</div>
+
+                    <div class="stat-label">
+                        Derash
+                    </div>
+
                     <div
                         id="derashValue"
                         class="stat-value"
                     >
                         0
                     </div>
+
                 </div>
 
+
                 <div class="stat-box">
-                    <div class="stat-label">Bet</div>
+
+                    <div class="stat-label">
+                        Bet
+                    </div>
+
                     <div
                         id="betValue"
                         class="stat-value"
                     >
                         10
                     </div>
+
                 </div>
 
+
                 <div class="stat-box">
-                    <div class="stat-label">Call Count</div>
+
+                    <div class="stat-label">
+                        Call Count
+                    </div>
+
                     <div
                         id="callCountValue"
                         class="stat-value"
                     >
                         0
                     </div>
+
                 </div>
 
             </div>
@@ -1234,7 +1269,9 @@ button:disabled {
                 style="display:none;"
             >
                 Game starts in
-                <span id="gameCountdown">30</span>
+                <span id="gameCountdown">
+                    30
+                </span>
             </div>
 
 
@@ -1249,7 +1286,7 @@ button:disabled {
 
             <div class="game-layout">
 
-                <!-- LEFT SIDE -->
+                <!-- LEFT -->
 
                 <div class="call-panel">
 
@@ -1258,28 +1295,57 @@ button:disabled {
                         <div class="call-columns">
 
                             <div class="call-column">
-                                <div class="call-letter b">B</div>
+
+                                <div class="call-letter b">
+                                    B
+                                </div>
+
                                 <div id="bCalls"></div>
+
                             </div>
 
+
                             <div class="call-column">
-                                <div class="call-letter i">I</div>
+
+                                <div class="call-letter i">
+                                    I
+                                </div>
+
                                 <div id="iCalls"></div>
+
                             </div>
 
+
                             <div class="call-column">
-                                <div class="call-letter n">N</div>
+
+                                <div class="call-letter n">
+                                    N
+                                </div>
+
                                 <div id="nCalls"></div>
+
                             </div>
 
+
                             <div class="call-column">
-                                <div class="call-letter g">G</div>
+
+                                <div class="call-letter g">
+                                    G
+                                </div>
+
                                 <div id="gCalls"></div>
+
                             </div>
 
+
                             <div class="call-column">
-                                <div class="call-letter o">O</div>
+
+                                <div class="call-letter o">
+                                    O
+                                </div>
+
                                 <div id="oCalls"></div>
+
                             </div>
 
                         </div>
@@ -1306,7 +1372,9 @@ button:disabled {
                     <div class="last-call">
 
                         LAST CALL:
-                        <span id="lastCall">—</span>
+                        <span id="lastCall">
+                            —
+                        </span>
 
                     </div>
 
@@ -1316,7 +1384,9 @@ button:disabled {
                         onclick="toggleAuto()"
                     >
 
-                        <span>Auto</span>
+                        <span>
+                            Auto
+                        </span>
 
                         <div
                             id="autoToggle"
@@ -1330,7 +1400,7 @@ button:disabled {
                 </div>
 
 
-                <!-- RIGHT SIDE -->
+                <!-- RIGHT -->
 
                 <div class="right-game">
 
@@ -1449,18 +1519,30 @@ button:disabled {
             class="nav-item active"
             onclick="goLobby()"
         >
-            <span class="nav-icon">🎮</span>
+            <span class="nav-icon">
+                🎮
+            </span>
             Game
         </div>
 
         <div class="nav-item">
-            <span class="nav-icon">🏆</span>
+
+            <span class="nav-icon">
+                🏆
+            </span>
+
             Scores
+
         </div>
 
         <div class="nav-item">
-            <span class="nav-icon">👤</span>
+
+            <span class="nav-icon">
+                👤
+            </span>
+
             Profile
+
         </div>
 
     </nav>
@@ -1469,7 +1551,7 @@ button:disabled {
 
 
 <!-- =========================================================
-     WRONG CLAIM OVERLAY
+     WRONG CLAIM
 ========================================================= -->
 
 <div
@@ -1508,9 +1590,11 @@ button:disabled {
    TELEGRAM
 ========================================================= */
 
-const tg = window.Telegram && window.Telegram.WebApp
-    ? window.Telegram.WebApp
-    : null;
+const tg =
+    window.Telegram &&
+    window.Telegram.WebApp
+        ? window.Telegram.WebApp
+        : null;
 
 if (tg) {
     tg.ready();
@@ -1524,16 +1608,36 @@ if (tg) {
 
 let userId = null;
 
-if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-    userId = String(tg.initDataUnsafe.user.id);
+if (
+    tg &&
+    tg.initDataUnsafe &&
+    tg.initDataUnsafe.user
+) {
+    userId =
+        String(
+            tg.initDataUnsafe.user.id
+        );
 }
 
 if (!userId) {
-    userId = localStorage.getItem("rfz_user_id");
+
+    userId =
+        localStorage.getItem(
+            "rfz_user_id"
+        );
 
     if (!userId) {
-        userId = "web_" + Math.random().toString(36).slice(2);
-        localStorage.setItem("rfz_user_id", userId);
+
+        userId =
+            "web_" +
+            Math.random()
+                .toString(36)
+                .slice(2);
+
+        localStorage.setItem(
+            "rfz_user_id",
+            userId
+        );
     }
 }
 
@@ -1543,11 +1647,17 @@ if (!userId) {
 ========================================================= */
 
 let state = null;
+
 let selectedCartela = null;
+
 let proceeded = false;
+
 let autoMode = true;
+
 let manuallyMarked = new Set();
+
 let returnedToSelection = false;
+
 let inLobby = true;
 
 let pollingTimer = null;
@@ -1565,19 +1675,28 @@ async function api(path, options = {}) {
     };
 
     if (options.headers) {
-        Object.assign(headers, options.headers);
+        Object.assign(
+            headers,
+            options.headers
+        );
     }
 
     try {
 
-        const response = await fetch(path, {
-            ...options,
-            headers
-        });
+        const response =
+            await fetch(
+                path,
+                {
+                    ...options,
+                    headers
+                }
+            );
 
-        const data = await response.json();
+        const data =
+            await response.json();
 
         if (!response.ok) {
+
             throw new Error(
                 data.error ||
                 data.message ||
@@ -1589,7 +1708,10 @@ async function api(path, options = {}) {
 
     } catch (error) {
 
-        console.error("API error:", error);
+        console.error(
+            "API error:",
+            error
+        );
 
         throw error;
     }
@@ -1603,19 +1725,37 @@ async function api(path, options = {}) {
 function escapeHtml(value) {
 
     return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 }
 
 
 function formatNumber(value) {
 
-    const number = Number(value);
+    const number =
+        Number(value);
 
-    if (!Number.isFinite(number)) {
+    if (
+        !Number.isFinite(number)
+    ) {
         return "0";
     }
 
@@ -1631,30 +1771,48 @@ function getRemainingSeconds(deadline) {
 
     let end = deadline;
 
-    if (typeof end === "string") {
+    if (
+        typeof end === "string"
+    ) {
 
-        const numeric = Number(end);
+        const numeric =
+            Number(end);
 
-        if (Number.isFinite(numeric)) {
+        if (
+            Number.isFinite(numeric)
+        ) {
+
             end = numeric;
-        } else {
-            const parsed = Date.parse(end);
 
-            if (Number.isFinite(parsed)) {
+        } else {
+
+            const parsed =
+                Date.parse(end);
+
+            if (
+                Number.isFinite(parsed)
+            ) {
                 end = parsed;
             }
         }
     }
 
-    if (typeof end === "number") {
+    if (
+        typeof end === "number"
+    ) {
 
-        if (end < 100000000000) {
+        if (
+            end < 100000000000
+        ) {
             end *= 1000;
         }
 
         return Math.max(
             0,
-            Math.ceil((end - Date.now()) / 1000)
+            Math.ceil(
+                (end - Date.now()) /
+                1000
+            )
         );
     }
 
@@ -1668,12 +1826,24 @@ function getRemainingSeconds(deadline) {
 
 function renderLobby() {
 
-    document.getElementById("lobbyView").style.display = "block";
-    document.getElementById("selectionView").style.display = "none";
-    document.getElementById("gameView").style.display = "none";
-    document.getElementById("resultView").style.display = "none";
+    document.getElementById(
+        "lobbyView"
+    ).style.display = "block";
+
+    document.getElementById(
+        "selectionView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "gameView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "resultView"
+    ).style.display = "none";
 
     renderLobbyBalance();
+
     renderGames();
 
     inLobby = true;
@@ -1688,14 +1858,19 @@ function renderLobbyBalance() {
         state?.user_balance ??
         0;
 
-    document.getElementById("lobbyBalance").textContent =
+    document.getElementById(
+        "lobbyBalance"
+    ).textContent =
         formatNumber(value);
 }
 
 
 function renderGames() {
 
-    const list = document.getElementById("gamesList");
+    const list =
+        document.getElementById(
+            "gamesList"
+        );
 
     list.innerHTML = "";
 
@@ -1712,91 +1887,107 @@ function renderGames() {
         state?.lobby_games ||
         games;
 
-    gameData.forEach((game, index) => {
+    gameData.forEach(
+        (game) => {
 
-        const bet =
-            game.bet ??
-            game.amount ??
-            10;
+            const bet =
+                game.bet ??
+                game.amount ??
+                10;
 
-        const prize =
-            game.prize ??
-            game.derash ??
-            game.win ??
-            0;
+            const prize =
+                game.prize ??
+                game.derash ??
+                game.win ??
+                0;
 
-        const players =
-            game.players ??
-            game.player_count ??
-            0;
+            const players =
+                game.players ??
+                game.player_count ??
+                0;
 
-        const status =
-            game.status ??
-            "READY";
+            const status =
+                game.status ??
+                "READY";
 
-        const row = document.createElement("div");
+            const row =
+                document.createElement(
+                    "div"
+                );
 
-        row.className = "game-row";
+            row.className =
+                "game-row";
 
-        row.innerHTML = `
+            row.innerHTML = `
 
-            <div class="bet-box">
+                <div class="bet-box">
 
-                <div class="bet-number">
-                    ${escapeHtml(bet)}
-                </div>
+                    <div class="bet-number">
+                        ${escapeHtml(bet)}
+                    </div>
 
-                <div class="bet-label">
-                    BIRR
-                </div>
-
-            </div>
-
-            <div class="game-middle">
-
-                <div class="game-prize">
-                    🏆 ${formatNumber(prize)}
-                </div>
-
-                <div class="game-players">
-                    ${formatNumber(players)} players
-                </div>
-
-                <div class="game-progress">
-
-                    <div
-                        class="game-progress-fill"
-                        style="width:${Math.min(100, Math.max(5, players))}%"
-                    ></div>
-
-                    <div class="game-progress-text">
-                        BINGO GAME
+                    <div class="bet-label">
+                        BIRR
                     </div>
 
                 </div>
 
-            </div>
 
-            <div class="game-actions">
+                <div class="game-middle">
 
-                <div class="status-badge">
-                    ${escapeHtml(status)}
+                    <div class="game-prize">
+                        🏆 ${formatNumber(prize)}
+                    </div>
+
+                    <div class="game-players">
+                        ${formatNumber(players)}
+                        players
+                    </div>
+
+                    <div class="game-progress">
+
+                        <div
+                            class="game-progress-fill"
+                            style="
+                                width:
+                                ${Math.min(
+                                    100,
+                                    Math.max(
+                                        5,
+                                        players
+                                    )
+                                )}%
+                            "
+                        ></div>
+
+                        <div class="game-progress-text">
+                            BINGO GAME
+                        </div>
+
+                    </div>
+
                 </div>
 
-                <button
-                    class="join-button"
-                    onclick="joinGame()"
-                >
-                    JOIN
-                </button>
 
-            </div>
+                <div class="game-actions">
 
-        `;
+                    <div class="status-badge">
+                        ${escapeHtml(status)}
+                    </div>
 
-        list.appendChild(row);
+                    <button
+                        class="join-button"
+                        onclick="joinGame()"
+                    >
+                        JOIN
+                    </button>
 
-    });
+                </div>
+            `;
+
+            list.appendChild(row);
+        }
+    );
 }
 
 
@@ -1808,9 +1999,21 @@ async function joinGame() {
 
     try {
 
-        await api("/api/join", {
-            method: "POST"
-        });
+        returnedToSelection =
+            false;
+
+        proceeded =
+            false;
+
+        selectedCartela =
+            null;
+
+        await api(
+            "/api/join",
+            {
+                method: "POST"
+            }
+        );
 
         inLobby = false;
 
@@ -1818,8 +2021,10 @@ async function joinGame() {
 
     } catch (error) {
 
-        alert(error.message || "Unable to join game.");
-
+        alert(
+            error.message ||
+            "Unable to join game."
+        );
     }
 }
 
@@ -1830,15 +2035,28 @@ async function joinGame() {
 
 function renderSelection() {
 
-    document.getElementById("lobbyView").style.display = "none";
-    document.getElementById("selectionView").style.display = "block";
-    document.getElementById("gameView").style.display = "none";
-    document.getElementById("resultView").style.display = "none";
+    document.getElementById(
+        "lobbyView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "selectionView"
+    ).style.display = "block";
+
+    document.getElementById(
+        "gameView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "resultView"
+    ).style.display = "none";
 
     inLobby = false;
 
     renderSelectionBalance();
+
     renderCartelas();
+
     updateSelectionCountdown();
 }
 
@@ -1851,83 +2069,126 @@ function renderSelectionBalance() {
         state?.user_balance ??
         0;
 
-    document.getElementById("selectionBalance").textContent =
+    document.getElementById(
+        "selectionBalance"
+    ).textContent =
         formatNumber(value);
 }
 
 
 function renderCartelas() {
 
-    const grid = document.getElementById("cartelaGrid");
+    const grid =
+        document.getElementById(
+            "cartelaGrid"
+        );
 
     grid.innerHTML = "";
 
-    const taken = new Set(
-        state?.taken_cartelas ||
-        state?.takenCartelas ||
-        state?.occupied_cartelas ||
-        []
-    );
+    const taken =
+        new Set(
+            state?.taken_cartelas ||
+            state?.takenCartelas ||
+            state?.occupied_cartelas ||
+            []
+        );
 
     const current =
         state?.cartela ??
         state?.player_cartela ??
         selectedCartela;
 
-    if (current != null) {
-        selectedCartela = Number(current);
+    if (
+        current != null &&
+        !returnedToSelection
+    ) {
+
+        selectedCartela =
+            Number(current);
     }
 
-    for (let number = 1; number <= 100; number++) {
+    for (
+        let number = 1;
+        number <= 100;
+        number++
+    ) {
 
-        const button = document.createElement("button");
+        const button =
+            document.createElement(
+                "button"
+            );
 
-        button.className = "cartela-button";
+        button.className =
+            "cartela-button";
 
-        button.textContent = number;
+        button.textContent =
+            number;
 
-        if (Number(selectedCartela) === number) {
-            button.classList.add("selected");
+        if (
+            Number(selectedCartela) ===
+            number
+        ) {
+
+            button.classList.add(
+                "selected"
+            );
         }
 
         if (
             taken.has(number) &&
-            Number(selectedCartela) !== number
+            Number(selectedCartela) !==
+            number
         ) {
-            button.classList.add("taken");
+
+            button.classList.add(
+                "taken"
+            );
+
             button.disabled = true;
         }
 
-        button.onclick = () => selectCartela(number);
+        button.onclick =
+            () => selectCartela(number);
 
         grid.appendChild(button);
     }
 
-    document.getElementById("proceedButton").disabled =
+    document.getElementById(
+        "proceedButton"
+    ).disabled =
         !selectedCartela;
 }
 
 
 async function selectCartela(number) {
 
-    selectedCartela = Number(number);
+    returnedToSelection =
+        false;
+
+    selectedCartela =
+        Number(number);
 
     renderCartelas();
 
     try {
 
-        await api("/api/select", {
-            method: "POST",
-            body: JSON.stringify({
-                cartela: selectedCartela
-            })
-        });
+        await api(
+            "/api/select",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    cartela:
+                        selectedCartela
+                })
+            }
+        );
 
         await loadState(false);
 
     } catch (error) {
 
-        selectedCartela = null;
+        selectedCartela =
+            null;
 
         renderCartelas();
 
@@ -1945,19 +2206,28 @@ async function proceedGame() {
         return;
     }
 
+    returnedToSelection =
+        false;
+
     const button =
-        document.getElementById("proceedButton");
+        document.getElementById(
+            "proceedButton"
+        );
 
     button.disabled = true;
 
     try {
 
-        await api("/api/proceed", {
-            method: "POST",
-            body: JSON.stringify({
-                cartela: selectedCartela
-            })
-        });
+        await api(
+            "/api/proceed",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    cartela:
+                        selectedCartela
+                })
+            }
+        );
 
         proceeded = true;
 
@@ -1982,7 +2252,9 @@ async function proceedGame() {
 function updateSelectionCountdown() {
 
     const element =
-        document.getElementById("selectionCountdown");
+        document.getElementById(
+            "selectionCountdown"
+        );
 
     if (!element) {
         return;
@@ -1992,17 +2264,19 @@ function updateSelectionCountdown() {
         state?.selection_end ??
         state?.selectionEnd;
 
-    const seconds =
-        getRemainingSeconds(deadline);
-
-    element.textContent = seconds;
+    element.textContent =
+        getRemainingSeconds(
+            deadline
+        );
 }
 
 
 function updateGameCountdown() {
 
     const element =
-        document.getElementById("gameCountdown");
+        document.getElementById(
+            "gameCountdown"
+        );
 
     if (!element) {
         return;
@@ -2014,10 +2288,10 @@ function updateGameCountdown() {
         state?.selection_end ??
         state?.selectionEnd;
 
-    const seconds =
-        getRemainingSeconds(deadline);
-
-    element.textContent = seconds;
+    element.textContent =
+        getRemainingSeconds(
+            deadline
+        );
 }
 
 
@@ -2027,16 +2301,30 @@ function updateGameCountdown() {
 
 function renderGame() {
 
-    document.getElementById("lobbyView").style.display = "none";
-    document.getElementById("selectionView").style.display = "none";
-    document.getElementById("gameView").style.display = "block";
-    document.getElementById("resultView").style.display = "none";
+    document.getElementById(
+        "lobbyView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "selectionView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "gameView"
+    ).style.display = "block";
+
+    document.getElementById(
+        "resultView"
+    ).style.display = "none";
 
     inLobby = false;
 
     renderGameStats();
+
     renderGamePhase();
+
     renderCallBoard();
+
     renderPlayerCard();
 }
 
@@ -2065,16 +2353,24 @@ function renderGameStats() {
         state?.called_numbers?.length ??
         0;
 
-    document.getElementById("playersValue").textContent =
+    document.getElementById(
+        "playersValue"
+    ).textContent =
         formatNumber(players);
 
-    document.getElementById("derashValue").textContent =
+    document.getElementById(
+        "derashValue"
+    ).textContent =
         formatNumber(derash);
 
-    document.getElementById("betValue").textContent =
+    document.getElementById(
+        "betValue"
+    ).textContent =
         formatNumber(bet);
 
-    document.getElementById("callCountValue").textContent =
+    document.getElementById(
+        "callCountValue"
+    ).textContent =
         formatNumber(callCount);
 }
 
@@ -2086,20 +2382,28 @@ function renderGamePhase() {
         "playing";
 
     const startingBox =
-        document.getElementById("startingBox");
+        document.getElementById(
+            "startingBox"
+        );
 
     const leftBox =
-        document.getElementById("playerLeftBox");
+        document.getElementById(
+            "playerLeftBox"
+        );
 
-    startingBox.style.display = "none";
-    leftBox.style.display = "none";
+    startingBox.style.display =
+        "none";
+
+    leftBox.style.display =
+        "none";
 
     if (
         phase === "selection" ||
         phase === "starting"
     ) {
 
-        startingBox.style.display = "block";
+        startingBox.style.display =
+            "block";
 
         updateGameCountdown();
 
@@ -2111,7 +2415,8 @@ function renderGamePhase() {
         state?.player_left === true
     ) {
 
-        leftBox.style.display = "block";
+        leftBox.style.display =
+            "block";
     }
 }
 
@@ -2123,18 +2428,29 @@ function renderGamePhase() {
 function getCalledNumbers() {
 
     return new Set(
-        (state?.called_numbers || []).map(Number)
+        (
+            state?.called_numbers ||
+            []
+        ).map(Number)
     );
 }
 
 
-function createCallNumbers(start, end) {
+function createCallNumbers(
+    start,
+    end
+) {
 
-    const called = getCalledNumbers();
+    const called =
+        getCalledNumbers();
 
     let html = "";
 
-    for (let number = start; number <= end; number++) {
+    for (
+        let number = start;
+        number <= end;
+        number++
+    ) {
 
         const active =
             called.has(number)
@@ -2154,20 +2470,45 @@ function createCallNumbers(start, end) {
 
 function renderCallBoard() {
 
-    document.getElementById("bCalls").innerHTML =
-        createCallNumbers(1, 15);
+    document.getElementById(
+        "bCalls"
+    ).innerHTML =
+        createCallNumbers(
+            1,
+            15
+        );
 
-    document.getElementById("iCalls").innerHTML =
-        createCallNumbers(16, 30);
+    document.getElementById(
+        "iCalls"
+    ).innerHTML =
+        createCallNumbers(
+            16,
+            30
+        );
 
-    document.getElementById("nCalls").innerHTML =
-        createCallNumbers(31, 45);
+    document.getElementById(
+        "nCalls"
+    ).innerHTML =
+        createCallNumbers(
+            31,
+            45
+        );
 
-    document.getElementById("gCalls").innerHTML =
-        createCallNumbers(46, 60);
+    document.getElementById(
+        "gCalls"
+    ).innerHTML =
+        createCallNumbers(
+            46,
+            60
+        );
 
-    document.getElementById("oCalls").innerHTML =
-        createCallNumbers(61, 75);
+    document.getElementById(
+        "oCalls"
+    ).innerHTML =
+        createCallNumbers(
+            61,
+            75
+        );
 
     const current =
         state?.current_number ??
@@ -2175,17 +2516,24 @@ function renderCallBoard() {
         null;
 
     const called =
-        state?.called_numbers || [];
+        state?.called_numbers ||
+        [];
 
     const last =
         called.length
-            ? called[called.length - 1]
+            ? called[
+                called.length - 1
+              ]
             : null;
 
-    document.getElementById("currentCall").textContent =
+    document.getElementById(
+        "currentCall"
+    ).textContent =
         current ?? "—";
 
-    document.getElementById("lastCall").textContent =
+    document.getElementById(
+        "lastCall"
+    ).textContent =
         last ?? "—";
 
     renderAutoToggle();
@@ -2195,7 +2543,9 @@ function renderCallBoard() {
 function renderAutoToggle() {
 
     const toggle =
-        document.getElementById("autoToggle");
+        document.getElementById(
+            "autoToggle"
+        );
 
     if (autoMode) {
         toggle.classList.add("on");
@@ -2207,7 +2557,8 @@ function renderAutoToggle() {
 
 function toggleAuto() {
 
-    autoMode = !autoMode;
+    autoMode =
+        !autoMode;
 
     renderAutoToggle();
 }
@@ -2235,15 +2586,25 @@ function normalizeCard(card) {
         return null;
     }
 
-    if (Array.isArray(card)) {
+    if (
+        Array.isArray(card)
+    ) {
         return card;
     }
 
-    if (Array.isArray(card?.numbers)) {
+    if (
+        Array.isArray(
+            card?.numbers
+        )
+    ) {
         return card.numbers;
     }
 
-    if (Array.isArray(card?.grid)) {
+    if (
+        Array.isArray(
+            card?.grid
+        )
+    ) {
         return card.grid;
     }
 
@@ -2254,10 +2615,14 @@ function normalizeCard(card) {
 function renderPlayerCard() {
 
     const container =
-        document.getElementById("playerCard");
+        document.getElementById(
+            "playerCard"
+        );
 
     const card =
-        normalizeCard(getPlayerCard());
+        normalizeCard(
+            getPlayerCard()
+        );
 
     const called =
         getCalledNumbers();
@@ -2286,23 +2651,35 @@ function renderPlayerCard() {
         <table class="bingo-card">
 
             <thead>
+
                 <tr>
+
                     <th>B</th>
                     <th>I</th>
                     <th>N</th>
                     <th>G</th>
                     <th>O</th>
+
                 </tr>
+
             </thead>
 
             <tbody>
     `;
 
-    for (let row = 0; row < 5; row++) {
+    for (
+        let row = 0;
+        row < 5;
+        row++
+    ) {
 
         html += "<tr>";
 
-        for (let col = 0; col < 5; col++) {
+        for (
+            let col = 0;
+            col < 5;
+            col++
+        ) {
 
             const value =
                 card?.[row]?.[col];
@@ -2313,17 +2690,24 @@ function renderPlayerCard() {
 
             const isCalled =
                 !isFree &&
-                called.has(Number(value));
+                called.has(
+                    Number(value)
+                );
 
             const key =
                 `${row}-${col}`;
 
             const isManual =
-                manuallyMarked.has(key);
+                manuallyMarked.has(
+                    key
+                );
 
             let classes = "";
 
-            if (isCalled || isManual) {
+            if (
+                isCalled ||
+                isManual
+            ) {
                 classes += " marked";
             }
 
@@ -2334,9 +2718,18 @@ function renderPlayerCard() {
             html += `
                 <td
                     class="${classes.trim()}"
-                    onclick="toggleManualMark(${row}, ${col})"
+                    onclick="
+                        toggleManualMark(
+                            ${row},
+                            ${col}
+                        )
+                    "
                 >
-                    ${isFree ? "FREE" : escapeHtml(value)}
+                    ${
+                        isFree
+                            ? "FREE"
+                            : escapeHtml(value)
+                    }
                 </td>
             `;
         }
@@ -2349,7 +2742,8 @@ function renderPlayerCard() {
         </table>
     `;
 
-    container.innerHTML = html;
+    container.innerHTML =
+        html;
 
     const cardNumber =
         state?.cartela ??
@@ -2357,23 +2751,37 @@ function renderPlayerCard() {
         selectedCartela ??
         "—";
 
-    document.getElementById("cardNumber").textContent =
-        "Card Number: " + cardNumber;
+    document.getElementById(
+        "cardNumber"
+    ).textContent =
+        "Card Number: " +
+        cardNumber;
 }
 
 
-function toggleManualMark(row, col) {
+function toggleManualMark(
+    row,
+    col
+) {
 
-    if (row === 2 && col === 2) {
+    if (
+        row === 2 &&
+        col === 2
+    ) {
         return;
     }
 
     const key =
         `${row}-${col}`;
 
-    if (manuallyMarked.has(key)) {
+    if (
+        manuallyMarked.has(key)
+    ) {
+
         manuallyMarked.delete(key);
+
     } else {
+
         manuallyMarked.add(key);
     }
 
@@ -2388,31 +2796,40 @@ function toggleManualMark(row, col) {
 async function claimBingo() {
 
     const button =
-        document.getElementById("bingoWinButton");
+        document.getElementById(
+            "bingoWinButton"
+        );
 
     button.disabled = true;
 
     try {
 
         const marks =
-            Array.from(manuallyMarked).map(key => {
+            Array.from(
+                manuallyMarked
+            ).map(
+                key => {
 
-                const parts = key.split("-");
+                    const parts =
+                        key.split("-");
 
-                return [
-                    Number(parts[0]),
-                    Number(parts[1])
-                ];
-
-            });
+                    return [
+                        Number(parts[0]),
+                        Number(parts[1])
+                    ];
+                }
+            );
 
         const response =
-            await api("/api/claim-bingo", {
-                method: "POST",
-                body: JSON.stringify({
-                    marks
-                })
-            });
+            await api(
+                "/api/claim-bingo",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        marks
+                    })
+                }
+            );
 
         if (
             response &&
@@ -2430,7 +2847,6 @@ async function claimBingo() {
         } else {
 
             await loadState();
-
         }
 
     } catch (error) {
@@ -2442,7 +2858,8 @@ async function claimBingo() {
 
     } finally {
 
-        button.disabled = false;
+        button.disabled =
+            false;
     }
 }
 
@@ -2451,15 +2868,20 @@ async function claimBingo() {
    WRONG CLAIM
 ========================================================= */
 
-function showWrongClaim(message) {
+function showWrongClaim(
+    message
+) {
 
     document.getElementById(
         "wrongClaimMessage"
-    ).textContent = message;
+    ).textContent =
+        message;
 
     document.getElementById(
         "wrongClaimOverlay"
-    ).classList.add("show");
+    ).classList.add(
+        "show"
+    );
 }
 
 
@@ -2467,34 +2889,87 @@ function closeWrongClaim() {
 
     document.getElementById(
         "wrongClaimOverlay"
-    ).classList.remove("show");
+    ).classList.remove(
+        "show"
+    );
 }
 
 
 /* =========================================================
-   LEAVE
+   LEAVE GAME
+   IMPORTANT:
+   The player leaves ONLY themselves.
+   The game continues for everyone else.
+   The player is immediately returned to
+   the Cartela Selection screen.
 ========================================================= */
 
 async function leaveGame() {
 
     try {
 
-        await api("/api/leave", {
-            method: "POST"
-        });
+        /*
+         * Immediately tell the frontend that
+         * this player is going back to cartela
+         * selection.
+         */
+        returnedToSelection =
+            true;
 
-        selectedCartela = null;
-        proceeded = false;
+        proceeded =
+            false;
+
+        selectedCartela =
+            null;
+
         manuallyMarked.clear();
-        returnedToSelection = true;
 
-        await loadState();
+        /*
+         * Ask backend to remove this player
+         * from the current game.
+         */
+        await api(
+            "/api/leave",
+            {
+                method: "POST"
+            }
+        );
+
+        /*
+         * Get the newest game state.
+         * The game itself is NOT stopped.
+         */
+        await loadState(false);
+
+        /*
+         * Force this player's screen to
+         * Cartela Selection immediately.
+         */
+        renderSelection();
 
     } catch (error) {
 
-        alert(
-            error.message ||
-            "Unable to leave the game."
+        /*
+         * Even if the state refresh has a problem,
+         * don't leave the player stuck on the
+         * Bingo screen.
+         */
+        returnedToSelection =
+            true;
+
+        proceeded =
+            false;
+
+        selectedCartela =
+            null;
+
+        manuallyMarked.clear();
+
+        renderSelection();
+
+        console.error(
+            "Leave error:",
+            error
         );
     }
 }
@@ -2516,12 +2991,28 @@ function refreshGame() {
 
 function renderResult() {
 
-    document.getElementById("lobbyView").style.display = "none";
-    document.getElementById("selectionView").style.display = "none";
-    document.getElementById("gameView").style.display = "none";
-    document.getElementById("resultView").style.display = "block";
+    document.getElementById(
+        "lobbyView"
+    ).style.display =
+        "none";
 
-    inLobby = false;
+    document.getElementById(
+        "selectionView"
+    ).style.display =
+        "none";
+
+    document.getElementById(
+        "gameView"
+    ).style.display =
+        "none";
+
+    document.getElementById(
+        "resultView"
+    ).style.display =
+        "block";
+
+    inLobby =
+        false;
 
     const winner =
         state?.winner || {};
@@ -2531,7 +3022,10 @@ function renderResult() {
         winner.username ||
         winner.user_name ||
         (
-            String(winner.user_id || "") === String(userId)
+            String(
+                winner.user_id || ""
+            ) ===
+            String(userId)
                 ? "You"
                 : "Winner"
         );
@@ -2559,14 +3053,19 @@ function renderResult() {
 function renderResultCard() {
 
     const container =
-        document.getElementById("resultCard");
+        document.getElementById(
+            "resultCard"
+        );
 
     const card =
-        normalizeCard(getPlayerCard());
+        normalizeCard(
+            getPlayerCard()
+        );
 
     if (!card) {
 
-        container.innerHTML = "";
+        container.innerHTML =
+            "";
 
         return;
     }
@@ -2578,6 +3077,7 @@ function renderResultCard() {
         <table class="bingo-card">
 
             <thead>
+
                 <tr>
                     <th>B</th>
                     <th>I</th>
@@ -2585,16 +3085,25 @@ function renderResultCard() {
                     <th>G</th>
                     <th>O</th>
                 </tr>
+
             </thead>
 
             <tbody>
     `;
 
-    for (let row = 0; row < 5; row++) {
+    for (
+        let row = 0;
+        row < 5;
+        row++
+    ) {
 
         html += "<tr>";
 
-        for (let col = 0; col < 5; col++) {
+        for (
+            let col = 0;
+            col < 5;
+            col++
+        ) {
 
             const value =
                 card?.[row]?.[col];
@@ -2605,7 +3114,9 @@ function renderResultCard() {
 
             const isCalled =
                 !isFree &&
-                called.has(Number(value));
+                called.has(
+                    Number(value)
+                );
 
             let classes = "";
 
@@ -2619,7 +3130,11 @@ function renderResultCard() {
 
             html += `
                 <td class="${classes.trim()}">
-                    ${isFree ? "FREE" : escapeHtml(value)}
+                    ${
+                        isFree
+                            ? "FREE"
+                            : escapeHtml(value)
+                    }
                 </td>
             `;
         }
@@ -2632,7 +3147,8 @@ function renderResultCard() {
         </table>
     `;
 
-    container.innerHTML = html;
+    container.innerHTML =
+        html;
 }
 
 
@@ -2654,12 +3170,31 @@ function openPractice() {
 
 function goLobby() {
 
-    inLobby = true;
+    returnedToSelection =
+        false;
 
-    document.getElementById("lobbyView").style.display = "block";
-    document.getElementById("selectionView").style.display = "none";
-    document.getElementById("gameView").style.display = "none";
-    document.getElementById("resultView").style.display = "none";
+    inLobby =
+        true;
+
+    document.getElementById(
+        "lobbyView"
+    ).style.display =
+        "block";
+
+    document.getElementById(
+        "selectionView"
+    ).style.display =
+        "none";
+
+    document.getElementById(
+        "gameView"
+    ).style.display =
+        "none";
+
+    document.getElementById(
+        "resultView"
+    ).style.display =
+        "none";
 
     renderLobby();
 }
@@ -2667,8 +3202,15 @@ function goLobby() {
 
 function backToLobby() {
 
-    selectedCartela = null;
-    proceeded = false;
+    selectedCartela =
+        null;
+
+    proceeded =
+        false;
+
+    returnedToSelection =
+        false;
+
     manuallyMarked.clear();
 
     goLobby();
@@ -2679,23 +3221,51 @@ function backToLobby() {
    STATE
 ========================================================= */
 
-async function loadState(renderNow = true) {
+async function loadState(
+    renderNow = true
+) {
 
     try {
 
         const newState =
-            await api("/api/state", {
-                method: "GET"
-            });
+            await api(
+                "/api/state",
+                {
+                    method: "GET"
+                }
+            );
 
-        state = newState;
+        state =
+            newState;
+
+        /*
+         * IMPORTANT:
+         *
+         * When the player has pressed LEAVE,
+         * do NOT restore their Bingo screen
+         * just because the shared game is still
+         * in "playing".
+         */
+        if (
+            returnedToSelection
+        ) {
+
+            if (renderNow) {
+                renderSelection();
+            }
+
+            return;
+        }
 
         if (
             state?.cartela != null &&
             !selectedCartela
         ) {
+
             selectedCartela =
-                Number(state.cartela);
+                Number(
+                    state.cartela
+                );
         }
 
         if (renderNow) {
@@ -2718,6 +3288,26 @@ async function loadState(renderNow = true) {
 
 function render() {
 
+    /*
+     * HIGHEST PRIORITY:
+     *
+     * If this player has left the game,
+     * always show Cartela Selection.
+     *
+     * This is independent from the shared
+     * game phase, so the game can continue
+     * for the other players.
+     */
+    if (
+        returnedToSelection
+    ) {
+
+        renderSelection();
+
+        return;
+    }
+
+
     if (!state) {
 
         renderLobby();
@@ -2725,8 +3315,10 @@ function render() {
         return;
     }
 
+
     const phase =
         state.phase;
+
 
     if (
         state.finished === true ||
@@ -2739,6 +3331,7 @@ function render() {
         return;
     }
 
+
     if (
         phase === "selection" &&
         !proceeded
@@ -2748,6 +3341,7 @@ function render() {
 
         return;
     }
+
 
     if (
         phase === "selection" &&
@@ -2760,6 +3354,7 @@ function render() {
         return;
     }
 
+
     if (
         phase === "starting" ||
         phase === "playing"
@@ -2770,12 +3365,14 @@ function render() {
         return;
     }
 
+
     if (inLobby) {
 
         renderLobby();
 
         return;
     }
+
 
     renderSelection();
 }
@@ -2800,6 +3397,7 @@ async function pollState() {
         ) {
 
             updateSelectionCountdown();
+
             updateGameCountdown();
         }
     }
@@ -2809,7 +3407,10 @@ async function pollState() {
 function startPolling() {
 
     if (pollingTimer) {
-        clearInterval(pollingTimer);
+
+        clearInterval(
+            pollingTimer
+        );
     }
 
     pollingTimer =
@@ -2821,7 +3422,7 @@ function startPolling() {
 
 
 /* =========================================================
-   START
+   START APP
 ========================================================= */
 
 async function startApp() {
