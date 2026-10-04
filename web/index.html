@@ -52,7 +52,44 @@
   .nav div{flex:1;text-align:center;font-weight:600;font-size:11px;color:#777;cursor:pointer}
   .nav div i{display:block;font-style:normal;font-size:22px;margin-bottom:1px}
   .nav div.on{color:var(--title)}
-  .pane{padding:18px 8px;font-size:15px;font-weight:600;color:var(--title);line-height:1.6}
+
+  /* history */
+  .hs{background:#ab87c8;border-radius:18px;padding:12px;color:#fff}
+  .hs-top{display:flex;justify-content:center;align-items:center;gap:10px;margin:4px 0 12px;font-size:20px;font-weight:700}
+  .hs-top button{width:34px;height:34px;border-radius:50%;background:transparent;color:#fff;font-size:20px}
+  .hs-seg{display:grid;grid-template-columns:1fr 1fr;background:#bb9fd3;border-radius:14px;padding:4px;margin-bottom:10px}
+  .hs-seg span{text-align:center;padding:10px 0;border-radius:11px;font-weight:600;color:#fff;cursor:pointer}
+  .hs-seg span.on{background:#fff;color:#a883c6}
+  .hs-chips{display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
+  .hs-chips span{padding:8px 12px;border-radius:12px;background:#bb9fd3;font-weight:600;font-size:13px;cursor:pointer}
+  .hs-chips span.on{background:#fff;color:#a883c6}
+  .hs-search{width:100%;border:0;border-radius:14px;background:#bb9fd3;color:#fff;padding:13px 14px;font-size:14px;margin-bottom:10px;outline:none}
+  .hs-search::placeholder{color:#efe6f8}
+  .hs-item{display:flex;align-items:center;gap:12px;background:#bd9fd5;border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer}
+  .hs-item .tr{font-size:32px;flex:none}
+  .hs-item .mid{flex:1;min-width:0}
+  .hs-item .mid b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hs-item .mid small{display:block;color:#f1e7fa;font-size:12px;line-height:1.5}
+  .hs-item .rt{text-align:right;font-size:12px;flex:none}
+  .hs-pill{display:inline-block;margin-top:6px;background:#22c55e;border-radius:12px;padding:5px 10px;font-weight:700;font-size:13px}
+  .hs-pill.no{background:#7d6a92}
+  .hs-empty{text-align:center;padding:26px 0;color:#f1e7fa}
+
+  /* game detail (opens when a history card is tapped) */
+  #gd{position:fixed;inset:0;background:#ab87c8;z-index:8;overflow-y:auto;padding:12px 14px 34px;color:#fff;max-width:520px;margin:0 auto}
+  #gd .back{color:#fff}
+  #gd h2{text-align:center;margin:8px 0 16px;font-size:22px}
+  .balls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px}
+  .balls i{width:38px;height:38px;border-radius:50%;font-style:normal;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px}
+  .bl1{background:#ff9800}.bl2{background:#4cc72b}.bl3{background:#4a8fd6}.bl4{background:#ea4545}.bl5{background:#7b3fa0}
+  .fair{background:#8b6aa6;border-radius:16px;padding:14px}
+  .fair h3{text-align:center;margin:0 0 4px;font-size:18px}
+  .fl{display:flex;justify-content:space-between;align-items:center;color:#d8c8e6;font-size:13px;margin:12px 0 6px;font-weight:600}
+  .fb{background:#5f4a72;border-radius:12px;padding:12px;font-size:13px;word-break:break-all;line-height:1.5}
+  .fb.v{max-height:110px;overflow:auto}
+  .cp{width:auto;height:28px;padding:0 10px;background:#5f4a72;border-radius:8px;font-size:12px}
+  .fair p{color:#d8c8e6;font-size:12px;line-height:1.5;margin:14px 0 0}
+  .gdate{text-align:center;margin-top:16px;color:#f1e7fa}
 
   /* profile */
   .pf{background:#0e1628;border-radius:18px;padding:12px;color:#e8edf7}
@@ -134,7 +171,7 @@
   .winb{background:#f39c1b;margin-bottom:8px;height:44px;font-size:15px}
   .btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .leave{background:#e8212f;height:38px}.rf{background:#1565d8;height:38px}
-  #toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:9}
+  #toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:12}
   #toast.show{opacity:1}
 </style>
 </head>
@@ -156,7 +193,24 @@
       <button id="openFree">OPEN</button>
     </div>
   </div>
-  <div id="tab-scores" class="pane" hidden>🏆 Scores are coming soon.</div>
+
+  <div id="tab-history" hidden>
+    <div class="hs">
+      <div class="hs-top"><span>Bingo History</span><button id="hsRef">↻</button></div>
+      <div class="hs-seg">
+        <span class="on" data-s="recent">Recent Games</span>
+        <span data-s="mine">My Games</span>
+      </div>
+      <div class="hs-chips">
+        <span class="on" data-b="10">10 Birr</span>
+        <span data-b="20">20 Birr</span>
+        <span data-b="50">50 Birr</span>
+        <span data-b="100">100 Birr</span>
+      </div>
+      <input class="hs-search" id="hsQ" type="search" placeholder="🔍  Search by game number...">
+      <div id="hsList"></div>
+    </div>
+  </div>
 
   <div id="tab-profile" hidden>
     <div class="pf">
@@ -181,9 +235,31 @@
 
   <div class="nav">
     <div class="on" data-t="game"><i>🎮</i>Game</div>
-    <div data-t="scores"><i>🏆</i>Scores</div>
+    <div data-t="history"><i>🕘</i>History</div>
     <div data-t="profile"><i>👤</i>Profile</div>
   </div>
+</div>
+
+<!-- ============ GAME DETAIL (from History) ============ -->
+<div id="gd" hidden>
+  <button class="back" id="gdBack">← Back</button>
+  <h2>Called Numbers</h2>
+  <div class="balls" id="gdBalls"></div>
+  <div class="fair">
+    <h3>GAME FAIRNESS</h3>
+    <div class="fl"><span>Secret Key:</span><button class="cp" data-c="gdSecret">Copy</button></div>
+    <div class="fb" id="gdSecret"></div>
+    <div class="fl"><span>Pre-generated Numbers:</span><button class="cp" data-c="gdSeq">Copy</button></div>
+    <div class="fb" id="gdSeq"></div>
+    <div class="fl"><span>Game Hash:</span><button class="cp" data-c="gdHash">Copy</button></div>
+    <div class="fb" id="gdHash"></div>
+    <p><b style="color:#fff">How to verify:</b><br>
+       Compute the SHA-256 hash of the Verification String below using any online SHA-256 tool.
+       The result will exactly match the Game Hash.</p>
+    <div class="fl"><span>Verification String:</span><button class="cp" data-c="gdVer">Copy</button></div>
+    <div class="fb v" id="gdVer"></div>
+  </div>
+  <div class="gdate" id="gdDate"></div>
 </div>
 
 <!-- ============ PICK CARTELA ============ -->
@@ -259,6 +335,7 @@ const st = { card:null, cardNo:0, called:[], marked:new Set() };
 let R = 0;                                   // room (bet) the player is looking at
 let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
 let P = null, pfTab = "ov";                  // profile data + selected profile tab
+const H = { scope:"recent", bet:10, q:"" };  // history filters
 
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
@@ -348,6 +425,59 @@ async function loadProfile(){
   catch(e){ console.error(e); }
 }
 
+/* ---------- history ---------- */
+const dDate = t => new Date(t*1000).toLocaleDateString();
+const dTime = t => new Date(t*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+
+function drawHistory(list){
+  if(!list.length){
+    $("hsList").innerHTML = `<div class="hs-empty">No games found</div>`;
+    return;
+  }
+  $("hsList").innerHTML = list.map(g=>{
+    const noWin = !g.winner;
+    let pill;
+    if(H.scope==="mine") pill = g.won ? `<span class="hs-pill">${g.prize} birr</span>` : `<span class="hs-pill no">Lost</span>`;
+    else pill = noWin ? `<span class="hs-pill no">0 birr</span>` : `<span class="hs-pill">${g.prize} birr</span>`;
+    return `<div class="hs-item" data-id="${g.id}"><div class="tr">🏆</div>`+
+      `<div class="mid"><b>👤 ${noWin?"No winner":esc(g.winner)}</b>`+
+      `<small>Game #${g.id} · Refs: ${esc(g.ref)}</small>`+
+      `<small>${g.board?"Board #"+g.board:"—"}</small>`+
+      `<small>${g.calls} calls</small></div>`+
+      `<div class="rt">📅 ${dDate(g.t)}<br>🕒 ${dTime(g.t)}<br>${pill}</div></div>`;
+  }).join("");
+}
+async function loadHistory(){
+  try{
+    const r = await get(`/history?scope=${H.scope}&bet=${H.bet}&q=${encodeURIComponent(H.q)}`);
+    drawHistory(r.list||[]);
+  }catch(e){ console.error(e); }
+}
+async function openGame(id){
+  try{
+    const d = await get("/game?id="+id);
+    if(d.error){ toast("Game not found"); return; }
+    $("gdBalls").innerHTML = d.called.map(n=>`<i class="bl${Math.floor((n-1)/15)+1}">${n}</i>`).join("");
+    $("gdSecret").textContent = d.secret;
+    $("gdSeq").textContent = d.seq.join(",");
+    $("gdHash").textContent = d.hash;
+    $("gdVer").textContent = d.secret+":"+d.seq.join(",");
+    $("gdDate").textContent = "📅 "+dDate(d.t)+"   🕒 "+dTime(d.t);
+    $("gd").hidden = false;
+    $("gd").scrollTop = 0;
+  }catch(e){ toast("Can't reach server"); }
+}
+function copyText(t){
+  const fallback = () => {
+    const a=document.createElement("textarea"); a.value=t; document.body.appendChild(a); a.select();
+    try{ document.execCommand("copy"); toast("Copied"); }catch(e){ toast("Copy failed"); }
+    a.remove();
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(()=>toast("Copied"), fallback);
+  } else fallback();
+}
+
 /* ---------- render from server state ---------- */
 function render(){
   if(!S) return;
@@ -414,11 +544,30 @@ async function sync(){
 /* ---------- events ---------- */
 document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
   document.querySelectorAll(".nav div").forEach(x=>x.classList.toggle("on",x===d));
-  ["game","scores","profile"].forEach(t=>$("tab-"+t).hidden = t!==d.dataset.t);
+  ["game","history","profile"].forEach(t=>$("tab-"+t).hidden = t!==d.dataset.t);
   if(d.dataset.t==="profile") loadProfile();
+  if(d.dataset.t==="history") loadHistory();
 });
 document.querySelectorAll(".pf-tabs span").forEach(s=>s.onclick=()=>{ pfTab=s.dataset.p; drawProfile(); });
 $("pfRef").onclick=loadProfile;
+
+document.querySelectorAll(".hs-seg span").forEach(s=>s.onclick=()=>{
+  H.scope=s.dataset.s;
+  document.querySelectorAll(".hs-seg span").forEach(x=>x.classList.toggle("on",x===s));
+  loadHistory();
+});
+document.querySelectorAll(".hs-chips span").forEach(s=>s.onclick=()=>{
+  H.bet=+s.dataset.b;
+  document.querySelectorAll(".hs-chips span").forEach(x=>x.classList.toggle("on",x===s));
+  loadHistory();
+});
+let hsT=null;
+$("hsQ").oninput=()=>{ H.q=$("hsQ").value; clearTimeout(hsT); hsT=setTimeout(loadHistory,300); };
+$("hsRef").onclick=loadHistory;
+$("hsList").onclick=e=>{ const it=e.target.closest(".hs-item"); if(it) openGame(+it.dataset.id); };
+$("gdBack").onclick=()=>$("gd").hidden=true;
+$("gd").onclick=e=>{ const b=e.target.closest(".cp"); if(b) copyText($(b.dataset.c).textContent); };
+
 $("openFree").onclick=()=>toast("Practice mode is coming soon");
 
 $("roomList").onclick=e=>{
