@@ -54,6 +54,32 @@
   .nav div.on{color:var(--title)}
   .pane{padding:18px 8px;font-size:15px;font-weight:600;color:var(--title);line-height:1.6}
 
+  /* profile */
+  .pf{background:#0e1628;border-radius:18px;padding:12px;color:#e8edf7}
+  .pf-top{display:flex;justify-content:space-between;align-items:center;margin:0 2px 10px;font-weight:700;font-size:15px}
+  .pf-ref{width:34px;height:34px;border-radius:50%;background:#131f38;border:1px solid #243457;color:#f5c518;font-size:16px}
+  .pf-head{display:flex;align-items:center;gap:10px;background:#131f38;border:1px solid #1f2d4d;border-radius:16px;padding:12px;margin-bottom:8px}
+  .pf-av{width:46px;height:46px;border-radius:50%;background:#12404a;color:#22d3b6;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;flex:none}
+  .pf-who{flex:1;min-width:0}
+  .pf-who b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pf-who small,.pf-bal small{color:#8b98b3;font-size:11px}
+  .pf-bal{text-align:right}.pf-bal b{display:block;font-size:16px}
+  .pf-stats{display:grid;grid-template-columns:1fr 1fr;background:#131f38;border:1px solid #1f2d4d;border-radius:16px;padding:14px 4px;margin-bottom:8px;text-align:center}
+  .pf-stats b{display:block;font-size:22px}
+  .pf-stats .gold b{color:#f5b50a}
+  .pf-stats small{color:#8b98b3;font-size:12px}
+  .pf-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;background:#131f38;border:1px solid #1f2d4d;border-radius:30px;padding:4px;margin-bottom:8px;text-align:center}
+  .pf-tabs span{padding:9px 0;border-radius:24px;font-weight:700;font-size:13px;color:#8b98b3;cursor:pointer}
+  .pf-tabs span.on{background:linear-gradient(90deg,#f5b50a,#ffd24a);color:#2b2000}
+  .pf-card{background:#131f38;border:1px solid #1f2d4d;border-radius:16px;padding:4px 14px;min-height:80px}
+  .pf-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid #1f2d4d;font-size:14px}
+  .pf-row:last-child{border-bottom:0}
+  .pf-row span{color:#c5cee0}
+  .pf-row b{text-align:right}
+  .pf-row small{display:block;color:#8b98b3;font-size:11px;margin-top:2px}
+  .pf-row .pos{color:#22d3b6}.pf-row .neg{color:#ff6b81}
+  .pf-empty{padding:26px 0;text-align:center;color:#8b98b3}
+
   /* picker: 10 per row */
   .pickTitle{background:var(--cream);border-radius:12px;text-align:center;color:var(--title);font-size:17px;font-weight:700;padding:10px 6px;margin-bottom:10px;box-shadow:var(--shadow)}
   .pgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
@@ -131,9 +157,28 @@
     </div>
   </div>
   <div id="tab-scores" class="pane" hidden>🏆 Scores are coming soon.</div>
-  <div id="tab-profile" class="pane" hidden>
-    👤 <span id="pfName">Player</span><br><br>Balance: <span id="pfBal">0.00</span> birr
+
+  <div id="tab-profile" hidden>
+    <div class="pf">
+      <div class="pf-top"><span>👤 Profile</span><button class="pf-ref" id="pfRef">↻</button></div>
+      <div class="pf-head">
+        <div class="pf-av" id="pfAv">P</div>
+        <div class="pf-who"><b id="pfName">Player</b><small id="pfSub">Player Profile</small></div>
+        <div class="pf-bal"><small>Balance</small><b><span id="pfBal">0.00</span> birr</b></div>
+      </div>
+      <div class="pf-stats">
+        <div><b id="pfWins">0</b><small>Total Wins</small></div>
+        <div class="gold"><b id="pfWon">0 birr</b><small>Winnings</small></div>
+      </div>
+      <div class="pf-tabs">
+        <span class="on" data-p="ov">Overview</span>
+        <span data-p="tx">Transactions</span>
+        <span data-p="wn">Wins</span>
+      </div>
+      <div class="pf-card" id="pfBody"></div>
+    </div>
   </div>
+
   <div class="nav">
     <div class="on" data-t="game"><i>🎮</i>Game</div>
     <div data-t="scores"><i>🏆</i>Scores</div>
@@ -213,6 +258,7 @@ const COLS = ["B","I","N","G","O"];
 const st = { card:null, cardNo:0, called:[], marked:new Set() };
 let R = 0;                                   // room (bet) the player is looking at
 let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
+let P = null, pfTab = "ov";                  // profile data + selected profile tab
 
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
@@ -221,6 +267,7 @@ async function post(p,b){ const r=await fetch(API+p,{method:"POST",headers:{"Con
 function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
 const letter = n => COLS[Math.floor((n-1)/15)];
 const label = n => letter(n)+"-"+n;      // e.g. B-1, O-71
+const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* ---------- builders ---------- */
 function cardHTML(card, marked){
@@ -262,6 +309,45 @@ function autoMark(){
     const mine = new Set(st.card.flat());
     st.called.forEach(n=>{ if(mine.has(n)) st.marked.add(n); });
   }
+}
+
+/* ---------- profile ---------- */
+const fmtDate = t => t ? new Date(t*1000).toLocaleDateString([], {year:"numeric",month:"short",day:"numeric"}) : "--";
+const fmtTime = t => new Date(t*1000).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+const prow = (k,v) => `<div class="pf-row"><span>${k}</span><b>${v}</b></div>`;
+
+function drawProfile(){
+  if(!P || P.error) return;
+  $("pfName").textContent = P.name;
+  $("pfAv").textContent = (P.name||"P").charAt(0).toUpperCase();
+  $("pfSub").textContent = "Player Profile · ID " + P.id;
+  $("pfBal").textContent = P.balance.toFixed(2);
+  $("pfWins").textContent = P.wins;
+  $("pfWon").textContent = P.won + " birr";
+  document.querySelectorAll(".pf-tabs span").forEach(x=>x.classList.toggle("on", x.dataset.p===pfTab));
+
+  let h = "";
+  if(pfTab==="ov"){
+    h = prow("Current Balance", P.balance.toFixed(2)+" birr")
+      + prow("Telegram ID", P.id)
+      + prow("Username", P.username ? "@"+esc(P.username) : "--")
+      + prow("Member Since", fmtDate(P.joined));
+  } else if(pfTab==="tx"){
+    h = P.tx.length ? P.tx.map(t=>
+        `<div class="pf-row"><span>${esc(t.n||t.k)}<small>${fmtTime(t.t)}</small></span>`+
+        `<b class="${t.a>0?"pos":"neg"}">${t.a>0?"+":""}${t.a}</b></div>`).join("")
+      : `<div class="pf-empty">No transactions yet</div>`;
+  } else {
+    h = P.winlist.length ? P.winlist.map(w=>
+        `<div class="pf-row"><span>Room ${w.bet} birr<small>${fmtTime(w.t)}</small></span>`+
+        `<b class="pos">+${w.prize}</b></div>`).join("")
+      : `<div class="pf-empty">No wins yet — good luck! 🍀</div>`;
+  }
+  $("pfBody").innerHTML = h;
+}
+async function loadProfile(){
+  try{ P = await get("/profile"); drawProfile(); }
+  catch(e){ console.error(e); }
 }
 
 /* ---------- render from server state ---------- */
@@ -332,7 +418,10 @@ async function sync(){
 document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
   document.querySelectorAll(".nav div").forEach(x=>x.classList.toggle("on",x===d));
   ["game","scores","profile"].forEach(t=>$("tab-"+t).hidden = t!==d.dataset.t);
+  if(d.dataset.t==="profile") loadProfile();
 });
+document.querySelectorAll(".pf-tabs span").forEach(s=>s.onclick=()=>{ pfTab=s.dataset.p; drawProfile(); });
+$("pfRef").onclick=loadProfile;
 $("openFree").onclick=()=>toast("Practice mode is coming soon");
 
 $("roomList").onclick=e=>{
@@ -388,6 +477,7 @@ $("refreshBtn").onclick=sync;
 /* ---------- start ---------- */
 buildCalls();
 sync(); setInterval(sync, 2000);
+setInterval(()=>{ if(screen==="lobby" && !$("tab-profile").hidden) loadProfile(); }, 5000);
 </script>
 </body>
 </html>
