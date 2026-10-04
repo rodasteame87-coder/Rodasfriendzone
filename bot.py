@@ -15,20 +15,21 @@ PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
 
-BET = 10               # price of 1 cartela
-CALL_EVERY = 4         # seconds between calls
-LOBBY_SECONDS = 30     # countdown after the FIRST player picks a cartela
-START_BALANCE = 1000   # free test money (set 0 for real money)
+BETS = [10, 20, 50, 100]   # room prices (birr per cartela)
+CALL_EVERY = 4             # seconds between calls
+LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
+START_BALANCE = 1000       # free test money (set 0 for real money)
 CARD_COUNT = 100
-MIN_PLAYERS = 1        # change to 2 or more for real games
-IDLE_KICK = 60
+MIN_PLAYERS = 1            # change to 2 or more for real games
+IDLE_KICK = 60             # seconds without contact before a player is removed
 MIN_DEPOSIT = 10
 MIN_WITHDRAW = 50
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
-game = {"phase": "lobby", "called": [], "players": {}, "winner": None,
-        "prize": 0, "round": 0, "deadline": None}
+rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
+             "winner": None, "prize": 0, "round": 0, "deadline": None}
+         for b in BETS}
 wallets, names, seen = {}, {}, {}
 pending, req_counter = {}, [0]          # deposit / withdraw requests
 
@@ -73,65 +74,90 @@ def has_bingo(card, called):
     return any(all(hit(r, c) for r, c in line) for line in lines)
 
 
+def room_of(uid):
+    """The room this player is currently in (or None)."""
+    for g in rooms.values():
+        if uid in g["players"]:
+            return g
+    return None
+
+
 def remove_player(uid):
-    if uid not in game["players"]:
+    g = room_of(uid)
+    if not g:
         return
-    if game["phase"] == "lobby":
-        wallets[uid] = wallets.get(uid, 0) + BET
-    game["players"].pop(uid, None)
-    if game["phase"] == "lobby" and not game["players"]:
-        game["deadline"] = None
+    if g["phase"] == "lobby":
+        wallets[uid] = wallets.get(uid, 0) + g["bet"]     # refund
+    g["players"].pop(uid, None)
+    if g["phase"] == "lobby" and not g["players"]:
+        g["deadline"] = None                              # stop countdown
+
+
+def lobby_time(g):
+    if g["phase"] != "lobby":
+        return 0
+    if g["deadline"] is None:
+        return LOBBY_SECONDS
+    return max(0, int(g["deadline"] - time.time()))
 
 
 # ---------- background jobs ----------
 async def reaper():
+    """Remove players who closed the app without pressing LEAVE."""
     while True:
         await asyncio.sleep(5)
         now = time.time()
-        for uid in list(game["players"]):
-            if now - seen.get(uid, 0) > IDLE_KICK:
-                remove_player(uid)
+        for g in rooms.values():
+            for uid in list(g["players"]):
+                if now - seen.get(uid, 0) > IDLE_KICK:
+                    remove_player(uid)
 
 
-async def run_round():
-    game.update(called=[], phase="lobby", winner=None, prize=0,
-                round=game["round"] + 1, deadline=None)
-    while game["deadline"] is None or time.time() < game["deadline"]:
+async def run_round(g):
+    g.update(called=[], phase="lobby", winner=None, prize=0,
+             round=g["round"] + 1, deadline=None)
+
+    # wait for the first player, then count down
+    while g["deadline"] is None or time.time() < g["deadline"]:
         await asyncio.sleep(1)
 
-    if len(game["players"]) < MIN_PLAYERS:
-        game["deadline"] = time.time() + LOBBY_SECONDS
-        while game["deadline"] is not None and time.time() < game["deadline"]:
+    if len(g["players"]) < MIN_PLAYERS:
+        g["deadline"] = time.time() + LOBBY_SECONDS
+        while g["deadline"] is not None and time.time() < g["deadline"]:
             await asyncio.sleep(1)
-        if len(game["players"]) < MIN_PLAYERS:
-            for uid in list(game["players"]):
-                wallets[uid] = wallets.get(uid, 0) + BET
-            game["players"].clear()
+        if len(g["players"]) < MIN_PLAYERS:
+            for uid in list(g["players"]):
+                wallets[uid] = wallets.get(uid, 0) + g["bet"]
+            g["players"].clear()
             return
 
-    game["phase"] = "playing"
-    game["prize"] = int(len(game["players"]) * BET * 0.8)
+    g["phase"] = "playing"
+    g["prize"] = int(len(g["players"]) * g["bet"] * 0.8)
     for n in random.sample(range(1, 76), 75):
-        if game["phase"] != "playing" or not game["players"]:
+        if g["phase"] != "playing" or not g["players"]:
             break
-        game["called"].append(n)
+        g["called"].append(n)
         await asyncio.sleep(CALL_EVERY)
 
-    game["phase"] = "finished"
+    g["phase"] = "finished"
     await asyncio.sleep(8)
-    game["players"].clear()
+    g["players"].clear()
+
+
+async def room_loop(g):
+    while True:
+        try:
+            await run_round(g)
+        except Exception as e:                 # never let a room die
+            print("room loop error:", repr(e))
+            g["players"].clear()
+            g["phase"] = "lobby"
+            g["deadline"] = None
+            await asyncio.sleep(2)
 
 
 async def game_loop():
-    while True:
-        try:
-            await run_round()
-        except Exception as e:
-            print("game loop error:", repr(e))
-            game["players"].clear()
-            game["phase"] = "lobby"
-            game["deadline"] = None
-            await asyncio.sleep(2)
+    await asyncio.gather(*[room_loop(g) for g in rooms.values()])
 
 
 # ---------- web pages / API ----------
@@ -146,21 +172,27 @@ async def api_state(req):
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
-    my = game["players"].get(uid)
-    if game["phase"] == "lobby":
-        left = LOBBY_SECONDS if game["deadline"] is None \
-            else max(0, int(game["deadline"] - time.time()))
-    else:
-        left = 0
-    n = len(game["players"])
+    mine = room_of(uid)
+    try:
+        asked = rooms.get(int(req.query.get("room", 0)))
+    except (TypeError, ValueError):
+        asked = None
+    g = mine or asked or rooms[BETS[0]]
+    my = g["players"].get(uid)
+    n = len(g["players"])
     return web.json_response({
-        "phase": game["phase"], "time": left, "round": game["round"],
-        "players": n, "bet": BET, "derash": int(n * BET * 0.8),
+        "phase": g["phase"], "time": lobby_time(g), "round": g["round"],
+        "players": n, "bet": g["bet"], "derash": int(n * g["bet"] * 0.8),
         "wallet": wallets[uid], "name": names[uid],
-        "count": CARD_COUNT, "taken": list(game["players"].values()),
+        "count": CARD_COUNT, "taken": list(g["players"].values()),
         "myCard": my, "card": make_card(my) if my else None,
-        "called": game["called"],
-        "winner": names.get(game["winner"]), "prize": game["prize"],
+        "called": g["called"],
+        "winner": names.get(g["winner"]), "prize": g["prize"],
+        "room": g["bet"], "inRoom": mine["bet"] if mine else None,
+        "rooms": [{"bet": r["bet"], "phase": r["phase"],
+                   "players": len(r["players"]),
+                   "win": int(len(r["players"]) * r["bet"] * 0.8),
+                   "time": lobby_time(r)} for r in rooms.values()],
     })
 
 
@@ -178,9 +210,15 @@ async def api_join(req):
     if not user:
         return web.json_response({"ok": False, "error": "Open from Telegram"})
     uid = touch(user)
-    if game["phase"] != "lobby":
+    try:
+        g = rooms.get(int(body.get("room")))
+    except (TypeError, ValueError):
+        g = None
+    if not g:
+        return web.json_response({"ok": False, "error": "Bad room"})
+    if g["phase"] != "lobby":
         return web.json_response({"ok": False, "error": "Round already started"})
-    if uid in game["players"]:
+    if room_of(uid):
         return web.json_response({"ok": False,
                                   "error": "You already have a cartela this game"})
     try:
@@ -189,31 +227,31 @@ async def api_join(req):
         card = 0
     if not 1 <= card <= CARD_COUNT:
         return web.json_response({"ok": False, "error": "Bad card number"})
-    if card in game["players"].values():
+    if card in g["players"].values():
         return web.json_response({"ok": False, "error": "Card already taken"})
-    if wallets[uid] < BET:
+    if wallets[uid] < g["bet"]:
         return web.json_response({"ok": False, "error": "Not enough balance"})
 
-    wallets[uid] -= BET
-    game["players"][uid] = card
-    if game["deadline"] is None:
-        game["deadline"] = time.time() + LOBBY_SECONDS
+    wallets[uid] -= g["bet"]
+    g["players"][uid] = card
+    if g["deadline"] is None:                  # first player starts the clock
+        g["deadline"] = time.time() + LOBBY_SECONDS
     return web.json_response({"ok": True})
 
 
 async def api_bingo(req):
     body = await req.json()
     user = verify(body.get("initData", ""))
-    if not user or game["phase"] != "playing":
+    if not user:
         return web.json_response({"ok": False})
     uid = user["id"]
-    card_no = game["players"].get(uid)
-    if not card_no:
+    g = room_of(uid)
+    if not g or g["phase"] != "playing":
         return web.json_response({"ok": False})
-    if has_bingo(make_card(card_no), set(game["called"])):
-        game["phase"] = "finished"
-        game["winner"] = uid
-        wallets[uid] = wallets.get(uid, 0) + game["prize"]
+    if has_bingo(make_card(g["players"][uid]), set(g["called"])):
+        g["phase"] = "finished"
+        g["winner"] = uid
+        wallets[uid] = wallets.get(uid, 0) + g["prize"]
         return web.json_response({"ok": True})
     return web.json_response({"ok": False})
 
@@ -228,7 +266,6 @@ async def api_leave(req):
 
 # ---------- bot commands ----------
 def ensure(u):
-    """Create the wallet the first time a user talks to the bot."""
     wallets.setdefault(u.id, START_BALANCE)
     names[u.id] = u.first_name or "Player"
     return u.id
@@ -370,8 +407,8 @@ async def cmd_transfer(m: Message, command: CommandObject):
 async def cmd_instruction(m: Message):
     await m.answer(
         "📖 How to play\n\n"
-        "1) Tap /play and press JOIN.\n"
-        f"2) Choose a cartela number. It costs {BET} birr.\n"
+        "1) Tap /play and choose a room (10, 20, 50 or 100 birr).\n"
+        "2) Choose a cartela number. It costs the room price.\n"
         "3) When the countdown ends, numbers are called one by one.\n"
         "4) Keep Auto on to mark numbers automatically.\n"
         "5) Complete a row, column or diagonal, then press BINGO WIN.\n\n"
