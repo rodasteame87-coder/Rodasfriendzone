@@ -31,6 +31,8 @@ rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None}
          for b in BETS}
 wallets, names, seen = {}, {}, {}
+joined, usernames, wins, won = {}, {}, {}, {}      # profile data
+history, winlog = {}, {}                           # transactions / wins list
 pending, req_counter = {}, [0]          # deposit / withdraw requests
 
 dp = Dispatcher()
@@ -48,10 +50,19 @@ def verify(init_data: str):
     return json.loads(data["user"])
 
 
+def log(uid, kind, amount, note=""):
+    """Save a transaction for the profile page (keeps the last 50)."""
+    h = history.setdefault(uid, [])
+    h.insert(0, {"t": int(time.time()), "k": kind, "a": amount, "n": note})
+    del h[50:]
+
+
 def touch(user):
     uid = user["id"]
     wallets.setdefault(uid, START_BALANCE)
+    joined.setdefault(uid, int(time.time()))
     names[uid] = user.get("first_name", "Player")
+    usernames[uid] = user.get("username", "") or ""
     seen[uid] = time.time()
     return uid
 
@@ -88,6 +99,7 @@ def remove_player(uid):
         return
     if g["phase"] == "lobby":
         wallets[uid] = wallets.get(uid, 0) + g["bet"]     # refund
+        log(uid, "refund", g["bet"], f"Room {g['bet']} refund")
     g["players"].pop(uid, None)
     if g["phase"] == "lobby" and not g["players"]:
         g["deadline"] = None                              # stop countdown
@@ -128,6 +140,7 @@ async def run_round(g):
         if len(g["players"]) < MIN_PLAYERS:
             for uid in list(g["players"]):
                 wallets[uid] = wallets.get(uid, 0) + g["bet"]
+                log(uid, "refund", g["bet"], f"Room {g['bet']} refund")
             g["players"].clear()
             return
 
@@ -196,6 +209,20 @@ async def api_state(req):
     })
 
 
+async def api_profile(req):
+    user = verify(req.query.get("initData", ""))
+    if not user:
+        return web.json_response({"error": "auth"})
+    uid = touch(user)
+    return web.json_response({
+        "id": uid, "name": names[uid], "username": usernames.get(uid, ""),
+        "balance": wallets[uid], "joined": joined[uid],
+        "wins": wins.get(uid, 0), "won": won.get(uid, 0),
+        "tx": history.get(uid, [])[:30],
+        "winlist": winlog.get(uid, [])[:30],
+    })
+
+
 async def api_card(req):
     try:
         no = max(1, min(CARD_COUNT, int(req.query.get("card", 1))))
@@ -233,6 +260,7 @@ async def api_join(req):
         return web.json_response({"ok": False, "error": "Not enough balance"})
 
     wallets[uid] -= g["bet"]
+    log(uid, "bet", -g["bet"], f"Room {g['bet']} · cartela {card}")
     g["players"][uid] = card
     if g["deadline"] is None:                  # first player starts the clock
         g["deadline"] = time.time() + LOBBY_SECONDS
@@ -252,6 +280,12 @@ async def api_bingo(req):
         g["phase"] = "finished"
         g["winner"] = uid
         wallets[uid] = wallets.get(uid, 0) + g["prize"]
+        wins[uid] = wins.get(uid, 0) + 1
+        won[uid] = won.get(uid, 0) + g["prize"]
+        wl = winlog.setdefault(uid, [])
+        wl.insert(0, {"t": int(time.time()), "bet": g["bet"], "prize": g["prize"]})
+        del wl[50:]
+        log(uid, "win", g["prize"], f"Won in room {g['bet']}")
         return web.json_response({"ok": True})
     return web.json_response({"ok": False})
 
@@ -267,7 +301,9 @@ async def api_leave(req):
 # ---------- bot commands ----------
 def ensure(u):
     wallets.setdefault(u.id, START_BALANCE)
+    joined.setdefault(u.id, int(time.time()))
     names[u.id] = u.first_name or "Player"
+    usernames[u.id] = u.username or ""
     return u.id
 
 
@@ -360,6 +396,7 @@ async def cmd_withdraw(m: Message, command: CommandObject):
         await m.answer(f"Withdrawals are handled by support: {SUPPORT}")
         return
     wallets[uid] -= amount                       # hold the money
+    log(uid, "withdraw", -amount, "Withdraw request")
     req_counter[0] += 1
     rid = req_counter[0]
     pending[rid] = {"type": "withdraw", "uid": uid, "amount": amount}
@@ -394,6 +431,8 @@ async def cmd_transfer(m: Message, command: CommandObject):
     else:
         wallets[uid] -= amount
         wallets[to] += amount
+        log(uid, "transfer", -amount, f"Transfer to {names.get(to, to)}")
+        log(to, "transfer", amount, f"Transfer from {names[uid]}")
         await m.answer(f"✅ Sent {amount} birr to {names.get(to, to)}.\n"
                        f"New balance: {wallets[uid]:.2f}")
         try:
@@ -443,6 +482,7 @@ async def admin_buttons(cb: CallbackQuery):
     if req["type"] == "deposit":
         if approved:
             wallets[uid] = wallets.get(uid, 0) + amount
+            log(uid, "deposit", amount, "Deposit approved")
             note = f"✅ Your deposit of {amount} birr was approved."
         else:
             note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
@@ -451,6 +491,7 @@ async def admin_buttons(cb: CallbackQuery):
             note = f"✅ Your withdrawal of {amount} birr was paid."
         else:
             wallets[uid] = wallets.get(uid, 0) + amount        # give it back
+            log(uid, "refund", amount, "Withdraw rejected")
             note = f"❌ Your withdrawal was rejected. {amount} birr returned to your balance."
     try:
         await cb.bot.send_message(uid, note)
@@ -469,6 +510,7 @@ async def main():
     app.add_routes([
         web.get("/", index),
         web.get("/api/state", api_state),
+        web.get("/api/profile", api_profile),
         web.get("/api/card", api_card),
         web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
