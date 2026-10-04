@@ -34,18 +34,17 @@
   .dot{width:12px;height:12px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(22,163,74,.2)}
   .bal{font-weight:600;color:var(--title);font-size:13px}.bal b{font-size:17px}
   .gt{font-size:17px;font-weight:700;color:var(--title);margin:14px 2px 8px}
-  .pill{background:#fff;border-radius:12px;display:grid;grid-template-columns:.8fr 1.2fr 1.4fr;padding:10px 8px;
-        font-weight:700;color:var(--title);font-size:11px;text-align:center;margin-bottom:8px;box-shadow:var(--shadow)}
-  .gcard{display:grid;grid-template-columns:28% 1fr;border-radius:14px;overflow:hidden;background:var(--cream);box-shadow:var(--shadow)}
-  .gl{background:var(--purple);color:#fff;text-align:center;padding:16px 4px;font-weight:700;display:flex;flex-direction:column;justify-content:center}
-  .gl b{display:block;font-size:32px;line-height:1}.gl span{font-size:12px;opacity:.9;margin-top:4px}
-  .gm{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;gap:8px}
-  .win{text-align:center;color:var(--title);font-weight:600;font-size:12px}
-  .win b{display:block;font-size:22px;color:var(--green)}
-  .gr{display:flex;flex-direction:column;gap:6px;min-width:96px}
-  .ready{background:#d9f1e0;color:#15803d;border-radius:8px;padding:6px;text-align:center;font-weight:700;font-size:11px}
-  .joinbtn{background:var(--green);height:38px;border-radius:10px;font-size:15px}
-  .joinbtn.dim{opacity:.5}
+  .colhead{display:flex;justify-content:space-between;padding:0 6px 6px;font-size:11px;font-weight:700;color:#6b5a7c;letter-spacing:.4px}
+
+  .room{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:var(--shadow)}
+  .room .b{font-size:20px;font-weight:800;color:var(--purple);flex:1}
+  .room .b small{font-size:12px;font-weight:700;opacity:.7}
+  .room .w{font-weight:700;color:#e0405e;font-size:15px}
+  .room .s{font-size:11px;font-weight:700;border-radius:12px;padding:5px 8px;background:#e8e4ee;color:#6b5a7c;min-width:58px;text-align:center}
+  .room .s.t{background:#f7c32c;color:#3a2a00}
+  .room .j{width:74px;height:36px;background:var(--green);border-radius:18px;font-size:14px}
+  .room .j.dim{opacity:.5}
+
   .practice{margin-top:12px;background:#d9f2f8;border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--title)}
   .practice b{font-size:15px}.practice p{margin:3px 0 0;font-size:12px;color:#5b3a82}
   .practice button{background:var(--purple);width:84px;height:38px;font-size:14px}
@@ -124,17 +123,8 @@
       <div class="bal">💳 Balance: <b id="bal">0.00</b></div>
     </div>
     <div class="gt">🎯 BINGO GAMES</div>
-    <div class="pill"><span>BET</span><span>WIN / PLAYER</span><span>STATUS &amp; JOIN</span></div>
-    <div class="gcard">
-      <div class="gl"><b id="lbBet">10</b><span>BIRR</span></div>
-      <div class="gm">
-        <div class="win">🏆 <b id="lbWin">0</b><span id="lbPlayers">0 players</span></div>
-        <div class="gr">
-          <div class="ready" id="lbStatus">READY</div>
-          <button class="joinbtn" id="joinBtn">JOIN</button>
-        </div>
-      </div>
-    </div>
+    <div class="colhead"><span>BET</span><span>POSSIBLE WIN · STATUS</span></div>
+    <div id="roomList"></div>
     <div class="practice">
       <div><b>🎮 FREE</b><p>Practice Mode — No Real Money</p></div>
       <button id="openFree">OPEN</button>
@@ -221,7 +211,8 @@ const API = "/api";
 const $ = id => document.getElementById(id);
 const COLS = ["B","I","N","G","O"];
 const st = { card:null, cardNo:0, called:[], marked:new Set() };
-let S = null, screen = "lobby", pv = 0, lastRound = -1, shownRound = -1, errShown = false;
+let R = 0;                                   // room (bet) the player is looking at
+let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
 
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
@@ -278,15 +269,22 @@ function render(){
   if(!S) return;
   if(S.error){ if(!errShown){ errShown=true; toast("Please open this from the bot in Telegram"); } return; }
 
-  if(S.round!==lastRound){ st.marked=new Set(); lastRound=S.round; }
+  const key = S.room+":"+S.round;
+  if(key!==lastRound){ st.marked=new Set(); lastRound=key; }
+  if(S.inRoom) R = S.inRoom;
 
   // lobby
   $("bal").textContent=S.wallet.toFixed(2);
-  $("lbBet").textContent=S.bet; $("lbWin").textContent=S.derash;
-  $("lbPlayers").textContent=S.players+" players";
-  $("lbStatus").textContent=S.phase==="lobby"?"READY":"PLAYING";
-  $("joinBtn").classList.toggle("dim", S.phase!=="lobby");
   $("pfName").textContent=S.name; $("pfBal").textContent=S.wallet.toFixed(2);
+  $("roomList").innerHTML = S.rooms.map(r=>{
+    const lbl = r.phase!=="lobby" ? "playing" : r.players ? r.time+"s" : "waiting";
+    const hot = r.players && r.phase==="lobby" ? " t" : "";
+    const dim = r.phase!=="lobby" ? " dim" : "";
+    return `<div class="room"><div class="b">${r.bet} <small>BIRR</small></div>`+
+           `<div class="w">${r.win} win</div>`+
+           `<div class="s${hot}">${lbl}</div>`+
+           `<button class="j${dim}" data-r="${r.bet}">Join</button></div>`;
+  }).join("");
 
   // picker
   $("pkPlayers").textContent=S.players;
@@ -299,7 +297,7 @@ function render(){
   }
   $("pickGrid").innerHTML=g;
 
-  // calls (always updated from the server list)
+  // calls
   st.called = (S.called||[]).slice();
   const last = paintCalls();
 
@@ -321,12 +319,12 @@ function render(){
   if(S.myCard && screen!=="game") show("game");
   if(!S.myCard && screen==="game") show("lobby");
 
-  if(S.phase==="finished" && S.winner && shownRound!==S.round){
-    shownRound=S.round; toast("🏆 "+S.winner+" won "+S.prize+" birr");
+  if(S.phase==="finished" && S.winner && shownRound!==key){
+    shownRound=key; toast("🏆 "+S.winner+" won "+S.prize+" birr");
   }
 }
 async function sync(){
-  try{ S=await get("/state"); errShown=false; render(); }
+  try{ S=await get("/state?room="+R); errShown=false; render(); }
   catch(e){ console.error(e); }
 }
 
@@ -337,11 +335,12 @@ document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
 });
 $("openFree").onclick=()=>toast("Practice mode is coming soon");
 
-$("joinBtn").onclick=async()=>{
-  if(!S){ toast("Can't reach server yet — wait a few seconds and tap again"); sync(); return; }
-  if(S.error){ toast("Please open this from the bot in Telegram"); return; }
-  if(S.phase!=="lobby"){ toast("A round is in progress. Join the next one."); return; }
-  show("pick"); sync();
+$("roomList").onclick=e=>{
+  const b=e.target.closest(".j"); if(!b) return;
+  if(!S) return toast("Can't reach server yet — wait a few seconds and tap again");
+  if(S.error) return toast("Please open this from the bot in Telegram");
+  if(b.classList.contains("dim")) return toast("A round is in progress. Join the next one.");
+  R=+b.dataset.r; show("pick"); sync();
 };
 $("backBtn").onclick=()=>show("lobby");
 
@@ -350,7 +349,7 @@ $("pickGrid").onclick=async e=>{
   pv=+el.dataset.n;
   try{
     const r=await fetch(API+"/card?card="+pv).then(r=>r.json());
-    $("pvTitle").textContent="Cartela "+pv;
+    $("pvTitle").textContent="Cartela "+pv+" · "+R+" birr";
     $("pvGrid").innerHTML=cardHTML(r.card,new Set());
     $("modal").hidden=false;
   }catch(err){ toast("Can't reach server"); }
@@ -358,7 +357,7 @@ $("pickGrid").onclick=async e=>{
 $("pvCancel").onclick=()=>$("modal").hidden=true;
 $("pvOk").onclick=async()=>{
   try{
-    const r=await post("/join",{card:pv});
+    const r=await post("/join",{card:pv, room:R});
     $("modal").hidden=true;
     if(!r.ok) toast(r.error||"Could not join");
   }catch(err){ $("modal").hidden=true; toast("Can't reach server"); }
