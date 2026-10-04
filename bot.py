@@ -16,13 +16,14 @@ LOBBY_SECONDS = 30     # countdown after the FIRST player picks a cartela
 START_BALANCE = 1000   # free test money
 CARD_COUNT = 100       # numbers shown in the picker
 MIN_PLAYERS = 1        # change to 2 or more for real games
+IDLE_KICK = 60         # seconds without contact before a player is removed
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
 # deadline = None means: waiting for the first player (no countdown yet)
 game = {"phase": "lobby", "called": [], "players": {}, "winner": None,
         "prize": 0, "round": 0, "deadline": None}
-wallets, names = {}, {}
+wallets, names, seen = {}, {}, {}
 
 
 # ---------- helpers ----------
@@ -41,6 +42,7 @@ def touch(user):
     uid = user["id"]
     wallets.setdefault(uid, START_BALANCE)
     names[uid] = user.get("first_name", "Player")
+    seen[uid] = time.time()
     return uid
 
 
@@ -62,36 +64,69 @@ def has_bingo(card, called):
     return any(all(hit(r, c) for r, c in line) for line in lines)
 
 
-# ---------- game loop ----------
+def remove_player(uid):
+    """Take a player out of the game. Refund if the round hasn't started."""
+    if uid not in game["players"]:
+        return
+    if game["phase"] == "lobby":
+        wallets[uid] = wallets.get(uid, 0) + BET
+    game["players"].pop(uid, None)
+    if game["phase"] == "lobby" and not game["players"]:
+        game["deadline"] = None                    # stop countdown
+
+
+# ---------- background jobs ----------
+async def reaper():
+    """Remove players who closed the app without pressing LEAVE."""
+    while True:
+        await asyncio.sleep(5)
+        now = time.time()
+        for uid in list(game["players"]):
+            if now - seen.get(uid, 0) > IDLE_KICK:
+                remove_player(uid)
+
+
+async def run_round():
+    game.update(called=[], phase="lobby", winner=None, prize=0,
+                round=game["round"] + 1, deadline=None)
+
+    # wait until the first player picks a cartela, then count down
+    while game["deadline"] is None or time.time() < game["deadline"]:
+        await asyncio.sleep(1)
+
+    if len(game["players"]) < MIN_PLAYERS:
+        game["deadline"] = time.time() + LOBBY_SECONDS   # wait longer
+        while game["deadline"] is not None and time.time() < game["deadline"]:
+            await asyncio.sleep(1)
+        if len(game["players"]) < MIN_PLAYERS:
+            for uid in list(game["players"]):            # refund everyone
+                wallets[uid] = wallets.get(uid, 0) + BET
+            game["players"].clear()
+            return
+
+    game["phase"] = "playing"
+    game["prize"] = int(len(game["players"]) * BET * 0.8)
+    for n in random.sample(range(1, 76), 75):
+        if game["phase"] != "playing" or not game["players"]:
+            break
+        game["called"].append(n)
+        await asyncio.sleep(CALL_EVERY)
+
+    game["phase"] = "finished"
+    await asyncio.sleep(8)            # let everyone see the result
+    game["players"].clear()
+
+
 async def game_loop():
     while True:
-        game.update(called=[], phase="lobby", winner=None, prize=0,
-                    round=game["round"] + 1, deadline=None)
-
-        # wait until the first player picks a cartela, then count down
-        while game["deadline"] is None or time.time() < game["deadline"]:
-            await asyncio.sleep(1)
-
-        if len(game["players"]) < MIN_PLAYERS:
-            game["deadline"] = time.time() + LOBBY_SECONDS   # wait longer
-            while time.time() < game["deadline"]:
-                await asyncio.sleep(1)
-            if len(game["players"]) < MIN_PLAYERS:
-                for uid in game["players"]:                  # refund everyone
-                    wallets[uid] = wallets.get(uid, 0) + BET
-                game["players"].clear()
-                continue
-
-        game["phase"] = "playing"
-        game["prize"] = int(len(game["players"]) * BET * 0.8)
-        for n in random.sample(range(1, 76), 75):
-            if game["phase"] != "playing" or not game["players"]:
-                break
-            game["called"].append(n)
-            await asyncio.sleep(CALL_EVERY)
-        game["phase"] = "finished"
-        await asyncio.sleep(8)            # let everyone see the result
-        game["players"].clear()
+        try:
+            await run_round()
+        except Exception as e:                     # never let the loop die
+            print("game loop error:", repr(e))
+            game["players"].clear()
+            game["phase"] = "lobby"
+            game["deadline"] = None
+            await asyncio.sleep(2)
 
 
 # ---------- pages / API ----------
@@ -184,13 +219,7 @@ async def api_leave(req):
     body = await req.json()
     user = verify(body.get("initData", ""))
     if user:
-        uid = user["id"]
-        if uid in game["players"]:
-            if game["phase"] == "lobby":
-                wallets[uid] = wallets.get(uid, 0) + BET   # refund
-            game["players"].pop(uid, None)
-            if game["phase"] == "lobby" and not game["players"]:
-                game["deadline"] = None                    # stop countdown
+        remove_player(user["id"])
     return web.json_response({"ok": True})
 
 
@@ -220,8 +249,9 @@ async def main():
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
 
     asyncio.create_task(game_loop())
+    asyncio.create_task(reaper())
 
-    await bot.delete_webhook(drop_pending_updates=True)   # fixes the Conflict error
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 
