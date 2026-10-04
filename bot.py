@@ -3,27 +3,36 @@ from pathlib import Path
 from urllib.parse import parse_qsl
 from aiohttp import web
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
-from aiogram.types import (Message, InlineKeyboardMarkup,
-                           InlineKeyboardButton, WebAppInfo)
+from aiogram.filters import CommandStart, Command, CommandObject
+from aiogram.types import (Message, CallbackQuery, BotCommand,
+                           InlineKeyboardMarkup, InlineKeyboardButton,
+                           WebAppInfo)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))            # your Telegram ID
+PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
+SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
+
 BET = 10               # price of 1 cartela
 CALL_EVERY = 4         # seconds between calls
 LOBBY_SECONDS = 30     # countdown after the FIRST player picks a cartela
-START_BALANCE = 1000   # free test money
-CARD_COUNT = 100       # numbers shown in the picker
+START_BALANCE = 1000   # free test money (set 0 for real money)
+CARD_COUNT = 100
 MIN_PLAYERS = 1        # change to 2 or more for real games
-IDLE_KICK = 60         # seconds without contact before a player is removed
+IDLE_KICK = 60
+MIN_DEPOSIT = 10
+MIN_WITHDRAW = 50
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
-# deadline = None means: waiting for the first player (no countdown yet)
 game = {"phase": "lobby", "called": [], "players": {}, "winner": None,
         "prize": 0, "round": 0, "deadline": None}
 wallets, names, seen = {}, {}, {}
+pending, req_counter = {}, [0]          # deposit / withdraw requests
+
+dp = Dispatcher()
 
 
 # ---------- helpers ----------
@@ -65,19 +74,17 @@ def has_bingo(card, called):
 
 
 def remove_player(uid):
-    """Take a player out of the game. Refund if the round hasn't started."""
     if uid not in game["players"]:
         return
     if game["phase"] == "lobby":
         wallets[uid] = wallets.get(uid, 0) + BET
     game["players"].pop(uid, None)
     if game["phase"] == "lobby" and not game["players"]:
-        game["deadline"] = None                    # stop countdown
+        game["deadline"] = None
 
 
 # ---------- background jobs ----------
 async def reaper():
-    """Remove players who closed the app without pressing LEAVE."""
     while True:
         await asyncio.sleep(5)
         now = time.time()
@@ -89,17 +96,15 @@ async def reaper():
 async def run_round():
     game.update(called=[], phase="lobby", winner=None, prize=0,
                 round=game["round"] + 1, deadline=None)
-
-    # wait until the first player picks a cartela, then count down
     while game["deadline"] is None or time.time() < game["deadline"]:
         await asyncio.sleep(1)
 
     if len(game["players"]) < MIN_PLAYERS:
-        game["deadline"] = time.time() + LOBBY_SECONDS   # wait longer
+        game["deadline"] = time.time() + LOBBY_SECONDS
         while game["deadline"] is not None and time.time() < game["deadline"]:
             await asyncio.sleep(1)
         if len(game["players"]) < MIN_PLAYERS:
-            for uid in list(game["players"]):            # refund everyone
+            for uid in list(game["players"]):
                 wallets[uid] = wallets.get(uid, 0) + BET
             game["players"].clear()
             return
@@ -113,7 +118,7 @@ async def run_round():
         await asyncio.sleep(CALL_EVERY)
 
     game["phase"] = "finished"
-    await asyncio.sleep(8)            # let everyone see the result
+    await asyncio.sleep(8)
     game["players"].clear()
 
 
@@ -121,7 +126,7 @@ async def game_loop():
     while True:
         try:
             await run_round()
-        except Exception as e:                     # never let the loop die
+        except Exception as e:
             print("game loop error:", repr(e))
             game["players"].clear()
             game["phase"] = "lobby"
@@ -129,7 +134,7 @@ async def game_loop():
             await asyncio.sleep(2)
 
 
-# ---------- pages / API ----------
+# ---------- web pages / API ----------
 async def index(request):
     if not INDEX_FILE.exists():
         return web.Response(text=f"File not found: {INDEX_FILE}", status=404)
@@ -143,10 +148,8 @@ async def api_state(req):
     uid = touch(user)
     my = game["players"].get(uid)
     if game["phase"] == "lobby":
-        if game["deadline"] is None:
-            left = LOBBY_SECONDS                 # not counting yet
-        else:
-            left = max(0, int(game["deadline"] - time.time()))
+        left = LOBBY_SECONDS if game["deadline"] is None \
+            else max(0, int(game["deadline"] - time.time()))
     else:
         left = 0
     n = len(game["players"])
@@ -193,7 +196,7 @@ async def api_join(req):
 
     wallets[uid] -= BET
     game["players"][uid] = card
-    if game["deadline"] is None:                 # first player starts the clock
+    if game["deadline"] is None:
         game["deadline"] = time.time() + LOBBY_SECONDS
     return web.json_response({"ok": True})
 
@@ -223,17 +226,207 @@ async def api_leave(req):
     return web.json_response({"ok": True})
 
 
+# ---------- bot commands ----------
+def ensure(u):
+    """Create the wallet the first time a user talks to the bot."""
+    wallets.setdefault(u.id, START_BALANCE)
+    names[u.id] = u.first_name or "Player"
+    return u.id
+
+
+def play_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🎱 Play Bingo",
+                             web_app=WebAppInfo(url=WEBAPP_URL))]])
+
+
+def to_amount(text):
+    try:
+        v = int(text)
+        return v if v > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+@dp.message(CommandStart())
+async def cmd_start(m: Message):
+    ensure(m.from_user)
+    await m.answer("🎯 Rodas Friend Zone Bingo\n\n"
+                   "Tap the button below to open the Bingo game.",
+                   reply_markup=play_kb())
+
+
+@dp.message(Command("play"))
+async def cmd_play(m: Message):
+    ensure(m.from_user)
+    await m.answer("Tap the button below to play 👇", reply_markup=play_kb())
+
+
+@dp.message(Command("balance"))
+async def cmd_balance(m: Message):
+    uid = ensure(m.from_user)
+    await m.answer(f"💰 Balance: {wallets[uid]:.2f} birr\n"
+                   f"🆔 Your ID: {uid}")
+
+
+@dp.message(Command("deposit"))
+async def cmd_deposit(m: Message, command: CommandObject):
+    uid = ensure(m.from_user)
+    args = (command.args or "").split(maxsplit=1)
+    amount = to_amount(args[0]) if args else None
+    if not amount:
+        await m.answer(
+            "💰 Deposit\n\n"
+            f"1) Send your money to:\n{PAY_INFO}\n\n"
+            "2) Then send this message:\n"
+            "/deposit <amount> <transaction number>\n\n"
+            "Example:\n/deposit 100 FT24123ABC")
+        return
+    if amount < MIN_DEPOSIT:
+        await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
+        return
+    if not ADMIN_ID:
+        await m.answer(f"Deposits are handled by support: {SUPPORT}")
+        return
+    ref = args[1] if len(args) > 1 else "(none)"
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
+        InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
+    await m.bot.send_message(
+        ADMIN_ID,
+        f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
+        f"Amount: {amount} birr\nReference: {ref}", reply_markup=kb)
+    await m.answer(f"✅ Request #{rid} sent. You will get a message when it is approved.")
+
+
+@dp.message(Command("withdraw"))
+async def cmd_withdraw(m: Message, command: CommandObject):
+    uid = ensure(m.from_user)
+    args = (command.args or "").split(maxsplit=1)
+    amount = to_amount(args[0]) if args else None
+    if not amount or len(args) < 2:
+        await m.answer(
+            "🏧 Withdraw\n\n"
+            "Send:\n/withdraw <amount> <your account or phone>\n\n"
+            f"Example:\n/withdraw 200 0912345678\n\nMinimum: {MIN_WITHDRAW} birr")
+        return
+    if amount < MIN_WITHDRAW:
+        await m.answer(f"Minimum withdraw is {MIN_WITHDRAW} birr.")
+        return
+    if wallets[uid] < amount:
+        await m.answer("Not enough balance.")
+        return
+    if not ADMIN_ID:
+        await m.answer(f"Withdrawals are handled by support: {SUPPORT}")
+        return
+    wallets[uid] -= amount                       # hold the money
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "withdraw", "uid": uid, "amount": amount}
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Paid", callback_data=f"ok:{rid}"),
+        InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
+    await m.bot.send_message(
+        ADMIN_ID,
+        f"🏧 Withdraw request #{rid}\nUser: {names[uid]} ({uid})\n"
+        f"Amount: {amount} birr\nSend to: {args[1]}", reply_markup=kb)
+    await m.answer(f"✅ Request #{rid} sent. {amount} birr is on hold until it is processed.")
+
+
+@dp.message(Command("transfer"))
+async def cmd_transfer(m: Message, command: CommandObject):
+    uid = ensure(m.from_user)
+    args = (command.args or "").split()
+    if len(args) != 2 or not args[0].isdigit() or not to_amount(args[1]):
+        await m.answer(
+            "🔁 Transfer\n\n"
+            "Send:\n/transfer <user ID> <amount>\n\n"
+            "Example:\n/transfer 123456789 50\n\n"
+            "Ask your friend to send /balance to see their ID.")
+        return
+    to, amount = int(args[0]), int(args[1])
+    if to == uid:
+        await m.answer("You can't transfer to yourself.")
+    elif to not in wallets:
+        await m.answer("That user hasn't started the bot yet.")
+    elif wallets[uid] < amount:
+        await m.answer("Not enough balance.")
+    else:
+        wallets[uid] -= amount
+        wallets[to] += amount
+        await m.answer(f"✅ Sent {amount} birr to {names.get(to, to)}.\n"
+                       f"New balance: {wallets[uid]:.2f}")
+        try:
+            await m.bot.send_message(
+                to, f"💸 You received {amount} birr from {names[uid]}.")
+        except Exception:
+            pass
+
+
+@dp.message(Command("instruction"))
+async def cmd_instruction(m: Message):
+    await m.answer(
+        "📖 How to play\n\n"
+        "1) Tap /play and press JOIN.\n"
+        f"2) Choose a cartela number. It costs {BET} birr.\n"
+        "3) When the countdown ends, numbers are called one by one.\n"
+        "4) Keep Auto on to mark numbers automatically.\n"
+        "5) Complete a row, column or diagonal, then press BINGO WIN.\n\n"
+        "The first player to press BINGO WIN with a real bingo wins the prize.")
+
+
+@dp.message(Command("invite"))
+async def cmd_invite(m: Message):
+    uid = ensure(m.from_user)
+    me = await m.bot.get_me()
+    await m.answer("👥 Invite your friends with this link:\n"
+                   f"https://t.me/{me.username}?start=ref_{uid}")
+
+
+@dp.message(Command("support"))
+async def cmd_support(m: Message):
+    await m.answer(f"🛟 Need help? Contact {SUPPORT}")
+
+
+@dp.callback_query()
+async def admin_buttons(cb: CallbackQuery):
+    if cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action, _, rid = (cb.data or "").partition(":")
+    req = pending.pop(int(rid), None) if rid.isdigit() else None
+    if not req:
+        await cb.answer("Already handled")
+        return
+    uid, amount = req["uid"], req["amount"]
+    approved = action == "ok"
+    if req["type"] == "deposit":
+        if approved:
+            wallets[uid] = wallets.get(uid, 0) + amount
+            note = f"✅ Your deposit of {amount} birr was approved."
+        else:
+            note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
+    else:
+        if approved:
+            note = f"✅ Your withdrawal of {amount} birr was paid."
+        else:
+            wallets[uid] = wallets.get(uid, 0) + amount        # give it back
+            note = f"❌ Your withdrawal was rejected. {amount} birr returned to your balance."
+    try:
+        await cb.bot.send_message(uid, note)
+    except Exception:
+        pass
+    await cb.message.edit_text(
+        cb.message.text + ("\n\n✅ DONE" if approved else "\n\n❌ REJECTED"))
+    await cb.answer("Done")
+
+
 # ---------- main ----------
 async def main():
     bot = Bot(TOKEN)
-    dp = Dispatcher()
-
-    @dp.message(CommandStart())
-    async def start(m: Message):
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="🎱 Play Bingo",
-                                 web_app=WebAppInfo(url=WEBAPP_URL))]])
-        await m.answer("Welcome to Rodas Friend Zone Bingo!", reply_markup=kb)
 
     app = web.Application()
     app.add_routes([
@@ -252,6 +445,17 @@ async def main():
     asyncio.create_task(reaper())
 
     await bot.delete_webhook(drop_pending_updates=True)
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Start Rodas Friend Zone"),
+        BotCommand(command="play", description="Play Bingo"),
+        BotCommand(command="deposit", description="Deposit"),
+        BotCommand(command="balance", description="Check balance"),
+        BotCommand(command="withdraw", description="Withdraw"),
+        BotCommand(command="transfer", description="Transfer"),
+        BotCommand(command="instruction", description="How to play"),
+        BotCommand(command="invite", description="Invite friends"),
+        BotCommand(command="support", description="Support"),
+    ])
     await dp.start_polling(bot)
 
 
