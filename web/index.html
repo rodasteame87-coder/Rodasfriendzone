@@ -54,10 +54,7 @@
   .pane{padding:18px 8px;font-size:15px;font-weight:600;color:var(--title);line-height:1.6}
 
   /* picker: 10 per row */
-  .pickTitle{background:var(--cream);border-radius:12px;text-align:center;color:var(--title);font-size:17px;font-weight:700;padding:10px 6px;margin-bottom:8px;box-shadow:var(--shadow)}
-  .prow{display:grid;grid-template-columns:1fr 1fr 44px;gap:6px;margin-bottom:10px}
-  .prow .stat small{font-size:10px}.prow .stat b{font-size:18px}
-  .refresh{background:#2f5fd0;font-size:18px;height:auto;border-radius:10px}
+  .pickTitle{background:var(--cream);border-radius:12px;text-align:center;color:var(--title);font-size:17px;font-weight:700;padding:10px 6px;margin-bottom:10px;box-shadow:var(--shadow)}
   .pgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
   .num{background:#fff;border:1.5px solid #b98bd0;border-radius:7px;color:var(--title);font-weight:700;font-size:12px;
        height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none}
@@ -161,11 +158,6 @@
     <div class="stat"><small>Time</small><b id="pkTime">30</b></div>
   </div>
   <div class="pickTitle">Choose Your Cartela</div>
-  <div class="prow">
-    <div class="stat"><small>TIME</small><b id="pkTime2">30</b></div>
-    <div class="stat"><small>PLAYERS</small><b id="pkPlayers2">0</b></div>
-    <button class="refresh" id="pkRefresh">🔄</button>
-  </div>
   <div class="pgrid" id="pickGrid"></div>
 </div>
 
@@ -279,9 +271,9 @@ function render(){
   $("pfName").textContent=S.name; $("pfBal").textContent=S.wallet.toFixed(2);
 
   // picker
-  $("pkPlayers").textContent=$("pkPlayers2").textContent=S.players;
+  $("pkPlayers").textContent=S.players;
   $("pkWallet").textContent=S.wallet; $("pkBet").textContent=S.bet;
-  $("pkTime").textContent=$("pkTime2").textContent=S.time;
+  $("pkTime").textContent=S.time;
   let g="";
   for(let n=1;n<=S.count;n++){
     const c=S.myCard===n?" mine":S.taken.includes(n)?" taken":"";
@@ -322,7 +314,6 @@ document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
 $("openFree").onclick=()=>toast("Practice mode is coming soon");
 $("joinBtn").onclick=()=>{ show("pick"); sync(); };
 $("backBtn").onclick=()=>show("lobby");
-$("pkRefresh").onclick=sync;
 
 $("pickGrid").onclick=async e=>{
   const el=e.target.closest(".num"); if(!el) return;
