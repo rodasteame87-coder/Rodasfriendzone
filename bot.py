@@ -1,4 +1,5 @@
 import asyncio, hashlib, hmac, json, os, random
+from pathlib import Path
 from urllib.parse import parse_qsl
 from aiohttp import web
 from aiogram import Bot, Dispatcher
@@ -7,11 +8,13 @@ from aiogram.types import (Message, InlineKeyboardMarkup,
                            InlineKeyboardButton, WebAppInfo)
 
 TOKEN = os.environ["BOT_TOKEN"]        # from BotFather
-WEBAPP_URL = os.environ["WEBAPP_URL"]  # public https URL of this server
+WEBAPP_URL = os.environ["WEBAPP_URL"]  # https://rodasfriendzone.onrender.com
 PORT = int(os.getenv("PORT", 8080))
 BET = 10
 CALL_EVERY = 4        # seconds between calls
 LOBBY_SECONDS = 30    # wait time before a round starts
+
+INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
 game = {"called": [], "players": {}, "phase": "lobby", "winner": None}
 
@@ -65,7 +68,17 @@ async def game_loop():
         game["players"].clear()
 
 
-# ---------- API ----------
+# ---------- web pages / API ----------
+async def index(request):
+    if not INDEX_FILE.exists():
+        return web.Response(text=f"File not found: {INDEX_FILE}", status=404)
+    return web.FileResponse(INDEX_FILE)
+
+
+async def health(request):
+    return web.Response(text="ok")
+
+
 async def api_state(req):
     user = verify(req.query.get("initData", ""))
     if not user:
@@ -124,7 +137,8 @@ async def main():
 
     app = web.Application()
     app.add_routes([
-        web.get("/", lambda r: web.FileResponse("index.html")),
+        web.get("/", index),
+        web.get("/health", health),
         web.get("/api/state", api_state),
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
