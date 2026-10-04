@@ -1,399 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Rodas Friend Zone Bingo</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{
-  --felt:#0f3d2e; --felt2:#165a43; --ink:#0a2119; --cream:#f6efd9; --brass:#d9a441;
-  --tomato:#d64933; --sage:#4fa37a; --blue:#5b7db1; --dim:#7f9a8e;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--ink);color:var(--cream);
-  font-family:"Avenir Next","Segoe UI",system-ui,sans-serif}
-#app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--felt);padding:14px 12px 28px}
-.screen{display:none}.screen.on{display:block}
-h1{font-size:26px;margin:6px 0 2px;letter-spacing:.2px}
-.sub{color:var(--dim);font-size:14px;margin:0 0 14px}
-.btn{width:100%;border:0;border-radius:14px;padding:15px;font-size:18px;font-weight:800;
-  background:var(--brass);color:var(--ink)}
-.btn:disabled{opacity:.4}
-.btn.ghost{background:transparent;color:var(--cream);border:2px solid var(--felt2)}
-.btn.red{background:var(--tomato);color:#fff}
-.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
-.pill{background:var(--felt2);border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px}
-.back{background:none;border:0;color:var(--cream);font-size:16px;padding:6px 0}
-/* lobby */
-.hall{background:var(--felt2);border-radius:18px;padding:22px 16px;text-align:center;margin:10px 0 16px}
-.big{font-size:56px;font-weight:900;color:var(--brass);line-height:1}
-.hall p{margin:8px 0 0;color:var(--cream)}
-.stats{display:flex;gap:10px;margin-bottom:16px}
-.stats div{flex:1;background:var(--felt2);border-radius:12px;padding:10px;text-align:center}
-.stats b{display:block;font-size:20px}.stats span{font-size:12px;color:var(--dim)}
-/* lobby */
-#app.lobbyview{background:#c9eef6;color:#5a0b6e;padding-bottom:100px}
-.topline{display:flex;justify-content:space-between;align-items:center;margin:10px 4px 14px;font-weight:800}
-.live{display:flex;align-items:center;gap:10px;font-size:26px}
-.live i{width:34px;height:34px;border-radius:50%;background:#12a150;display:block}
-.bal{display:flex;align-items:center;gap:8px;font-size:15px}.bal b{font-size:24px}
-.gt{font-size:28px;font-weight:900;margin:6px 4px 14px}
-.thead{display:flex;justify-content:space-between;background:#fffdf3;border-radius:999px;padding:14px 18px;font-weight:800;font-size:12.5px;margin-bottom:14px}
-.lmsg{text-align:center;font-weight:700;margin:-4px 0 10px}
-.grow{display:flex;background:#fffdf3;border-radius:26px;overflow:hidden;box-shadow:0 6px 16px rgba(60,20,80,.15);margin-bottom:18px}
-.gbet{width:31%;background:#6a0f7c;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 0}
-.gbet b{font-size:54px;line-height:1}.gbet span{font-weight:800;font-size:17px;margin-top:6px}
-.gmid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;gap:4px;padding:8px 4px}
-.win{font-size:34px;color:#12a150;display:flex;align-items:center;gap:6px}
-.gmid span{font-size:16px}
-.gact{width:35%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:14px 10px}
-.st{background:#dff1e1;color:#176b3a;border-radius:999px;padding:8px 6px;font-weight:800;font-size:13px;width:100%;text-align:center}
-.st.wait{background:#fbe9c6;color:#7a4b00}
-.join{width:100%;border:0;border-radius:20px;padding:14px 0;background:#12a150;color:#fff;font-size:22px;font-weight:900}
-.join:disabled{opacity:.45}
-.free{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#e0f6fb;border-radius:24px;padding:20px}
-.free h3{margin:0 0 4px;font-size:24px}.free p{margin:0;font-size:16px}
-.open{border:0;border-radius:18px;background:#6a0f7c;color:#fff;font-size:22px;font-weight:900;padding:20px 26px}
-.tabs{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.08)}
-.tin{max-width:480px;margin:0 auto;display:flex}
-.tab{flex:1;text-align:center;font-size:30px;padding:10px 0 12px;color:#777}
-.tab span{display:block;font-size:17px;font-weight:800;margin-top:2px}
-.tab.on{color:#6a0f7c}
-/* cartela grid */
-.grid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-bottom:12px}
-.num{aspect-ratio:1;border:0;border-radius:8px;background:var(--felt2);color:var(--cream);
-  font-weight:700;font-size:13px;padding:0}
-.num.taken{background:#0b2a20;color:#3d5c50}
-.num.mine{background:var(--brass);color:var(--ink)}
-.hint{text-align:center;color:var(--dim);font-size:14px;margin:8px 0}
-/* card */
-.card{background:var(--cream);color:var(--ink);border-radius:14px;padding:8px;margin:8px 0 12px}
-.hd{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-bottom:4px}
-.hd b{text-align:center;color:#fff;border-radius:8px;padding:5px 0;font-size:18px}
-.L0{background:var(--tomato)}.L1{background:var(--brass);color:var(--ink)!important}
-.L2{background:#2b2b2b}.L3{background:var(--sage)}.L4{background:var(--blue)}
-.cells{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
-.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;
-  background:#fff;font-weight:800;font-size:20px;border:2px solid #e3d9ba}
-.cell.free{background:var(--brass)}
-.cell.on{background:var(--sage);color:#fff;border-color:var(--sage)}
-.cell.win{background:var(--tomato);color:#fff;border-color:var(--tomato)}
-/* game */
-.ball{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.ballbig{width:72px;height:72px;border-radius:50%;background:var(--cream);color:var(--ink);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-weight:900;font-size:28px;line-height:1;border:5px solid var(--brass)}
-.ballbig small{font-size:13px}
-.recent{display:flex;gap:6px;flex-wrap:wrap}
-.recent span{background:var(--felt2);border-radius:999px;padding:5px 10px;font-weight:700;font-size:14px}
-.board{display:grid;grid-template-columns:repeat(15,1fr);gap:2px;margin:10px 0}
-.board i{font-style:normal;font-size:10px;text-align:center;padding:4px 0;border-radius:4px;
-  background:#0b2a20;color:#3d5c50}
-.board i.c{background:var(--brass);color:var(--ink);font-weight:800}
-.row2{display:flex;gap:10px}.row2 .btn{font-size:16px}
-.note{background:#0b2a20;border-radius:12px;padding:12px;text-align:center;margin:8px 0}
-/* overlay + toast */
-#over{position:fixed;inset:0;background:rgba(5,20,14,.94);display:none;overflow:auto;padding:20px 14px}
-#over.on{display:block}
-#over .in{max-width:420px;margin:0 auto;text-align:center}
-#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--cream);
-  color:var(--ink);padding:10px 16px;border-radius:12px;font-weight:700;display:none;max-width:90%}
-@media (prefers-reduced-motion:no-preference){.cell,.num{transition:background .15s}}
-/* selection: sticky compact card */
-.selTop{position:sticky;top:0;z-index:5;background:var(--felt);margin:0 -12px 10px;padding:2px 12px 10px;box-shadow:0 6px 10px -6px rgba(0,0,0,.5)}
-.selRow{display:flex;gap:10px;align-items:flex-start}
-#preview{flex:0 0 50%;min-width:0}
-#preview .card{margin:0;padding:5px;border-radius:12px}
-#preview .hd{gap:3px;margin-bottom:3px}
-#preview .hd b{font-size:13px;padding:3px 0;border-radius:6px}
-#preview .cells{gap:3px}
-#preview .cell{font-size:14px;border-radius:7px;border-width:1px}
-#preview .empty{aspect-ratio:1/1.12;border:2px dashed var(--felt2);border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--dim);font-size:14px;padding:8px}
-.selSide{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
-.selTitle{font-size:22px;font-weight:900;color:var(--brass)}
-.selSide .sub{margin:0}
-.selSide .btn{padding:14px 8px;font-size:18px}
+  :root{
+    --bg:#c5ebf5; --cream:#fffbea; --purple:#9c00a0; --title:#7a0a8c;
+    --b:#2f5fd0; --i:#e8453c; --n:#1e9a4a; --g:#e29a10; --o:#8a0f9a;
+    --hb:#16a34a; --hi:#f4891f; --hn:#16a34a; --hg:#e5262e; --ho:#8a0f9a;
+    --row:#e9dcf1; --mark:#16a34a; --cell:#ebe7ee; --cellmark:#c9f0d4;
+    --ink:#3a3a3a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);font-family:Roboto,"Segoe UI",system-ui,sans-serif;color:var(--ink)}
+  body{padding:8px 8px 24px;max-width:720px;margin:0 auto}
+  h1{margin:6px 0 10px;text-align:center;color:var(--title);font-size:26px;font-weight:800}
+  h1 span{font-size:30px;vertical-align:-3px}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .stat{background:var(--cream);border-radius:12px;padding:8px 4px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .stat small{display:block;color:var(--purple);font-weight:700;font-size:15px}
+  .stat b{font-size:28px;color:#111}
+
+  .main{display:grid;grid-template-columns:minmax(0,0.9fr) minmax(0,1.4fr);gap:8px;align-items:start}
+
+  .calls{background:var(--cream);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .calls h3{margin:0;padding:8px 0;text-align:center;color:var(--purple);font-size:16px}
+  .calls table{width:100%;border-collapse:collapse;table-layout:fixed}
+  .calls th{color:#fff;font-size:20px;padding:7px 0}
+  .calls th:nth-child(1){background:var(--hb)} .calls th:nth-child(2){background:var(--hi)}
+  .calls th:nth-child(3){background:var(--hn)} .calls th:nth-child(4){background:var(--hg)}
+  .calls th:nth-child(5){background:var(--ho)}
+  .calls td{background:var(--row);text-align:center;font-weight:700;font-size:15px;color:#555;height:37.5px;border:0}
+  .calls td.on{background:var(--mark);color:#fff}
+
+  .right{display:flex;flex-direction:column;gap:8px}
+  .panel{background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .current{background:var(--purple);color:#fff;text-align:center;padding:12px 0 16px}
+  .current h3{margin:0 0 10px;font-size:20px}
+  .ball{width:104px;height:104px;border-radius:50%;margin:0 auto;background:#ff9800;border:5px solid #fff;
+        display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:800;color:#fff}
+  .last{display:flex;justify-content:center;padding:10px}
+  .last div{width:82px;height:82px;border-radius:50%;background:#2f6fe0;color:#fff;font-size:34px;font-weight:800;
+            display:flex;align-items:center;justify-content:center}
+  .auto{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-weight:700;font-size:20px;color:#222}
+  .switch{position:relative;width:82px;height:46px}
+  .switch input{display:none}
+  .switch span{position:absolute;inset:0;background:#bbb;border-radius:30px;transition:.2s}
+  .switch span::after{content:"";position:absolute;top:5px;left:5px;width:36px;height:36px;border-radius:50%;background:#fff;transition:.2s}
+  .switch input:checked+span{background:#16a34a}
+  .switch input:checked+span::after{left:41px}
+
+  .card{padding:12px 12px 12px}
+  .card h3{margin:2px 0 10px;text-align:center;color:var(--title);font-size:20px}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
+  .grid .h{color:#fff;text-align:center;font-weight:800;font-size:20px;padding:10px 0;border-radius:3px}
+  .h:nth-child(1){background:var(--b)} .h:nth-child(2){background:var(--i)} .h:nth-child(3){background:var(--n)}
+  .h:nth-child(4){background:var(--g)} .h:nth-child(5){background:var(--o)}
+  .cell{background:var(--cell);text-align:center;font-weight:700;font-size:23px;color:#333;height:58px;
+        display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:pointer;user-select:none}
+  .cell.m{background:var(--cellmark);color:var(--mark)}
+  .cell.free{font-size:20px;cursor:default}
+  .cardno{text-align:center;color:var(--title);font-weight:800;font-size:20px;margin:14px 0 10px}
+  button{border:0;border-radius:12px;color:#fff;font-weight:800;font-size:21px;padding:0;height:66px;cursor:pointer;width:100%}
+  button:active{transform:scale(.98)}
+  .win{background:#f39c1b;margin-bottom:12px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .leave{background:#e8212f;height:62px} .refresh{background:#1565d8;height:62px}
+  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#222;color:#fff;padding:12px 20px;
+         border-radius:24px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center}
+  #toast.show{opacity:1}
 </style>
 </head>
 <body>
-<div id="app" class="lobbyview">
 
-  <!-- LOBBY -->
-  <section id="lobby" class="screen on">
-    <div class="topline">
-      <span class="live"><i></i>Live</span>
-      <span class="bal">💳 Balance: <b>0.00</b></span>
-    </div>
-    <h2 class="gt">🎯 BINGO GAMES</h2>
-    <div class="thead"><span>BET</span><span>WIN / PLAYER</span><span>STATUS &amp; JOIN</span></div>
-    <div id="lobbyMsg" class="lmsg"></div>
+<h1><span>🎱</span> Rodas Friend Zone Bingo</h1>
 
-    <div class="grow">
-      <div class="gbet"><b id="lbBet">10</b><span>BIRR</span></div>
-      <div class="gmid">
-        <div class="win">🏆 <b id="lbWin">0</b></div>
-        <span id="lbPlayers">0 players</span>
-      </div>
-      <div class="gact">
-        <span class="st" id="lbStatus">READY</span>
-        <button class="join" id="joinBtn">JOIN</button>
-      </div>
-    </div>
-
-    <div class="free">
-      <div>
-        <h3>🎮 FREE</h3>
-        <p>Practice Mode — No Real Money</p>
-      </div>
-      <button class="open" id="openFree">OPEN</button>
-    </div>
-
-    <nav class="tabs"><div class="tin">
-      <div class="tab on">🎮<span>Game</span></div>
-      <div class="tab" data-soon="Scores">🏆<span>Scores</span></div>
-      <div class="tab" data-soon="Profile">👤<span>Profile</span></div>
-    </div></nav>
-  </section>
-
-  <!-- CARTELA SELECTION -->
-  <section id="select" class="screen">
-    <div class="selTop">
-      <div class="bar">
-        <button class="back" id="leaveBtn">‹ Leave</button>
-        <span class="pill" id="selTimer">Waiting</span>
-      </div>
-      <div class="selRow">
-        <div id="preview"></div>
-        <div class="selSide">
-          <div class="selTitle" id="selTitle">Pick a cartela</div>
-          <p class="sub" id="selHint">Tap a number from 1 to 100. Tap it again to remove it.</p>
-          <button class="btn" id="proceedBtn" disabled>Play</button>
-        </div>
-      </div>
-    </div>
-    <div class="grid" id="grid"></div>
-  </section>
-
-  <!-- GAME -->
-  <section id="game" class="screen">
-    <div class="bar">
-      <span class="pill" id="gStatus">Starting…</span>
-      <span class="pill" id="gCount">0/75</span>
-    </div>
-    <div class="ball">
-      <div class="ballbig" id="lastBall">–</div>
-      <div class="recent" id="recent"></div>
-    </div>
-    <div class="board" id="board"></div>
-    <div id="myCard"></div>
-    <div id="gNote"></div>
-    <div class="row2">
-      <button class="btn ghost" id="autoBtn">Auto: ON</button>
-      <button class="btn red" id="bingoBtn">BINGO!</button>
-    </div>
-  </section>
+<div class="stats">
+  <div class="stat"><small>Players</small><b id="players">1</b></div>
+  <div class="stat"><small>Derash</small><b id="derash">0</b></div>
+  <div class="stat"><small>Bet</small><b id="bet">10</b></div>
+  <div class="stat"><small>Call</small><b id="callCount">0</b></div>
 </div>
 
-<div id="over"><div class="in" id="overIn"></div></div>
+<div class="main">
+  <div class="calls">
+    <h3>BINGO CALLS</h3>
+    <table>
+      <thead><tr><th>B</th><th>I</th><th>N</th><th>G</th><th>O</th></tr></thead>
+      <tbody id="callsBody"></tbody>
+    </table>
+  </div>
+
+  <div class="right">
+    <div class="panel current"><h3>Current Call</h3><div class="ball" id="ball">–</div></div>
+    <div class="panel last"><div id="lastCall">–</div></div>
+    <div class="panel auto">Auto
+      <label class="switch"><input type="checkbox" id="auto" checked><span></span></label>
+    </div>
+    <div class="panel card">
+      <h3>Chosen Cartela</h3>
+      <div class="grid" id="cardGrid"></div>
+      <div class="cardno">Card Number: <span id="cardNo">35</span></div>
+      <button class="win" id="winBtn">BINGO WIN</button>
+      <div class="row">
+        <button class="leave" id="leaveBtn">LEAVE</button>
+        <button class="refresh" id="refreshBtn">REFRESH</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
-const tg = window.Telegram && window.Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
-const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-let UID = tgUser ? String(tgUser.id) : null;
-if (!UID) {
-  try { UID = localStorage.getItem('uid') || ('guest-' + Math.random().toString(36).slice(2, 8));
-        localStorage.setItem('uid', UID); } catch (e) { UID = 'guest-' + Math.random().toString(36).slice(2, 8); }
-}
-const NAME = tgUser ? (tgUser.first_name || 'Player') : 'Player';
+/* ---------- Telegram ---------- */
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor && tg.setHeaderColor('#1e2836'); }
 
-const $ = (id) => document.getElementById(id);
-let S = null, screen = 'lobby', cartelas = null, marked = new Set(), lastGame = null, first = true, busy = false;
+/* ---------- Config ---------- */
+const API = "/api";        // set to "" for demo mode (no server needed)
+const DEMO = !API;
 
-async function api(path, method, body) {
-  const q = 'user_id=' + encodeURIComponent(UID) + '&user_name=' + encodeURIComponent(NAME);
-  const url = '/api/' + path + (path.indexOf('?') >= 0 ? '&' : '?') + q;
-  try {
-    const r = await fetch(url, { method: method || 'GET', headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': (tg && tg.initData) || '' },
-      body: body ? JSON.stringify(body) : undefined });
-    return await r.json();
-  } catch (e) { return null; }
-}
-function toast(t) {
-  const el = $('toast'); el.textContent = t; el.style.display = 'block';
-  clearTimeout(toast.t); toast.t = setTimeout(() => (el.style.display = 'none'), 2200);
-}
-function show(name) {
-  screen = name;
-  $('app').classList.toggle('lobbyview', name === 'lobby');
-  ['lobby', 'select', 'game'].forEach((s) => $(s).classList.toggle('on', s === name));
-}
-const letter = (n) => 'BINGO'[Math.floor((n - 1) / 15)];
+/* ---------- State ---------- */
+const COLS = ["B","I","N","G","O"];
+const state = {
+  card: [[15,21,42,50,67],[7,23,44,51,74],[2,30,0,56,65],[5,29,41,47,70],[12,24,43,49,72]], // 0 = FREE
+  cardNo: 35, called: [], marked: new Set(), players: 1, derash: 0, bet: 10
+};
 
-function cardHTML(b, isMarked, win) {
-  let h = '<div class="card"><div class="hd">' + [...'BINGO'].map((l, i) => '<b class="L' + i + '">' + l + '</b>').join('') + '</div><div class="cells">';
-  b.forEach((row, r) => row.forEach((v, c) => {
-    const free = v === 'FREE', cls = ['cell'];
-    if (free) cls.push('free'); else if (isMarked(v)) cls.push('on');
-    if (win && win.has(r + ',' + c)) cls.push('win');
-    h += '<div class="' + cls.join(' ') + '" data-n="' + (free ? '' : v) + '">' + (free ? '★' : v) + '</div>';
+/* ---------- Render ---------- */
+const $ = id => document.getElementById(id);
+const toast = msg => { const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); };
+
+function buildCalls(){
+  let h = "";
+  for (let r=0;r<15;r++){
+    h += "<tr>";
+    for (let c=0;c<5;c++){ const n=c*15+r+1; h += `<td id="c${n}">${n}</td>`; }
+    h += "</tr>";
+  }
+  $("callsBody").innerHTML = h;
+}
+
+function buildCard(){
+  let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
+  state.card.forEach((row,r)=>row.forEach((n,c)=>{
+    if (n===0) h += `<div class="cell free m" data-free="1">FREE</div>`;
+    else h += `<div class="cell${state.marked.has(n)?" m":""}" data-n="${n}">${n}</div>`;
   }));
-  return h + '</div></div>';
+  $("cardGrid").innerHTML = h;
+  $("cardNo").textContent = state.cardNo;
 }
 
-/* ---------- routing between screens ---------- */
-function route() {
-  const mine = S.my_cartela, ph = S.phase;
-  if (first) {
-    first = false;
-    if (mine && (ph !== 'selection' || S.proceeded)) show('game');
-    else if (S.joined && ph === 'selection') show('select');
+function renderStats(){
+  $("players").textContent = state.players;
+  $("derash").textContent  = state.derash;
+  $("bet").textContent     = state.bet;
+  $("callCount").textContent = state.called.length;
+}
+
+/* ---------- Game logic ---------- */
+function onCall(n){
+  if (state.called.includes(n)) return;
+  state.called.push(n);
+  $("c"+n).classList.add("on");
+  $("lastCall").textContent = n;
+  $("ball").textContent = n;
+  if ($("auto").checked && state.card.flat().includes(n)) state.marked.add(n);
+  buildCard(); renderStats();
+}
+
+function hasBingo(){
+  const m = (r,c) => state.card[r][c]===0 || state.marked.has(state.card[r][c]);
+  const lines = [];
+  for (let i=0;i<5;i++){
+    lines.push([0,1,2,3,4].map(c=>[i,c]));
+    lines.push([0,1,2,3,4].map(r=>[r,i]));
   }
-  if (screen === 'game' && !mine && ph === 'selection') show('lobby');       // new round started
-  if (screen === 'select' && !mine && ph !== 'selection') { show('lobby'); toast('Round already started'); }
-  if (screen === 'select' && mine && ph !== 'selection') show('game');       // countdown ended
-  if (screen === 'lobby' && mine && ph !== 'selection') show('game');
-  if (S.game_number !== lastGame) { marked = new Set(); lastGame = S.game_number; }
+  lines.push([0,1,2,3,4].map(i=>[i,i]));
+  lines.push([0,1,2,3,4].map(i=>[i,4-i]));
+  return lines.some(l=>l.every(([r,c])=>m(r,c)));
 }
 
-/* ---------- renderers ---------- */
-function renderLobby() {
-  const open = S.phase === 'selection';
-  $('lobbyMsg').textContent = '';
-  $('lbBet').textContent = S.bet;
-  $('lbWin').textContent = S.prize;
-  $('lbPlayers').textContent = S.players + (S.players === 1 ? ' player' : ' players');
-  const st = $('lbStatus');
-  if (open && S.players === 0) { st.textContent = 'READY'; st.className = 'st'; }
-  else if (open) { st.textContent = 'STARTS IN ' + S.selection_remaining + 's'; st.className = 'st wait'; }
-  else if (S.phase === 'playing') { st.textContent = 'IN PROGRESS'; st.className = 'st wait'; }
-  else { st.textContent = 'ENDING'; st.className = 'st wait'; }
-  $('joinBtn').disabled = !open;
-}
+$("cardGrid").addEventListener("click", e=>{
+  const el = e.target.closest(".cell"); if(!el || el.dataset.free) return;
+  const n = +el.dataset.n;
+  if ($("auto").checked) return toast("Turn Auto off to mark manually");
+  if (!state.called.includes(n)) return toast("That number hasn't been called");
+  state.marked.has(n) ? state.marked.delete(n) : state.marked.add(n);
+  buildCard();
+});
 
-function renderSelect() {
-  $('selTimer').textContent = S.players === 0 ? 'Waiting' : S.selection_remaining + 's left';
-  const taken = new Set(S.taken_cartelas), mine = S.my_cartela;
-  let g = '';
-  for (let n = 1; n <= 100; n++) {
-    const cls = n === mine ? 'num mine' : taken.has(n) ? 'num taken' : 'num';
-    g += '<button class="' + cls + '" data-n="' + n + '">' + n + '</button>';
+$("auto").addEventListener("change", ()=>{
+  if ($("auto").checked){
+    state.called.forEach(n=>{ if(state.card.flat().includes(n)) state.marked.add(n); });
+    buildCard();
   }
-  $('grid').innerHTML = g;
-  if (mine && cartelas && cartelas[mine]) {
-    $('preview').innerHTML = cardHTML(cartelas[mine], () => false);
-  } else {
-    $('preview').innerHTML = '<div class="empty">Your card shows here</div>';
+});
+
+$("winBtn").addEventListener("click", async ()=>{
+  if (!hasBingo()) return toast("No bingo yet — keep playing");
+  if (!DEMO){
+    const r = await fetch(API+"/bingo", {method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({initData: tg && tg.initData, cardNo: state.cardNo})}).then(r=>r.json()).catch(()=>null);
+    return toast(r && r.ok ? "Bingo confirmed! 🎉" : "Bingo rejected");
   }
-  $('selTitle').textContent = mine ? 'Cartela ' + mine : 'Pick a cartela';
-  $('selHint').style.display = mine ? 'none' : 'block';
-  $('proceedBtn').disabled = !mine;
+  toast("BINGO! 🎉");
+});
+
+$("leaveBtn").addEventListener("click", ()=>{
+  if (!DEMO) fetch(API+"/leave",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData: tg && tg.initData})});
+  tg ? tg.close() : toast("Left the game");
+});
+
+$("refreshBtn").addEventListener("click", ()=> DEMO ? toast("Refreshed") : sync());
+
+/* ---------- Server sync ---------- */
+async function sync(){
+  try{
+    const s = await fetch(API+"/state?card="+state.cardNo+"&initData="+encodeURIComponent((tg&&tg.initData)||"")).then(r=>r.json());
+    Object.assign(state,{players:s.players,derash:s.derash,bet:s.bet});
+    if (s.card) state.card = s.card;
+    if (s.cardNo) state.cardNo = s.cardNo;
+    buildCard(); renderStats();
+    (s.called||[]).forEach(onCall);
+  }catch(e){ toast("Connection problem"); }
 }
 
-function renderGame() {
-  const called = S.called || [], cs = new Set(called);
-  $('gStatus').textContent = S.phase === 'selection' ? 'Starts in ' + S.selection_remaining + 's'
-    : S.phase === 'playing' ? 'Game ' + S.game_number : 'Game over';
-  $('gCount').textContent = called.length + '/75';
-  const lb = S.last_called;
-  $('lastBall').innerHTML = lb ? '<small>' + letter(lb) + '</small>' + lb : '–';
-  $('recent').innerHTML = called.slice(-6, -1).reverse().map((n) => '<span>' + letter(n) + n + '</span>').join('');
-  let b = '';
-  for (let n = 1; n <= 75; n++) b += '<i class="' + (cs.has(n) ? 'c' : '') + '">' + n + '</i>';
-  $('board').innerHTML = b;
+/* ---------- Init ---------- */
+buildCalls(); buildCard(); renderStats();
 
-  if (S.my_board) {
-    const isOn = S.auto ? (v) => cs.has(v) : (v) => marked.has(v);
-    $('myCard').innerHTML = '<div class="hint">Your cartela ' + S.my_cartela + '</div>' + cardHTML(S.my_board, isOn);
-    $('gNote').innerHTML = '';
-  } else {
-    $('myCard').innerHTML = '';
-    $('gNote').innerHTML = '<div class="note">' + (S.disqualified ? 'You were disqualified for a wrong BINGO. You can watch this round.' : 'You are watching this round.') + '</div>';
-  }
-  $('autoBtn').textContent = 'Auto: ' + (S.auto ? 'ON' : 'OFF');
-  $('autoBtn').disabled = !S.my_board;
-  $('bingoBtn').disabled = !S.my_board || S.phase !== 'playing' || S.auto;
+if (DEMO){
+  const pool = Array.from({length:75},(_,i)=>i+1).sort(()=>Math.random()-.5);
+  setInterval(()=>{ if(pool.length) onCall(pool.pop()); }, 4000);
+} else {
+  sync(); setInterval(sync, 3000);
 }
-
-function renderOver() {
-  const o = $('over');
-  if (S.phase !== 'result') { o.classList.remove('on'); return; }
-  if (!S.winner_board) {
-    $('overIn').innerHTML = '<h1>No winner</h1><p class="sub">Nobody completed a pattern. Next round in ' + S.result_remaining + 's</p>';
-    o.classList.add('on'); return;
-  }
-  const me = (S.winner_user_ids || []).includes(UID);
-  const win = new Set((S.winning_cells || []).map((c) => c[0] + ',' + c[1]));
-  const cs = new Set(S.called || []);
-  $('overIn').innerHTML =
-    '<h1>' + (me ? 'You won!' : 'Bingo!') + '</h1>' +
-    '<p class="sub">' + (me ? 'Great game' : S.winner + ' won') + ' · cartela ' + S.winner_cartela + ' · ' + S.winner_pattern + '</p>' +
-    '<div class="hall"><div class="big">' + S.prize + '</div><p>Prize</p></div>' +
-    cardHTML(S.winner_board, (v) => cs.has(v), win) +
-    '<p class="sub">Next round in ' + S.result_remaining + 's</p>';
-  o.classList.add('on');
-}
-
-function render() {
-  if (!S) return;
-  if (screen === 'lobby') renderLobby();
-  if (screen === 'select') renderSelect();
-  if (screen === 'game') renderGame();
-  renderOver();
-}
-
-/* ---------- polling ---------- */
-async function poll() {
-  if (busy) return;
-  const s = await api('state');
-  if (s && s.phase) { S = s; route(); render(); }
-  else if (s && s.message) { $('lobbyMsg').textContent = s.message; }
-}
-
-/* ---------- actions ---------- */
-async function act(path, body) {
-  busy = true;
-  const r = await api(path, 'POST', body || {});
-  busy = false;
-  if (r && r.phase) { S = r; if (r.message && r.success === false) toast(r.message); route(); render(); }
-  return r;
-}
-
-$('joinBtn').onclick = async () => {
-  const r = await act('join');
-  if (r && r.success) show('select'), render();
-};
-$('leaveBtn').onclick = async () => { await act('leave'); show('lobby'); render(); };
-$('proceedBtn').onclick = async () => {
-  const r = await act('proceed');
-  if (r && r.success) show('game'), render();
-};
-$('grid').onclick = (e) => {
-  const n = e.target.dataset && e.target.dataset.n;
-  if (n) act('select', { cartela: Number(n), name: NAME });
-};
-$('myCard').onclick = (e) => {
-  const n = Number(e.target.dataset && e.target.dataset.n);
-  if (!n || !S || S.auto) return;
-  marked.has(n) ? marked.delete(n) : marked.add(n);
-  render();
-};
-$('openFree').onclick = () => toast('Practice mode is coming soon');
-document.querySelectorAll('.tab[data-soon]').forEach((t) => (t.onclick = () => toast(t.dataset.soon + ' is coming soon')));
-$('autoBtn').onclick = () => act('auto', { auto: !S.auto });
-$('bingoBtn').onclick = async () => {
-  const r = await act('claim-bingo');
-  if (r && r.message) toast(r.message);
-};
-
-(async () => {
-  const c = await api('cartelas');
-  if (c) cartelas = c;
-  await poll();
-  setInterval(poll, 1000);
-})();
 </script>
 </body>
 </html>
