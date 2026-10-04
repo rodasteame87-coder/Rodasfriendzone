@@ -163,7 +163,7 @@
       <div class="pf-top"><span>👤 Profile</span><button class="pf-ref" id="pfRef">↻</button></div>
       <div class="pf-head">
         <div class="pf-av" id="pfAv">P</div>
-        <div class="pf-who"><b id="pfName">Player</b><small id="pfSub">Player Profile</small></div>
+        <div class="pf-who"><b id="pfName">Player</b><small>Player Profile</small></div>
         <div class="pf-bal"><small>Balance</small><b><span id="pfBal">0.00</span> birr</b></div>
       </div>
       <div class="pf-stats">
@@ -320,7 +320,6 @@ function drawProfile(){
   if(!P || P.error) return;
   $("pfName").textContent = P.name;
   $("pfAv").textContent = (P.name||"P").charAt(0).toUpperCase();
-  $("pfSub").textContent = "Player Profile · ID " + P.id;
   $("pfBal").textContent = P.balance.toFixed(2);
   $("pfWins").textContent = P.wins;
   $("pfWon").textContent = P.won + " birr";
@@ -329,8 +328,7 @@ function drawProfile(){
   let h = "";
   if(pfTab==="ov"){
     h = prow("Current Balance", P.balance.toFixed(2)+" birr")
-      + prow("Telegram ID", P.id)
-      + prow("Username", P.username ? "@"+esc(P.username) : "--")
+      + prow("Username", P.username ? "@"+esc(P.username) : esc(P.name))
       + prow("Member Since", fmtDate(P.joined));
   } else if(pfTab==="tx"){
     h = P.tx.length ? P.tx.map(t=>
@@ -361,7 +359,6 @@ function render(){
 
   // lobby
   $("bal").textContent=S.wallet.toFixed(2);
-  $("pfName").textContent=S.name; $("pfBal").textContent=S.wallet.toFixed(2);
   $("roomList").innerHTML = S.rooms.map(r=>{
     const lbl = r.phase!=="lobby" ? "playing" : r.players ? r.time+"s" : "waiting";
     const hot = r.players && r.phase==="lobby" ? " t" : "";
