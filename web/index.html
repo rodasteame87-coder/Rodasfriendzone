@@ -379,6 +379,7 @@ const COLS = ["B","I","N","G","O"];
 const st = { card:null, cardNo:0, called:[], marked:new Set() };
 let R = 0;                                   // room (bet) the player is looking at
 let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
+let claimedKey = "";                         // round already auto-claimed
 let P = null, pfTab = "ov";                  // profile data + selected profile tab
 const H = { scope:"recent", bet:10, q:"" };  // history filters
 
@@ -440,6 +441,21 @@ function autoMark(){
     const mine = new Set(st.card.flat());
     st.called.forEach(n=>{ if(mine.has(n)) st.marked.add(n); });
   }
+}
+
+/* Auto ON: press BINGO WIN for the player as soon as a pattern is complete */
+async function autoClaim(){
+  if(!S || S.error || !$("auto").checked) return;
+  if(S.phase!=="playing" || !st.card) return;
+  const key = S.room+":"+S.round;
+  if(claimedKey===key || !hasBingo()) return;
+  claimedKey = key;                          // only one try at a time
+  try{
+    const r = await post("/bingo",{});
+    if(r.ok) toast("Bingo claimed automatically! 🎉");
+    else claimedKey = "";                    // not accepted, may try again
+  }catch(e){ claimedKey = ""; }
+  sync();
 }
 
 /* ---------- profile ---------- */
@@ -616,6 +632,7 @@ function render(){
   }
 
   drawWin();
+  autoClaim();
 }
 async function sync(){
   try{ S=await get("/state?room="+R); errShown=false; render(); }
@@ -691,6 +708,7 @@ $("cardGrid").onclick=e=>{
 $("auto").onchange=()=>{
   autoMark();
   if(st.card) $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
+  autoClaim();
 };
 $("winBtn").onclick=async()=>{
   if(!hasBingo()) return toast("No bingo yet — keep playing");
