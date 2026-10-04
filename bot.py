@@ -31,7 +31,8 @@ INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None,
              "seq": [], "secret": "", "hash": "",
-             "wcells": [], "wname": "", "finish_at": 0}
+             "wcells": [], "wname": "", "finish_at": 0,
+             "winners": [], "wlist": [], "share": 0}
          for b in BETS}
 wallets, names, seen = {}, {}, {}
 joined, usernames, wins, won = {}, {}, {}, {}      # profile data
@@ -69,6 +70,16 @@ def winning_cells(card, called):
         if all(hit(r, c) for r, c in p):
             return nm, [list(x) for x in p]
     return "", []
+
+
+def first_bingo_call(card, called_list):
+    """Index of the call where this card first got a bingo (None if never)."""
+    seen_nums = set()
+    for i, n in enumerate(called_list):
+        seen_nums.add(n)
+        if has_bingo(card, seen_nums):
+            return i
+    return None
 
 
 # ---------- helpers ----------
@@ -147,15 +158,16 @@ def record_game(g):
     if not g["players"]:
         return
     game_counter[0] += 1
-    wid = g["winner"]
+    wl = g.get("wlist", [])
     ref = "".join(random.choices(string.ascii_uppercase, k=2)) + \
           "".join(random.choices(string.digits, k=4))
     games.insert(0, {
         "id": game_counter[0], "bet": g["bet"], "t": int(time.time()),
-        "winner": names.get(wid, "Player") if wid else "",
-        "wid": wid, "board": g["players"].get(wid) if wid else None,
+        "winner": ", ".join(w["name"] for w in wl),
+        "wids": [w["uid"] for w in wl],
+        "board": ", ".join(str(w["board"]) for w in wl),
         "ref": ref, "calls": len(g["called"]),
-        "prize": g["prize"] if wid else 0,
+        "prize": g["share"] if wl else 0,
         "called": list(g["called"]), "seq": list(g["seq"]),
         "secret": g["secret"], "hash": g["hash"],
         "pl": list(g["players"].keys()),
@@ -167,7 +179,7 @@ def summ(r, uid):
     return {"id": r["id"], "bet": r["bet"], "t": r["t"],
             "winner": r["winner"], "board": r["board"], "ref": r["ref"],
             "calls": r["calls"], "prize": r["prize"],
-            "won": r["wid"] == uid, "mine": uid in r["pl"]}
+            "won": uid in r["wids"], "mine": uid in r["pl"]}
 
 
 # ---------- background jobs ----------
@@ -186,7 +198,8 @@ async def run_round(g):
     g.update(called=[], phase="lobby", winner=None, prize=0,
              round=g["round"] + 1, deadline=None,
              seq=[], secret="", hash="",
-             wcells=[], wname="", finish_at=0)
+             wcells=[], wname="", finish_at=0,
+             winners=[], wlist=[], share=0)
 
     # wait for the first player, then count down
     while g["deadline"] is None or time.time() < g["deadline"]:
@@ -269,13 +282,18 @@ async def api_state(req):
         "myCard": my, "card": make_card(my) if my else None,
         "called": g["called"],
         "winner": names.get(g["winner"]), "prize": g["prize"],
+        "share": g.get("share", 0),
+        "winners": [{"name": w["name"], "board": w["board"],
+                     "card": make_card(w["board"]),
+                     "pat": w["pat"], "cells": w["cells"],
+                     "me": w["uid"] == uid} for w in g.get("wlist", [])],
         "wBoard": g["players"].get(g["winner"]) if g["winner"] else None,
         "wCard": make_card(g["players"][g["winner"]])
                  if g["winner"] in g["players"] else None,
         "wCells": g.get("wcells", []),
         "wName": g.get("wname", ""),
         "left": finish_left(g),
-        "isWinner": g["winner"] == uid,
+        "isWinner": uid in g.get("winners", []),
         "room": g["bet"], "inRoom": mine["bet"] if mine else None,
         "rooms": [{"bet": r["bet"], "phase": r["phase"],
                    "players": len(r["players"]),
@@ -392,21 +410,47 @@ async def api_bingo(req):
         return web.json_response({"ok": False})
     uid = user["id"]
     g = room_of(uid)
-    if not g or g["phase"] != "playing":
+    if not g:
         return web.json_response({"ok": False})
+    # already counted as a winner of this finished round (shared win)
+    if g["phase"] == "finished" and uid in g.get("winners", []):
+        return web.json_response({"ok": True})
+    if g["phase"] != "playing":
+        return web.json_response({"ok": False})
+    called = set(g["called"])
     card = make_card(g["players"][uid])
-    if has_bingo(card, set(g["called"])):
+    if has_bingo(card, called):
+        # the earliest call that gave anybody a bingo decides the winners:
+        # only players who finished on that SAME call share the prize,
+        # players whose bingo came earlier or later do not share
+        firsts = {u: first_bingo_call(make_card(no), g["called"])
+                  for u, no in g["players"].items()}
+        firsts = {u: i for u, i in firsts.items() if i is not None}
+        best = min(firsts.values())
+        winners = [u for u, i in firsts.items() if i == best]
+        wcalled = set(g["called"][:best + 1])
+        share = g["prize"] // len(winners)
+        shared = len(winners) > 1
         g["phase"] = "finished"
-        g["winner"] = uid
-        g["wname"], g["wcells"] = winning_cells(card, set(g["called"]))
+        g["winner"] = winners[0]
+        g["winners"] = winners
+        g["share"] = share
+        g["wlist"] = []
+        for u in winners:
+            no = g["players"][u]
+            nm, cells = winning_cells(make_card(no), wcalled)
+            g["wlist"].append({"uid": u, "name": names.get(u, "Player"),
+                               "board": no, "pat": nm, "cells": cells})
+            wallets[u] = wallets.get(u, 0) + share
+            wins[u] = wins.get(u, 0) + 1
+            won[u] = won.get(u, 0) + share
+            wl = winlog.setdefault(u, [])
+            wl.insert(0, {"t": int(time.time()), "bet": g["bet"], "prize": share})
+            del wl[50:]
+            log(u, "win", share,
+                f"Won in room {g['bet']}" + (" (shared)" if shared else ""))
+        g["wname"], g["wcells"] = g["wlist"][0]["pat"], g["wlist"][0]["cells"]
         g["finish_at"] = time.time() + WIN_SCREEN_SECONDS
-        wallets[uid] = wallets.get(uid, 0) + g["prize"]
-        wins[uid] = wins.get(uid, 0) + 1
-        won[uid] = won.get(uid, 0) + g["prize"]
-        wl = winlog.setdefault(uid, [])
-        wl.insert(0, {"t": int(time.time()), "bet": g["bet"], "prize": g["prize"]})
-        del wl[50:]
-        log(uid, "win", g["prize"], f"Won in room {g['bet']}")
         return web.json_response({"ok": True})
     return web.json_response({"ok": False})
 
