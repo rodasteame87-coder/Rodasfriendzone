@@ -10,17 +10,18 @@ from aiogram.types import (Message, InlineKeyboardMarkup,
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
 PORT = int(os.getenv("PORT", 8080))
-BET = 10
+BET = 10               # price of 1 cartela
 CALL_EVERY = 4         # seconds between calls
-LOBBY_SECONDS = 30     # cartela selection time
+LOBBY_SECONDS = 30     # countdown after the FIRST player picks a cartela
 START_BALANCE = 1000   # free test money
 CARD_COUNT = 100       # numbers shown in the picker
 MIN_PLAYERS = 1        # change to 2 or more for real games
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
+# deadline = None means: waiting for the first player (no countdown yet)
 game = {"phase": "lobby", "called": [], "players": {}, "winner": None,
-        "prize": 0, "round": 0, "deadline": time.time() + LOBBY_SECONDS}
+        "prize": 0, "round": 0, "deadline": None}
 wallets, names = {}, {}
 
 
@@ -65,12 +66,22 @@ def has_bingo(card, called):
 async def game_loop():
     while True:
         game.update(called=[], phase="lobby", winner=None, prize=0,
-                    round=game["round"] + 1,
-                    deadline=time.time() + LOBBY_SECONDS)
-        while time.time() < game["deadline"]:
+                    round=game["round"] + 1, deadline=None)
+
+        # wait until the first player picks a cartela, then count down
+        while game["deadline"] is None or time.time() < game["deadline"]:
             await asyncio.sleep(1)
+
         if len(game["players"]) < MIN_PLAYERS:
-            continue                      # not enough players, wait again
+            game["deadline"] = time.time() + LOBBY_SECONDS   # wait longer
+            while time.time() < game["deadline"]:
+                await asyncio.sleep(1)
+            if len(game["players"]) < MIN_PLAYERS:
+                for uid in game["players"]:                  # refund everyone
+                    wallets[uid] = wallets.get(uid, 0) + BET
+                game["players"].clear()
+                continue
+
         game["phase"] = "playing"
         game["prize"] = int(len(game["players"]) * BET * 0.8)
         for n in random.sample(range(1, 76), 75):
@@ -96,8 +107,13 @@ async def api_state(req):
         return web.json_response({"error": "auth"})
     uid = touch(user)
     my = game["players"].get(uid)
-    left = max(0, int(game["deadline"] - time.time())) \
-        if game["phase"] == "lobby" else 0
+    if game["phase"] == "lobby":
+        if game["deadline"] is None:
+            left = LOBBY_SECONDS                 # not counting yet
+        else:
+            left = max(0, int(game["deadline"] - time.time()))
+    else:
+        left = 0
     n = len(game["players"])
     return web.json_response({
         "phase": game["phase"], "time": left, "round": game["round"],
@@ -126,19 +142,24 @@ async def api_join(req):
     uid = touch(user)
     if game["phase"] != "lobby":
         return web.json_response({"ok": False, "error": "Round already started"})
+    if uid in game["players"]:
+        return web.json_response({"ok": False,
+                                  "error": "You already have a cartela this game"})
     try:
         card = int(body.get("card", 0))
     except (TypeError, ValueError):
         card = 0
     if not 1 <= card <= CARD_COUNT:
         return web.json_response({"ok": False, "error": "Bad card number"})
-    if card in game["players"].values() and game["players"].get(uid) != card:
+    if card in game["players"].values():
         return web.json_response({"ok": False, "error": "Card already taken"})
-    if uid not in game["players"]:
-        if wallets[uid] < BET:
-            return web.json_response({"ok": False, "error": "Not enough balance"})
-        wallets[uid] -= BET
+    if wallets[uid] < BET:
+        return web.json_response({"ok": False, "error": "Not enough balance"})
+
+    wallets[uid] -= BET
     game["players"][uid] = card
+    if game["deadline"] is None:                 # first player starts the clock
+        game["deadline"] = time.time() + LOBBY_SECONDS
     return web.json_response({"ok": True})
 
 
@@ -168,6 +189,8 @@ async def api_leave(req):
             if game["phase"] == "lobby":
                 wallets[uid] = wallets.get(uid, 0) + BET   # refund
             game["players"].pop(uid, None)
+            if game["phase"] == "lobby" and not game["players"]:
+                game["deadline"] = None                    # stop countdown
     return web.json_response({"ok": True})
 
 
