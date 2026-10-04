@@ -184,11 +184,12 @@
   .wcard.me .wic{border-color:#4ade80;color:#4ade80}
   .wcard.me .wtitle,.wcard.me .wsub{color:#4ade80}
   .whead{font-size:20px;font-weight:700;margin:0 0 10px}
+  .wblock{margin-bottom:16px}
   .wwho{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;margin-bottom:12px}
   .wwho span:first-child{font-size:15px;font-weight:600;min-width:0;word-break:break-word}
   .wpill{background:#14532d;color:#d1fae5;border-radius:20px;padding:8px 14px;font-weight:600;font-size:14px;flex:none}
   .wboard{border:5px solid #ef4444;border-radius:10px;padding:4px;background:#fff;max-width:270px;margin:0 auto}
-  .wcard.me .wboard{border-color:#22c55e}
+  .wboard.mine{border-color:#22c55e}
   .wboard .grid{gap:2px}
   .wboard .cell{cursor:default;background:#fff;color:#111;border-radius:2px;height:34px;font-size:15px;font-weight:700;text-shadow:none}
   .wboard .cell.m{background:#22c55e;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.35)}
@@ -358,9 +359,8 @@
     <div class="wic" id="wIc">✕</div>
     <div class="wtitle" id="wTitle">Game Over</div>
     <div class="wsub" id="wSub">Better luck next time!</div>
-    <div class="whead">Winning Card</div>
-    <div class="wwho"><span id="wWho"></span><span class="wpill" id="wPat"></span></div>
-    <div class="wboard"><div class="grid" id="wGrid"></div></div>
+    <div class="whead" id="wHead">Winning Card</div>
+    <div id="wList"></div>
     <div class="wprize" id="wPrize"></div>
     <div class="wcount" id="wCount"></div>
   </div>
@@ -512,7 +512,7 @@ function drawHistory(list){
     return `<div class="hs-item" data-id="${g.id}"><div class="tr">🏆</div>`+
       `<div class="mid"><b>👤 ${noWin?"No winner":esc(g.winner)}</b>`+
       `<small>Game #${g.id} · Refs: ${esc(g.ref)}</small>`+
-      `<small>${g.board?"Board #"+g.board:"—"}</small>`+
+      `<small>${g.board?"Board #"+esc(g.board):"—"}</small>`+
       `<small>${g.calls} calls</small></div>`+
       `<div class="rt">📅 ${dDate(g.t)}<br>🕒 ${dTime(g.t)}<br>${pill}</div></div>`;
   }).join("");
@@ -550,26 +550,34 @@ function copyText(t){
 
 /* ---------- winner / loser card ---------- */
 function drawWin(){
-  const on = S.phase==="finished" && S.winner && S.wCard && screen==="game";
+  const W = S.winners || [];
+  const on = S.phase==="finished" && W.length>0 && screen==="game";
   $("win").hidden = !on;
   if(!on) return;
   const me = !!S.isWinner;
+  const many = W.length > 1;
   $("wBox").classList.toggle("me", me);
   $("wIc").textContent = me ? "🏆" : "✕";
   $("wTitle").textContent = me ? "BINGO! You Won!" : "Game Over";
-  $("wSub").textContent = me ? "Congratulations, " + S.winner + "!" : "Better luck next time!";
-  $("wWho").textContent = "Card #" + S.wBoard + " - " + S.winner;
-  $("wPat").textContent = (S.wName || "Bingo") + " Win";
+  $("wSub").textContent = me ? "Congratulations, " + S.name + "!" : "Better luck next time!";
+  $("wHead").textContent = many ? "Winning Cards" : "Winning Card";
   const called = new Set(S.called||[]);
-  const hot = new Set((S.wCells||[]).map(([r,c])=>r+","+c));
-  let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
-  S.wCard.forEach((row,r)=>row.forEach((n,c)=>{
-    const w = hot.has(r+","+c) ? " w" : "";
-    h += n===0 ? `<div class="cell freecell m${w}">FREE</div>`
-               : `<div class="cell${called.has(n)?" m":""}${w}">${n}</div>`;
-  }));
-  $("wGrid").innerHTML = h;
-  $("wPrize").textContent = "Prize: " + S.prize + " birr";
+  $("wList").innerHTML = W.map(w=>{
+    const hot = new Set((w.cells||[]).map(([r,c])=>r+","+c));
+    let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
+    w.card.forEach((row,r)=>row.forEach((n,c)=>{
+      const x = hot.has(r+","+c) ? " w" : "";
+      h += n===0 ? `<div class="cell freecell m${x}">FREE</div>`
+                 : `<div class="cell${called.has(n)?" m":""}${x}">${n}</div>`;
+    }));
+    return `<div class="wblock">`+
+      `<div class="wwho"><span>Card #${w.board} - ${esc(w.name)}</span>`+
+      `<span class="wpill">${esc(w.pat||"Bingo")} Win</span></div>`+
+      `<div class="wboard${w.me?" mine":""}"><div class="grid">${h}</div></div></div>`;
+  }).join("");
+  $("wPrize").textContent = many
+      ? "Prize: " + S.share + " birr each (" + W.length + " winners)"
+      : "Prize: " + S.prize + " birr";
   $("wCount").textContent = "Returning to card selection in " + S.left + "...";
 }
 
@@ -627,8 +635,11 @@ function render(){
   if(S.myCard && screen!=="game") show("game");
   if(!S.myCard && screen==="game") show("lobby");
 
-  if(S.phase==="finished" && S.winner && shownRound!==key){
-    shownRound=key; toast("🏆 "+S.winner+" won "+S.prize+" birr");
+  if(S.phase==="finished" && S.winners && S.winners.length && shownRound!==key){
+    shownRound=key;
+    toast(S.winners.length>1
+      ? "🏆 "+S.winners.map(w=>w.name).join(" & ")+" won "+S.share+" birr each"
+      : "🏆 "+S.winner+" won "+S.prize+" birr");
   }
 
   drawWin();
