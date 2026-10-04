@@ -33,7 +33,7 @@ CARD_COUNT = 100
 MIN_PLAYERS = 1            # change to 2 or more for real games
 IDLE_KICK = 60             # seconds without contact before a player is removed
 MIN_DEPOSIT = 10
-MIN_WITHDRAW = 50
+MIN_WITHDRAW = 100
 WIN_SCREEN_SECONDS = 10    # how long the winner / loser card stays
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
@@ -52,6 +52,7 @@ pending, req_counter = {}, [0]          # deposit / withdraw requests
 used_sms = set()                        # SMS already sent (no double use)
 referrer, invited = {}, {}              # player -> who invited him / invite count
 ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
+wd_state = {}                           # players in the middle of a withdraw
 
 dp = Dispatcher()
 
@@ -625,28 +626,48 @@ async def cmd_deposit(m: Message, command: CommandObject):
     await m.answer(f"✅ Request #{rid} sent. You will get a message when it is approved.")
 
 
-@dp.message(Command("withdraw"))
-async def cmd_withdraw(m: Message, command: CommandObject):
-    uid = ensure(m.from_user)
-    args = (command.args or "").split(maxsplit=1)
-    amount = to_amount(args[0]) if args else None
-    if not amount or len(args) < 2:
-        await m.answer(
-            "🏧 Withdraw\n\n"
-            "Send:\n/withdraw <amount> <your account or phone>\n\n"
-            f"Example:\n/withdraw 200 0912345678\n\nMinimum: {MIN_WITHDRAW} birr")
-        return
+# ---------- withdraw (CBE / Telebirr / CBE Birr) ----------
+WD_NAMES = {"cbe": "CBE", "telebirr": "Telebirr", "cbebirr": "CBE Birr"}
+WD_MENU_TEXT = ("💸 ገንዘብ ማውጣት\n\n"
+                "እባክዎ ገንዘብዎን ለመቀበል የሚፈልጉትን አማራጭ ይምረጡ 👇\n\n"
+                "Select how you want to receive your money:")
+
+
+def wd_menu_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="CBE", callback_data="wd:cbe")],
+        [InlineKeyboardButton(text="Telebirr", callback_data="wd:telebirr"),
+         InlineKeyboardButton(text="CBE Birr", callback_data="wd:cbebirr")],
+    ])
+
+
+def wd_cancel_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="❌ ሰርዝ / Cancel", callback_data="wd:cancel")]])
+
+
+def wd_account_prompt(kind):
+    if kind == "cbe":
+        return ("የ CBE አካውንት ቁጥርዎንና ሙሉ ስምዎን ይላኩ።\n\n"
+                "ምሳሌ:\n1000123456789 Abebe Kebede")
+    if kind == "telebirr":
+        return "የቴሌብር ስልክ ቁጥርዎን ይላኩ።\n\nምሳሌ:\n0912345678"
+    return "የ CBE Birr ስልክ ቁጥርዎን ይላኩ።\n\nምሳሌ:\n0912345678"
+
+
+async def submit_withdraw(m: Message, uid, amount, account, method):
     if amount < MIN_WITHDRAW:
-        await m.answer(f"Minimum withdraw is {MIN_WITHDRAW} birr.")
+        await m.answer(f"ዝቅተኛው የማውጫ መጠን {MIN_WITHDRAW} ብር ነው።\n"
+                       f"Minimum withdraw is {MIN_WITHDRAW} birr.")
         return
-    if wallets[uid] < amount:
-        await m.answer("Not enough balance.")
+    if wallets.get(uid, 0) < amount:
+        await m.answer("ቀሪ ሂሳብዎ በቂ አይደለም። / Not enough balance.")
         return
     if not ADMIN_ID:
         await m.answer(f"Withdrawals are handled by support: {SUPPORT}")
         return
     wallets[uid] -= amount                       # hold the money
-    log(uid, "withdraw", -amount, "Withdraw request")
+    log(uid, "withdraw", -amount, f"Withdraw request · {method}")
     req_counter[0] += 1
     rid = req_counter[0]
     pending[rid] = {"type": "withdraw", "uid": uid, "amount": amount}
@@ -656,8 +677,73 @@ async def cmd_withdraw(m: Message, command: CommandObject):
     await m.bot.send_message(
         ADMIN_ID,
         f"🏧 Withdraw request #{rid}\nUser: {names[uid]} ({uid})\n"
-        f"Amount: {amount} birr\nSend to: {args[1]}", reply_markup=kb)
-    await m.answer(f"✅ Request #{rid} sent. {amount} birr is on hold until it is processed.")
+        f"Method: {method}\nAmount: {amount} birr\nSend to: {account}",
+        reply_markup=kb)
+    await m.answer(f"💸 Withdrawal initiated\n\n"
+                   f"🧾 ጥያቄ #{rid}\n💰 {amount} ብር\n\n"
+                   f"ገንዘቡ እስኪላክልዎ ድረስ ከሂሳብዎ ላይ ተይዟል። ሲጠናቀቅ መልዕክት ይደርስዎታል።")
+
+
+@dp.message(Command("withdraw"))
+async def cmd_withdraw(m: Message, command: CommandObject):
+    uid = ensure(m.from_user)
+    wd_state.pop(uid, None)
+    args = (command.args or "").split(maxsplit=1)
+    amount = to_amount(args[0]) if args else None
+    if not amount or len(args) < 2:
+        await m.answer(WD_MENU_TEXT, reply_markup=wd_menu_kb())
+        return
+    await submit_withdraw(m, uid, amount, args[1], "—")
+
+
+@dp.callback_query(F.data.startswith("wd:"))
+async def withdraw_buttons(cb: CallbackQuery):
+    uid = ensure(cb.from_user)
+    kind = (cb.data or "").split(":", 1)[1]
+    try:
+        if kind == "cancel":
+            wd_state.pop(uid, None)
+            await cb.message.edit_text("❌ ተሰርዟል። / Cancelled")
+        elif kind in WD_NAMES:
+            wd_state[uid] = {"m": kind, "step": "amount", "t": time.time()}
+            await cb.message.edit_text(
+                f"💸 {WD_NAMES[kind]} ገንዘብ ማውጣት\n\n"
+                f"💰 ቀሪ ሂሳብ: {wallets.get(uid, 0):.2f} ብር\n\n"
+                "ማውጣት የሚፈልጉትን መጠን ይላኩ።\n"
+                f"⚠️ ዝቅተኛው {MIN_WITHDRAW} ብር ነው።",
+                reply_markup=wd_cancel_kb())
+    except Exception:
+        pass
+    await cb.answer()
+
+
+def wd_active(m: Message):
+    s = wd_state.get(m.from_user.id)
+    return bool(s) and time.time() - s["t"] < 600
+
+
+@dp.message(F.text & ~F.text.startswith("/"), wd_active)
+async def withdraw_steps(m: Message):
+    uid = ensure(m.from_user)
+    s = wd_state[uid]
+    text = m.text.strip()
+    if s["step"] == "amount":
+        amount = to_amount(text)
+        if not amount:
+            await m.answer("እባክዎ የገንዘቡን መጠን በቁጥር ብቻ ይላኩ። (ምሳሌ: 100)")
+            return
+        if amount < MIN_WITHDRAW:
+            await m.answer(f"ዝቅተኛው የማውጫ መጠን {MIN_WITHDRAW} ብር ነው። እባክዎ እንደገና ይላኩ።")
+            return
+        if amount > wallets.get(uid, 0):
+            await m.answer(f"ቀሪ ሂሳብዎ በቂ አይደለም። (ቀሪ: {wallets.get(uid, 0):.2f} ብር)\n"
+                           "ያነሰ መጠን ይላኩ።")
+            return
+        s.update(step="account", amount=amount, t=time.time())
+        await m.answer(wd_account_prompt(s["m"]), reply_markup=wd_cancel_kb())
+    else:
+        wd_state.pop(uid, None)
+        await submit_withdraw(m, uid, s["amount"], text[:100], WD_NAMES[s["m"]])
 
 
 @dp.message(Command("transfer"))
