@@ -32,6 +32,34 @@ h1{font-size:26px;margin:6px 0 2px;letter-spacing:.2px}
 .stats{display:flex;gap:10px;margin-bottom:16px}
 .stats div{flex:1;background:var(--felt2);border-radius:12px;padding:10px;text-align:center}
 .stats b{display:block;font-size:20px}.stats span{font-size:12px;color:var(--dim)}
+/* lobby */
+#app.lobbyview{background:#c9eef6;color:#5a0b6e;padding-bottom:100px}
+.topline{display:flex;justify-content:space-between;align-items:center;margin:10px 4px 14px;font-weight:800}
+.live{display:flex;align-items:center;gap:10px;font-size:26px}
+.live i{width:34px;height:34px;border-radius:50%;background:#12a150;display:block}
+.bal{display:flex;align-items:center;gap:8px;font-size:15px}.bal b{font-size:24px}
+.gt{font-size:28px;font-weight:900;margin:6px 4px 14px}
+.thead{display:flex;justify-content:space-between;background:#fffdf3;border-radius:999px;padding:14px 18px;font-weight:800;font-size:12.5px;margin-bottom:14px}
+.lmsg{text-align:center;font-weight:700;margin:-4px 0 10px}
+.grow{display:flex;background:#fffdf3;border-radius:26px;overflow:hidden;box-shadow:0 6px 16px rgba(60,20,80,.15);margin-bottom:18px}
+.gbet{width:31%;background:#6a0f7c;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 0}
+.gbet b{font-size:54px;line-height:1}.gbet span{font-weight:800;font-size:17px;margin-top:6px}
+.gmid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;gap:4px;padding:8px 4px}
+.win{font-size:34px;color:#12a150;display:flex;align-items:center;gap:6px}
+.gmid span{font-size:16px}
+.gact{width:35%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:14px 10px}
+.st{background:#dff1e1;color:#176b3a;border-radius:999px;padding:8px 6px;font-weight:800;font-size:13px;width:100%;text-align:center}
+.st.wait{background:#fbe9c6;color:#7a4b00}
+.join{width:100%;border:0;border-radius:20px;padding:14px 0;background:#12a150;color:#fff;font-size:22px;font-weight:900}
+.join:disabled{opacity:.45}
+.free{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#e0f6fb;border-radius:24px;padding:20px}
+.free h3{margin:0 0 4px;font-size:24px}.free p{margin:0;font-size:16px}
+.open{border:0;border-radius:18px;background:#6a0f7c;color:#fff;font-size:22px;font-weight:900;padding:20px 26px}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.08)}
+.tin{max-width:480px;margin:0 auto;display:flex}
+.tab{flex:1;text-align:center;font-size:30px;padding:10px 0 12px;color:#777}
+.tab span{display:block;font-size:17px;font-weight:800;margin-top:2px}
+.tab.on{color:#6a0f7c}
 /* cartela grid */
 .grid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-bottom:12px}
 .num{aspect-ratio:1;border:0;border-radius:8px;background:var(--felt2);color:var(--cream);
@@ -75,22 +103,43 @@ h1{font-size:26px;margin:6px 0 2px;letter-spacing:.2px}
 </style>
 </head>
 <body>
-<div id="app">
+<div id="app" class="lobbyview">
 
   <!-- LOBBY -->
   <section id="lobby" class="screen on">
-    <h1>Rodas Friend Zone</h1>
-    <p class="sub">Bingo with friends</p>
-    <div class="hall">
-      <div class="big" id="lobbyBig">–</div>
-      <p id="lobbyText">Loading…</p>
+    <div class="topline">
+      <span class="live"><i></i>Live</span>
+      <span class="bal">💳 Balance: <b>0.00</b></span>
     </div>
-    <div class="stats">
-      <div><b id="lobbyPlayers">0</b><span>players</span></div>
-      <div><b id="lobbyBet">0</b><span>bet</span></div>
-      <div><b id="lobbyPrize">0</b><span>prize pool</span></div>
+    <h2 class="gt">🎯 BINGO GAMES</h2>
+    <div class="thead"><span>BET</span><span>WIN / PLAYER</span><span>STATUS &amp; JOIN</span></div>
+    <div id="lobbyMsg" class="lmsg"></div>
+
+    <div class="grow">
+      <div class="gbet"><b id="lbBet">10</b><span>BIRR</span></div>
+      <div class="gmid">
+        <div class="win">🏆 <b id="lbWin">0</b></div>
+        <span id="lbPlayers">0 players</span>
+      </div>
+      <div class="gact">
+        <span class="st" id="lbStatus">READY</span>
+        <button class="join" id="joinBtn">JOIN</button>
+      </div>
     </div>
-    <button class="btn" id="joinBtn">Join</button>
+
+    <div class="free">
+      <div>
+        <h3>🎮 FREE</h3>
+        <p>Practice Mode — No Real Money</p>
+      </div>
+      <button class="open" id="openFree">OPEN</button>
+    </div>
+
+    <nav class="tabs"><div class="tin">
+      <div class="tab on">🎮<span>Game</span></div>
+      <div class="tab" data-soon="Scores">🏆<span>Scores</span></div>
+      <div class="tab" data-soon="Profile">👤<span>Profile</span></div>
+    </div></nav>
   </section>
 
   <!-- CARTELA SELECTION -->
@@ -158,6 +207,7 @@ function toast(t) {
 }
 function show(name) {
   screen = name;
+  $('app').classList.toggle('lobbyview', name === 'lobby');
   ['lobby', 'select', 'game'].forEach((s) => $(s).classList.toggle('on', s === name));
 }
 const letter = (n) => 'BINGO'[Math.floor((n - 1) / 15)];
@@ -191,17 +241,15 @@ function route() {
 /* ---------- renderers ---------- */
 function renderLobby() {
   const open = S.phase === 'selection';
-  $('lobbyPlayers').textContent = S.players;
-  $('lobbyBet').textContent = S.bet;
-  $('lobbyPrize').textContent = S.prize || Math.round(S.total_bets * 0.75 * 100) / 100;
-  if (open) {
-    if (S.players === 0) { $('lobbyBig').textContent = '•••'; $('lobbyText').textContent = 'Waiting for the first player to pick a cartela'; }
-    else { $('lobbyBig').textContent = S.selection_remaining + 's'; $('lobbyText').textContent = 'Game ' + S.game_number + ' starts soon'; }
-  } else if (S.phase === 'playing') {
-    $('lobbyBig').textContent = S.called.length + '/75'; $('lobbyText').textContent = 'A game is in progress. You can join the next one.';
-  } else {
-    $('lobbyBig').textContent = '★'; $('lobbyText').textContent = 'Game over. The next round opens soon.';
-  }
+  $('lobbyMsg').textContent = '';
+  $('lbBet').textContent = S.bet;
+  $('lbWin').textContent = S.prize;
+  $('lbPlayers').textContent = S.players + (S.players === 1 ? ' player' : ' players');
+  const st = $('lbStatus');
+  if (open && S.players === 0) { st.textContent = 'READY'; st.className = 'st'; }
+  else if (open) { st.textContent = 'STARTS IN ' + S.selection_remaining + 's'; st.className = 'st wait'; }
+  else if (S.phase === 'playing') { st.textContent = 'IN PROGRESS'; st.className = 'st wait'; }
+  else { st.textContent = 'ENDING'; st.className = 'st wait'; }
   $('joinBtn').disabled = !open;
 }
 
@@ -279,7 +327,7 @@ async function poll() {
   if (busy) return;
   const s = await api('state');
   if (s && s.phase) { S = s; route(); render(); }
-  else if (s && s.message) { $('lobbyBig').textContent = '!'; $('lobbyText').textContent = s.message; }
+  else if (s && s.message) { $('lobbyMsg').textContent = s.message; }
 }
 
 /* ---------- actions ---------- */
@@ -310,6 +358,8 @@ $('myCard').onclick = (e) => {
   marked.has(n) ? marked.delete(n) : marked.add(n);
   render();
 };
+$('openFree').onclick = () => toast('Practice mode is coming soon');
+document.querySelectorAll('.tab[data-soon]').forEach((t) => (t.onclick = () => toast(t.dataset.soon + ' is coming soon')));
 $('autoBtn').onclick = () => act('auto', { auto: !S.auto });
 $('bingoBtn').onclick = async () => {
   const r = await act('claim-bingo');
