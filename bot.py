@@ -1,8 +1,8 @@
-import asyncio, hashlib, hmac, json, math, os, random, secrets, string, time
+import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
 from pathlib import Path
 from urllib.parse import parse_qsl
 from aiohttp import web
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (Message, CallbackQuery, BotCommand,
                            InlineKeyboardMarkup, InlineKeyboardButton,
@@ -14,6 +14,15 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))            # your Telegram ID
 PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
+
+# ---------- PAYMENT DETAILS ----------
+CBE_ACCOUNT = os.getenv("CBE_ACCOUNT", "1000613735775")
+CBE_NAME = os.getenv("CBE_NAME", "Rodas Teame")
+TELEBIRR_PHONE = os.getenv("TELEBIRR_PHONE", "0978856625")
+TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "Rodas Teame")
+CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "0978856625")
+CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "Rodas Teame")
+DEPOSIT_SUPPORT = "@Rodasfriendzonesupport"
 
 BETS = [10, 20, 50, 100]   # room prices (birr per cartela)
 CALL_EVERY = 4             # seconds between calls
@@ -39,6 +48,7 @@ joined, usernames, wins, won = {}, {}, {}, {}      # profile data
 history, winlog = {}, {}                           # transactions / wins list
 games, game_counter = [], [0]                      # finished games (History page)
 pending, req_counter = {}, [0]          # deposit / withdraw requests
+used_sms = set()                        # SMS already sent (no double use)
 
 dp = Dispatcher()
 
@@ -486,6 +496,71 @@ def to_amount(text):
         return None
 
 
+# ---------- deposit menu (CBE / Telebirr / CBE Birr) ----------
+DEPOSIT_MENU_TEXT = "እባክዎ የሚፈልጉትን የመክፈያ አማራጭ ይምረጡ 👇\n\nPlease select the top-up option you wish to use:"
+
+
+def deposit_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="CBE", callback_data="dep:cbe")],
+        [InlineKeyboardButton(text="Telebirr", callback_data="dep:telebirr"),
+         InlineKeyboardButton(text="CBE Birr", callback_data="dep:cbebirr")],
+    ])
+
+
+def back_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⬅️ ተመለስ / Back", callback_data="dep:menu")]])
+
+
+def deposit_steps(target, sender):
+    return (
+        "<b>መመሪያ</b>\n"
+        f"1) ከላይ በተቀመጠው የ {target} ገንዘቡን ያስገቡ።\n"
+        f"2) የከፈላችሁበትን (transaction) ደረሰኝ መረጃ የያዘ አጭር የጽሁፍ መልዕክት(SMS) ከ {sender} እስኪደርሳችሁ ትጠብቃላችሁ።\n"
+        "3) የደረሳችሁን አጭር የጽሁፍ መልዕክት(SMS) መጀመሪያ ኮፒ(copy) ከዚያም ከታች ባለው የቴሌግራም የጽሁፍ ማስገቢያ ላይ ፔስት(paste) በማድረግ ይላኩት።\n\n"
+        "<b>ማሳሰቢያ</b>\n\n"
+        "በክፍያ ወቅት ያጋጠማችሁ ችግር ካለ\n"
+        f"{DEPOSIT_SUPPORT}\n"
+        "ማውራት ትችላላችሁ።\n"
+        "እናመሰግናለን!")
+
+
+def deposit_details(kind):
+    if kind == "cbe":
+        return (
+            "የ CBE አካውንት\n"
+            f"<code>{html.escape(CBE_ACCOUNT)}</code> _{html.escape(CBE_NAME)}\n\n"
+            + deposit_steps("CBE አካውንት ቁጥር", "CBE"))
+    if kind == "telebirr":
+        return (
+            "የቴሌብር (Telebirr) ቁጥር\n"
+            f"<code>{html.escape(TELEBIRR_PHONE)}</code> _{html.escape(TELEBIRR_NAME)}\n\n"
+            + deposit_steps("ቴሌብር ስልክ ቁጥር", "Telebirr"))
+    if kind == "cbebirr":
+        return (
+            "የ CBE Birr ቁጥር\n"
+            f"<code>{html.escape(CBEBIRR_PHONE)}</code> _{html.escape(CBEBIRR_NAME)}\n\n"
+            + deposit_steps("CBE Birr ስልክ ቁጥር", "CBE Birr"))
+    return None
+
+
+@dp.callback_query(F.data.startswith("dep:"))
+async def deposit_buttons(cb: CallbackQuery):
+    kind = (cb.data or "").split(":", 1)[1]
+    try:
+        if kind == "menu":
+            await cb.message.edit_text(DEPOSIT_MENU_TEXT, reply_markup=deposit_kb())
+        else:
+            text = deposit_details(kind)
+            if text:
+                await cb.message.edit_text(text, parse_mode="HTML",
+                                           reply_markup=back_kb())
+    except Exception:
+        pass
+    await cb.answer()
+
+
 @dp.message(CommandStart())
 async def cmd_start(m: Message):
     ensure(m.from_user)
@@ -513,12 +588,7 @@ async def cmd_deposit(m: Message, command: CommandObject):
     args = (command.args or "").split(maxsplit=1)
     amount = to_amount(args[0]) if args else None
     if not amount:
-        await m.answer(
-            "💰 Deposit\n\n"
-            f"1) Send your money to:\n{PAY_INFO}\n\n"
-            "2) Then send this message:\n"
-            "/deposit <amount> <transaction number>\n\n"
-            "Example:\n/deposit 100 FT24123ABC")
+        await m.answer(DEPOSIT_MENU_TEXT, reply_markup=deposit_kb())
         return
     if amount < MIN_DEPOSIT:
         await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
@@ -634,6 +704,47 @@ async def cmd_invite(m: Message):
 @dp.message(Command("support"))
 async def cmd_support(m: Message):
     await m.answer(f"🛟 Need help? Contact {SUPPORT}")
+
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def sms_deposit(m: Message):
+    """Player pastes the payment SMS (CBE / Telebirr / CBE Birr)."""
+    uid = ensure(m.from_user)
+    text = m.text.strip()
+    mt = re.search(r"(?:ETB|Birr|BIRR|birr|ብር)\s*([\d,]+(?:\.\d+)?)"
+                   r"|([\d,]+(?:\.\d+)?)\s*(?:ETB|Birr|BIRR|birr|ብር)", text)
+    amount = None
+    if mt:
+        try:
+            amount = int(float((mt.group(1) or mt.group(2)).replace(",", "")))
+        except ValueError:
+            amount = None
+    if not amount:
+        await m.answer("የገንዘቡን መጠን ማግኘት አልቻልንም። እባክዎ የደረሰዎትን SMS ሙሉ ይላኩ ወይም ይህንን ይጠቀሙ:\n"
+                       "/deposit <amount> <transaction number>")
+        return
+    if amount < MIN_DEPOSIT:
+        await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
+        return
+    key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
+    if key in used_sms:
+        await m.answer("ይህ መልዕክት ቀደም ብሎ ተልኳል። / This message was already sent.")
+        return
+    if not ADMIN_ID:
+        await m.answer(f"Deposits are handled by support: {SUPPORT}")
+        return
+    used_sms.add(key)
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
+        InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
+    await m.bot.send_message(
+        ADMIN_ID,
+        f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
+        f"Amount: {amount} birr\n\nSMS:\n{text[:800]}", reply_markup=kb)
+    await m.answer(f"✅ ጥያቄዎ #{rid} ተልኳል። ሲጸድቅ መልዕክት ይደርስዎታል።")
 
 
 @dp.callback_query()
