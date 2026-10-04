@@ -44,9 +44,9 @@
   .gr{display:flex;flex-direction:column;gap:6px;min-width:96px}
   .ready{background:#d9f1e0;color:#15803d;border-radius:8px;padding:6px;text-align:center;font-weight:700;font-size:11px}
   .joinbtn{background:var(--green);height:38px;border-radius:10px;font-size:15px}
-  .free{margin-top:12px;background:#d9f2f8;border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--title)}
-  .free b{font-size:15px}.free p{margin:3px 0 0;font-size:12px;color:#5b3a82}
-  .free button{background:var(--purple);width:84px;height:38px;font-size:14px}
+  .practice{margin-top:12px;background:#d9f2f8;border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--title)}
+  .practice b{font-size:15px}.practice p{margin:3px 0 0;font-size:12px;color:#5b3a82}
+  .practice button{background:var(--purple);width:84px;height:38px;font-size:14px}
   .nav{position:fixed;left:0;right:0;bottom:0;background:#fff;display:flex;max-width:520px;margin:0 auto;padding:6px 0 8px;border-top:1px solid #eee}
   .nav div{flex:1;text-align:center;font-weight:600;font-size:11px;color:#777;cursor:pointer}
   .nav div i{display:block;font-style:normal;font-size:22px;margin-bottom:1px}
@@ -85,8 +85,10 @@
   .current h3{margin:0 0 8px;font-size:13px;font-weight:600}
   .ball{width:66px;height:66px;border-radius:50%;margin:0 auto;background:#ff9800;border:3px solid #fff;
         display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff}
-  .last{display:flex;justify-content:center;padding:8px}
-  .last div{width:48px;height:48px;border-radius:50%;background:#2f6fe0;color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .lastbox{display:flex;align-items:center;gap:6px;padding:8px}
+  .lastbox .big{flex:none;width:48px;height:48px;border-radius:50%;background:#2f6fe0;color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  #recent{display:flex;gap:4px;flex-wrap:wrap}
+  #recent span{background:#efe6f5;color:var(--title);font-weight:700;font-size:11px;padding:4px 6px;border-radius:8px}
   .auto{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;font-weight:600;font-size:14px;color:#222}
   .switch{position:relative;width:44px;height:26px}.switch input{display:none}
   .switch span{position:absolute;inset:0;background:#c4c4c4;border-radius:20px;transition:.2s}
@@ -96,14 +98,14 @@
   .card h3{margin:0 0 8px;text-align:center;color:var(--title);font-size:13px;font-weight:700}
   .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
   .grid .h{color:#fff;text-align:center;font-weight:700;font-size:13px;padding:6px 0;border-radius:4px}
-  .h:nth-child(1){background:#2f5fd0}.h:nth-child(2){background:#e8453c}.h:nth-child(3){background:#1e9a4a}
-  .h:nth-child(4){background:#e29a10}.h:nth-child(5){background:#8a0f9a}
-  .cell{background:var(--cell);text-align:center;font-weight:600;font-size:15px;color:#333;height:36px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;user-select:none}
+  .grid .h:nth-child(1){background:#2f5fd0}.grid .h:nth-child(2){background:#e8453c}.grid .h:nth-child(3){background:#1e9a4a}
+  .grid .h:nth-child(4){background:#e29a10}.grid .h:nth-child(5){background:#8a0f9a}
+  .cell{background:var(--cell);text-align:center;font-weight:600;font-size:15px;color:#333;height:36px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;user-select:none;margin:0;padding:0}
   .cell.m{background:var(--cellmark);color:#15803d}
-  .cell.free{font-size:11px}
+  .cell.freecell{font-size:11px;cursor:default}
   .cardno{text-align:center;color:var(--title);font-weight:700;font-size:13px;margin:10px 0 8px}
   .winb{background:#f39c1b;margin-bottom:8px;height:44px;font-size:15px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .leave{background:#e8212f;height:38px}.rf{background:#1565d8;height:38px}
   #toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:9}
   #toast.show{opacity:1}
@@ -131,7 +133,7 @@
         </div>
       </div>
     </div>
-    <div class="free">
+    <div class="practice">
       <div><b>🎮 FREE</b><p>Practice Mode — No Real Money</p></div>
       <button id="openFree">OPEN</button>
     </div>
@@ -177,7 +179,7 @@
     </div>
     <div class="right">
       <div class="panel current"><h3 id="ballTitle">Current Call</h3><div class="ball" id="ball">–</div></div>
-      <div class="panel last"><div id="lastCall">–</div></div>
+      <div class="panel lastbox"><div class="big" id="lastCall">–</div><div id="recent"></div></div>
       <div class="panel auto">Auto
         <label class="switch"><input type="checkbox" id="auto" checked><span></span></label>
       </div>
@@ -186,7 +188,7 @@
         <div class="grid" id="cardGrid"></div>
         <div class="cardno">Card Number: <span id="cardNo">0</span></div>
         <button class="winb" id="winBtn">BINGO WIN</button>
-        <div class="row">
+        <div class="btnrow">
           <button class="leave" id="leaveBtn">LEAVE</button>
           <button class="rf" id="refreshBtn">REFRESH</button>
         </div>
@@ -222,12 +224,13 @@ const initData = () => (tg && tg.initData) || "";
 async function get(p){ const r=await fetch(API+p+(p.includes("?")?"&":"?")+"initData="+encodeURIComponent(initData())); return r.json(); }
 async function post(p,b){ const r=await fetch(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})}); return r.json(); }
 function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
+const letter = n => COLS[Math.floor((n-1)/15)];
 
 /* ---------- builders ---------- */
 function cardHTML(card, marked){
   let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
   card.forEach(row=>row.forEach(n=>{
-    h += n===0 ? `<div class="cell free m">FREE</div>`
+    h += n===0 ? `<div class="cell freecell m">FREE</div>`
                : `<div class="cell${marked.has(n)?" m":""}" data-n="${n}">${n}</div>`;
   }));
   return h;
@@ -237,15 +240,18 @@ function buildCalls(){
   for(let r=0;r<15;r++){ h+="<tr>"; for(let c=0;c<5;c++){ const n=c*15+r+1; h+=`<td id="c${n}">${n}</td>`; } h+="</tr>"; }
   $("callsBody").innerHTML=h;
 }
-function resetGame(){
-  st.called=[]; st.marked=new Set();
-  document.querySelectorAll("#callsBody td.on").forEach(td=>td.classList.remove("on"));
-}
-function onCall(n){
-  if(st.called.includes(n)) return;
-  st.called.push(n);
-  $("c"+n).classList.add("on");
-  if($("auto").checked && st.card && st.card.flat().includes(n)) st.marked.add(n);
+function paintCalls(){
+  const set = new Set(st.called);
+  for(let n=1;n<=75;n++){
+    const td = $("c"+n);
+    if(td) td.classList.toggle("on", set.has(n));
+  }
+  const last = st.called.length ? st.called[st.called.length-1] : null;
+  $("lastCall").textContent = last ?? "–";
+  $("recent").innerHTML = st.called.slice(-6,-1).reverse()
+      .map(n=>`<span>${letter(n)}-${n}</span>`).join("");
+  $("gCall").textContent = st.called.length;
+  return last;
 }
 function hasBingo(){
   if(!st.card) return false;
@@ -255,12 +261,19 @@ function hasBingo(){
   L.push([0,1,2,3,4].map(i=>[i,i])); L.push([0,1,2,3,4].map(i=>[i,4-i]));
   return L.some(l=>l.every(([r,c])=>m(r,c)));
 }
+function autoMark(){
+  if(st.card && $("auto").checked){
+    const mine = new Set(st.card.flat());
+    st.called.forEach(n=>{ if(mine.has(n)) st.marked.add(n); });
+  }
+}
 
 /* ---------- render from server state ---------- */
 function render(){
   if(!S) return;
   if(S.error){ toast("Please open this from the bot in Telegram"); return; }
-  if(S.round!==lastRound){ resetGame(); lastRound=S.round; }
+
+  if(S.round!==lastRound){ st.marked=new Set(); lastRound=S.round; }
 
   // lobby
   $("bal").textContent=S.wallet.toFixed(2);
@@ -281,20 +294,23 @@ function render(){
   }
   $("pickGrid").innerHTML=g;
 
-  // game
+  // calls (always updated from the server list)
+  st.called = (S.called||[]).slice();
+  const last = paintCalls();
+
+  // my card
   if(S.myCard){
-    if(st.cardNo!==S.myCard){ st.marked=new Set(); }
+    if(st.cardNo!==S.myCard) st.marked=new Set();
     st.card=S.card; st.cardNo=S.myCard;
-    S.called.forEach(onCall);
+    autoMark();
     $("cardGrid").innerHTML=cardHTML(st.card, st.marked);
     $("cardNo").textContent=st.cardNo;
   }
+
   $("gPlayers").textContent=S.players; $("gDerash").textContent=S.derash;
-  $("gBet").textContent=S.bet; $("gCall").textContent=st.called.length;
-  const last = st.called.length ? st.called[st.called.length-1] : "–";
+  $("gBet").textContent=S.bet;
   $("ballTitle").textContent = S.phase==="lobby" ? "Starting in" : "Current Call";
-  $("ball").textContent = S.phase==="lobby" ? S.time : last;
-  $("lastCall").textContent = last;
+  $("ball").textContent = S.phase==="lobby" ? S.time : (last ?? "–");
 
   // routing
   if(S.myCard && screen!=="game") show("game");
@@ -304,7 +320,10 @@ function render(){
     shownRound=S.round; toast("🏆 "+S.winner+" won "+S.prize+" birr");
   }
 }
-async function sync(){ try{ S=await get("/state"); render(); }catch(e){} }
+async function sync(){
+  try{ S=await get("/state"); render(); }
+  catch(e){ console.error(e); }
+}
 
 /* ---------- events ---------- */
 document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
@@ -340,10 +359,8 @@ $("cardGrid").onclick=e=>{
   $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
 };
 $("auto").onchange=()=>{
-  if($("auto").checked && st.card){
-    st.called.forEach(n=>{ if(st.card.flat().includes(n)) st.marked.add(n); });
-    $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
-  }
+  autoMark();
+  if(st.card) $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
 };
 $("winBtn").onclick=async()=>{
   if(!hasBingo()) return toast("No bingo yet — keep playing");
