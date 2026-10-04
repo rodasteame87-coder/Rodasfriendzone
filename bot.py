@@ -594,8 +594,19 @@ async def cmd_play(m: Message):
 @dp.message(Command("balance"))
 async def cmd_balance(m: Message):
     uid = ensure(m.from_user)
-    await m.answer(f"💰 Balance: {wallets[uid]:.2f} birr\n"
-                   f"🆔 Your ID: {uid}")
+    bal = wallets[uid]
+    await m.answer(
+        "Your wallet's detail currently is:\n\n"
+        "<blockquote>"
+        f"Name:  {html.escape(names[uid])}\n"
+        f"Telegram ID:  {uid}\n"
+        f"Withdrawable Balance:  {bal:.2f} ETB\n"
+        f"Non-withdrawable Bal:  0.00 ETB\n"
+        "----------------------------------------\n"
+        f"<b>Total Balance: {bal:.2f} ETB</b>\n"
+        "----------------------------------------"
+        "</blockquote>",
+        parse_mode="HTML")
 
 
 @dp.message(Command("deposit"))
