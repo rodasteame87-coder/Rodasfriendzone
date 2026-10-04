@@ -3,9 +3,9 @@ from pathlib import Path
 from urllib.parse import parse_qsl, quote
 import asyncpg
 from aiohttp import web
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher, F, BaseMiddleware
 from aiogram.filters import CommandStart, Command, CommandObject
-from aiogram.types import (Message, CallbackQuery, BotCommand,
+from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeChat,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
                            ReplyKeyboardRemove, WebAppInfo)
@@ -59,8 +59,31 @@ ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / tot
 wd_state = {}                           # players in the middle of a withdraw
 phones = {}                             # player -> verified phone number
 bank_sms, bank_by_h = [], set()         # SMS forwarded from YOUR phone (newest first)
+banned = set()                          # blocked players
+bc_pending = {}                         # admin's broadcast waiting for confirmation
+bg_tasks = set()                        # keeps background tasks alive
 
 dp = Dispatcher()
+
+
+class BanMiddleware(BaseMiddleware):
+    """Blocked players cannot use the bot (the admin is never blocked)."""
+    async def __call__(self, handler, event, data):
+        u = getattr(event, "from_user", None)
+        if u and u.id in banned and u.id != ADMIN_ID:
+            try:
+                if isinstance(event, CallbackQuery):
+                    await event.answer("Your account is blocked.", show_alert=True)
+                else:
+                    await event.answer(f"🚫 Your account is blocked. Contact {SUPPORT}")
+            except Exception:
+                pass
+            return
+        return await handler(event, data)
+
+
+dp.message.outer_middleware(BanMiddleware())
+dp.callback_query.outer_middleware(BanMiddleware())
 
 
 # ---------- DATABASE (Postgres) ----------
@@ -85,7 +108,7 @@ def save_user(uid):
             "hist": history.get(uid, []), "winlog": winlog.get(uid, []),
             "phone": phones.get(uid), "ref": referrer.get(uid),
             "inv": invited.get(uid, 0), "earn": ref_earn.get(uid, 0),
-            "paid": uid in ref_paid}
+            "paid": uid in ref_paid, "ban": uid in banned}
     _enqueue("INSERT INTO users(uid, data) VALUES($1, $2::jsonb) "
              "ON CONFLICT (uid) DO UPDATE SET data = EXCLUDED.data",
              uid, json.dumps(snap))
@@ -191,6 +214,8 @@ async def load_state():
             ref_earn[uid] = d.get("earn", 0)
             if d.get("paid"):
                 ref_paid.add(uid)
+            if d.get("ban"):
+                banned.add(uid)
         for r in await c.fetch("SELECT rid, data FROM pending"):
             pending[r["rid"]] = json.loads(r["data"])
         for r in await c.fetch("SELECT id, data FROM games ORDER BY id DESC LIMIT 300"):
@@ -726,6 +751,9 @@ async def api_join(req):
     if not user:
         return web.json_response({"ok": False, "error": "Open from Telegram"})
     uid = touch(user)
+    if uid in banned:
+        return web.json_response({"ok": False,
+                                  "error": "Your account is blocked. Contact support"})
     if uid not in phones:
         return web.json_response({"ok": False,
                                   "error": "Press /start in the bot and share your phone number first"})
@@ -766,6 +794,8 @@ async def api_bingo(req):
     if not user:
         return web.json_response({"ok": False})
     uid = user["id"]
+    if uid in banned:
+        return web.json_response({"ok": False})
     g = room_of(uid)
     if not g:
         return web.json_response({"ok": False})
@@ -1265,10 +1295,177 @@ async def cmd_support(m: Message):
     await m.answer(f"🛟 Need help? Contact {SUPPORT}")
 
 
+# ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
+def is_admin(m: Message):
+    return bool(ADMIN_ID) and m.from_user.id == ADMIN_ID
+
+
+@dp.message(Command("admin"))
+async def cmd_admin(m: Message):
+    if not is_admin(m):
+        return
+    await m.answer(
+        "🛠 Admin commands\n\n"
+        "/stats\nPlayers, money, waiting requests, last 24h\n\n"
+        "/addbalance <phone> <amount>\nAdd money to a player. Use a minus to remove: -50\n\n"
+        "/ban <phone>\nBlock a player\n\n"
+        "/unban <phone>\nUnblock a player\n\n"
+        "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
+        "/lastsms\nLast SMS forwarded from your phone")
+
+
+@dp.message(Command("stats"))
+async def cmd_stats(m: Message):
+    if not is_admin(m):
+        return
+    now = time.time()
+    in_rooms = sum(len(g["players"]) for g in rooms.values())
+    deps = [r for r in pending.values() if r["type"] == "deposit"]
+    wds = [r for r in pending.values() if r["type"] == "withdraw"]
+    recent = [r for r in games if r["t"] >= now - 86400]
+    stake = sum(r["bet"] * len(r["pl"]) for r in recent)
+    paid = sum(r["prize"] * len(r["wids"]) for r in recent)
+    await m.answer(
+        "📊 <b>Stats</b>\n\n"
+        f"Players: {len(wallets)} ({len(phones)} with phone)\n"
+        f"Blocked: {len(banned)}\n"
+        f"Playing now: {in_rooms}\n"
+        f"Money in player wallets: {sum(wallets.values()):,} ETB\n\n"
+        f"Waiting deposits: {len(deps)} ({sum(r['amount'] for r in deps):,} ETB)\n"
+        f"Waiting withdrawals: {len(wds)} ({sum(r['amount'] for r in wds):,} ETB)\n\n"
+        f"<b>Last 24 hours</b> (from the last 300 games)\n"
+        f"Games: {len(recent)}\n"
+        f"Stakes played: {stake:,} ETB\n"
+        f"Paid to winners: {paid:,} ETB\n"
+        f"House earned (approx): {stake - paid:,} ETB",
+        parse_mode="HTML")
+
+
+@dp.message(Command("addbalance"))
+async def cmd_addbalance(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    args = (command.args or "").split()
+    if len(args) != 2 or not re.fullmatch(r"-?\d+", args[1]) or int(args[1]) == 0:
+        await m.answer("Send:\n/addbalance <phone> <amount>\n\n"
+                       "Add 100 birr:\n/addbalance 0912345678 100\n"
+                       "Remove 50 birr:\n/addbalance 0912345678 -50")
+        return
+    uid, amount = find_by_phone(args[0]), int(args[1])
+    if not uid:
+        await m.answer("No player found with that phone number.")
+        return
+    if wallets.get(uid, 0) + amount < 0:
+        await m.answer(f"{names.get(uid, 'Player')} only has {wallets.get(uid, 0)} birr.")
+        return
+    wallets[uid] = wallets.get(uid, 0) + amount
+    if amount > 0:
+        log(uid, "deposit", amount, "Added by admin")
+        note = f"💰 {amount} birr was added to your balance."
+    else:
+        log(uid, "withdraw", amount, "Removed by admin")
+        note = f"💸 {-amount} birr was removed from your balance."
+    try:
+        await m.bot.send_message(uid, note)
+    except Exception:
+        pass
+    await m.answer(f"✅ Done.\nPlayer: {names.get(uid, 'Player')} ({phones.get(uid)})\n"
+                   f"Change: {amount:+d} birr\nNew balance: {wallets[uid]} birr")
+
+
+@dp.message(Command("ban"))
+async def cmd_ban(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    uid = find_by_phone((command.args or "").strip())
+    if not uid:
+        await m.answer("Send:\n/ban <phone>\n\nExample:\n/ban 0912345678\n\n"
+                       "No player found with that phone number.")
+        return
+    if uid == ADMIN_ID:
+        await m.answer("You can't block yourself.")
+        return
+    banned.add(uid)
+    save_user(uid)
+    await m.answer(f"🚫 {names.get(uid, 'Player')} ({phones.get(uid)}) is blocked.\n"
+                   "They can no longer use the bot or join games.")
+
+
+@dp.message(Command("unban"))
+async def cmd_unban(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    uid = find_by_phone((command.args or "").strip())
+    if not uid:
+        await m.answer("Send:\n/unban <phone>\n\nNo player found with that phone number.")
+        return
+    banned.discard(uid)
+    save_user(uid)
+    await m.answer(f"✅ {names.get(uid, 'Player')} ({phones.get(uid)}) is unblocked.")
+
+
+@dp.message(Command("broadcast"))
+async def cmd_broadcast(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    text = (command.args or "").strip()
+    if not text:
+        await m.answer("Send:\n/broadcast <your message>")
+        return
+    bc_pending[m.from_user.id] = text
+    n = len([u for u in wallets if u not in banned])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Send to {n} players", callback_data="bc:send"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="bc:cancel")]])
+    await m.answer(f"📢 This is what players will see:\n\n{text}", reply_markup=kb)
+
+
+async def run_broadcast(bot, text, admin_id):
+    ok = fail = 0
+    for uid in list(wallets):
+        if uid in banned:
+            continue
+        try:
+            await bot.send_message(uid, text)
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.06)              # stay under Telegram's speed limit
+    try:
+        await bot.send_message(admin_id, f"📢 Broadcast finished.\n✅ Sent: {ok}\n❌ Failed: {fail}")
+    except Exception:
+        pass
+
+
+@dp.callback_query(F.data.startswith("bc:"))
+async def broadcast_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    text = bc_pending.pop(cb.from_user.id, None)
+    if action != "send" or not text:
+        try:
+            await cb.message.edit_text("❌ Cancelled." if action != "send"
+                                       else "Nothing to send.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    try:
+        await cb.message.edit_text("📤 Sending…")
+    except Exception:
+        pass
+    await cb.answer()
+    task = asyncio.create_task(run_broadcast(cb.bot, text, cb.from_user.id))
+    bg_tasks.add(task)
+    task.add_done_callback(bg_tasks.discard)
+
+
 @dp.message(Command("lastsms"))
 async def cmd_lastsms(m: Message):
     """Admin only: shows the last SMS your phone forwarded, and how the bot read them."""
-    if m.from_user.id != ADMIN_ID:
+    if not is_admin(m):
         return
     if not bank_sms:
         await m.answer("No SMS received from your phone yet.")
@@ -1424,7 +1621,7 @@ async def main():
     asyncio.create_task(reaper())
 
     await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_my_commands([
+    public_commands = [
         BotCommand(command="start", description="Start Rodas Friend Zone"),
         BotCommand(command="play", description="Play Bingo"),
         BotCommand(command="deposit", description="Deposit"),
@@ -1434,7 +1631,23 @@ async def main():
         BotCommand(command="instruction", description="How to play"),
         BotCommand(command="invite", description="Invite friends"),
         BotCommand(command="support", description="Support"),
-    ])
+    ]
+    await bot.set_my_commands(public_commands)
+    if ADMIN_ID:                                  # extra menu only you can see
+        try:
+            await bot.set_my_commands(
+                public_commands + [
+                    BotCommand(command="admin", description="Admin commands"),
+                    BotCommand(command="stats", description="Stats"),
+                    BotCommand(command="addbalance", description="Add / remove balance"),
+                    BotCommand(command="ban", description="Block a player"),
+                    BotCommand(command="unban", description="Unblock a player"),
+                    BotCommand(command="broadcast", description="Message all players"),
+                    BotCommand(command="lastsms", description="Last forwarded SMS"),
+                ],
+                scope=BotCommandScopeChat(chat_id=ADMIN_ID))
+        except Exception as e:
+            print("could not set admin menu:", repr(e))
     await dp.start_polling(bot)
 
 
