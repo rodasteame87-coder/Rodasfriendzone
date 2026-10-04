@@ -1,21 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport"
+content="width=device-width,
+initial-scale=1.0,
+maximum-scale=1.0,
+user-scalable=no">
 
-<head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width,
-               initial-scale=1.0,
-               maximum-scale=1.0,
-               user-scalable=no">
-
-<title>Rodas Friend Zone</title>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<style>
+<title>Rodas Friend Zone</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>
 
 /* =========================================================
    GLOBAL
@@ -65,63 +54,51 @@ button {
 
 #lobbyScreen {
     min-height: 100vh;
-
     background: #c9f0f7;
-
     padding-bottom: 82px;
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    PURPLE HEADER
---------------------------------------------------------- */
+========================================================= */
 
 .lobby-header {
-
     height: 58px;
 
     background: #760080;
-
     color: white;
 
     display: flex;
-
     align-items: center;
-
     justify-content: center;
 
     padding: 0 10px;
 }
 
 .header-title {
-
     text-align: center;
 
     font-size: 22px;
-
     font-weight: 900;
-
     line-height: 1.1;
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    LIVE / BALANCE
---------------------------------------------------------- */
+========================================================= */
 
 .live-balance {
-
     display: flex;
 
     justify-content: space-between;
-
     align-items: center;
 
     padding: 22px 24px 10px;
 }
 
 .live-status {
-
     display: flex;
 
     align-items: center;
@@ -131,12 +108,10 @@ button {
     color: #641078;
 
     font-size: 25px;
-
     font-weight: 900;
 }
 
 .live-dot {
-
     width: 23px;
     height: 23px;
 
@@ -149,7 +124,6 @@ button {
 }
 
 .balance {
-
     display: flex;
 
     align-items: center;
@@ -164,22 +138,19 @@ button {
 }
 
 .balance strong {
-
     font-size: 22px;
 }
 
 .card-icon {
-
     font-size: 27px;
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    BINGO TITLE
---------------------------------------------------------- */
+========================================================= */
 
 .bingo-title {
-
     display: flex;
 
     align-items: center;
@@ -196,12 +167,11 @@ button {
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    COLUMN HEADER
---------------------------------------------------------- */
+========================================================= */
 
 .game-columns {
-
     margin: 0 18px;
 
     background: #fffef5;
@@ -229,12 +199,11 @@ button {
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    MAIN GAME CARD
---------------------------------------------------------- */
+========================================================= */
 
 .game-card {
-
     margin: 12px 18px;
 
     min-height: 150px;
@@ -257,12 +226,11 @@ button {
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    BET
---------------------------------------------------------- */
+========================================================= */
 
 .bet-section {
-
     background: #760080;
 
     color: white;
@@ -277,30 +245,23 @@ button {
 }
 
 .bet-number {
-
     font-size: 46px;
-
     font-weight: 900;
-
     line-height: 1;
 }
 
 .bet-currency {
-
     font-size: 19px;
-
     font-weight: 900;
-
     margin-top: 7px;
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    PLAYER INFO
---------------------------------------------------------- */
+========================================================= */
 
 .game-info {
-
     padding: 15px 8px;
 
     display: flex;
@@ -311,7 +272,6 @@ button {
 }
 
 .winner {
-
     display: flex;
 
     align-items: center;
@@ -320,12 +280,10 @@ button {
 }
 
 .trophy {
-
     font-size: 34px;
 }
 
 .winner-number {
-
     color: #079443;
 
     font-size: 30px;
@@ -334,7 +292,6 @@ button {
 }
 
 .players {
-
     color: #641078;
 
     font-size: 18px;
@@ -345,12 +302,11 @@ button {
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    JOIN
---------------------------------------------------------- */
+========================================================= */
 
 .join-section {
-
     display: flex;
 
     flex-direction: column;
@@ -363,7 +319,6 @@ button {
 }
 
 .ready {
-
     width: 100%;
 
     background: #d9f3df;
@@ -384,7 +339,6 @@ button {
 }
 
 .join-button {
-
     width: 100%;
 
     background: #08a348;
@@ -405,17 +359,15 @@ button {
 }
 
 .join-button:active {
-
     transform: scale(.97);
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    FREE CARD
---------------------------------------------------------- */
+========================================================= */
 
 .free-card {
-
     margin: 17px 18px;
 
     min-height: 105px;
@@ -434,7 +386,6 @@ button {
 }
 
 .free-title {
-
     color: #641078;
 
     font-size: 24px;
@@ -445,7 +396,6 @@ button {
 }
 
 .free-description {
-
     color: #641078;
 
     font-size: 16px;
@@ -454,7 +404,6 @@ button {
 }
 
 .open-button {
-
     background: #760080;
 
     color: white;
@@ -471,18 +420,15 @@ button {
 }
 
 
-/* ---------------------------------------------------------
+/* =========================================================
    BOTTOM NAVIGATION
---------------------------------------------------------- */
+========================================================= */
 
 .bottom-navigation {
-
     position: fixed;
 
     left: 0;
-
     right: 0;
-
     bottom: 0;
 
     height: 82px;
@@ -501,7 +447,6 @@ button {
 }
 
 .nav-item {
-
     background: white;
 
     border: none;
@@ -524,12 +469,10 @@ button {
 }
 
 .nav-item.active {
-
     color: #760080;
 }
 
 .nav-icon {
-
     font-size: 31px;
 }
 
@@ -539,21 +482,18 @@ button {
 ========================================================= */
 
 #selectionScreen {
-
     background: #c9f0f7;
 
     padding: 12px;
 }
 
 .selection-container {
-
     max-width: 650px;
 
     margin: auto;
 }
 
 .main-card {
-
     background: white;
 
     border-radius: 20px;
@@ -565,7 +505,6 @@ button {
 }
 
 .app-title {
-
     text-align: center;
 
     color: #5428a8;
@@ -578,7 +517,6 @@ button {
 }
 
 .selection-subtitle {
-
     text-align: center;
 
     color: #666;
@@ -589,7 +527,6 @@ button {
 }
 
 .selected-display {
-
     background: #f3edff;
 
     border: 2px solid #5428a8;
@@ -610,7 +547,6 @@ button {
 }
 
 .cartela-grid {
-
     display: grid;
 
     grid-template-columns:
@@ -626,7 +562,6 @@ button {
 }
 
 .cartela-button {
-
     border: 2px solid #ddd;
 
     background: white;
@@ -643,7 +578,6 @@ button {
 }
 
 .cartela-button.selected {
-
     background: #5428a8;
 
     color: white;
@@ -652,12 +586,10 @@ button {
 }
 
 .cartela-button:active {
-
     transform: scale(.95);
 }
 
 .proceed-button {
-
     width: 100%;
 
     margin-top: 17px;
@@ -678,7 +610,6 @@ button {
 }
 
 .proceed-button:disabled {
-
     opacity: .45;
 }
 
@@ -688,21 +619,18 @@ button {
 ========================================================= */
 
 #gameScreen {
-
     background: #c9f0f7;
 
     padding: 10px;
 }
 
 .game-container {
-
     max-width: 700px;
 
     margin: auto;
 }
 
 .game-topbar {
-
     background: #5428a8;
 
     color: white;
@@ -719,14 +647,12 @@ button {
 }
 
 .game-name {
-
     font-size: 18px;
 
     font-weight: 900;
 }
 
 .game-stats {
-
     display: flex;
 
     gap: 8px;
@@ -737,7 +663,6 @@ button {
 }
 
 .current-call-card {
-
     background: white;
 
     border-radius: 17px;
@@ -753,7 +678,6 @@ button {
 }
 
 .current-call-label {
-
     color: #666;
 
     font-size: 13px;
@@ -762,7 +686,6 @@ button {
 }
 
 .current-call {
-
     color: #f27c00;
 
     font-size: 48px;
@@ -773,7 +696,6 @@ button {
 }
 
 .number-board {
-
     background: white;
 
     border-radius: 17px;
@@ -788,7 +710,6 @@ button {
 
 .number-header,
 .number-row {
-
     display: grid;
 
     grid-template-columns:
@@ -798,12 +719,10 @@ button {
 }
 
 .number-header {
-
     margin-bottom: 4px;
 }
 
 .number-header div {
-
     background: #5428a8;
 
     color: white;
@@ -820,7 +739,6 @@ button {
 }
 
 .number-cell {
-
     text-align: center;
 
     background: #f3f3f3;
@@ -837,14 +755,12 @@ button {
 }
 
 .number-cell.called {
-
     background: #0ca94f;
 
     color: white;
 }
 
 .number-cell.current {
-
     background: #f27c00;
 
     color: white;
@@ -853,7 +769,6 @@ button {
 }
 
 .player-card-container {
-
     background: white;
 
     border-radius: 17px;
@@ -867,7 +782,6 @@ button {
 }
 
 .player-card-title {
-
     display: flex;
 
     justify-content: space-between;
@@ -882,7 +796,6 @@ button {
 }
 
 .player-board {
-
     width: 100%;
 
     border-collapse: separate;
@@ -891,7 +804,6 @@ button {
 }
 
 .player-board th {
-
     background: #5428a8;
 
     color: white;
@@ -904,7 +816,6 @@ button {
 }
 
 .player-board td {
-
     background: #f2f2f2;
 
     color: #333;
@@ -923,35 +834,30 @@ button {
 }
 
 .player-board td.called {
-
     background: #d9f3df;
 
     color: #168943;
 }
 
 .player-board td.marked {
-
     background: #0ca94f;
 
     color: white;
 }
 
 .player-board td.free {
-
     background: #0ca94f;
 
     color: white;
 }
 
 .player-board td.winning {
-
     background: #f27c00;
 
     color: white;
 }
 
 .game-controls {
-
     display: flex;
 
     gap: 8px;
@@ -960,7 +866,6 @@ button {
 }
 
 .auto-control {
-
     flex: 1;
 
     background: white;
@@ -983,14 +888,11 @@ button {
 }
 
 .auto-control input {
-
     width: 19px;
-
     height: 19px;
 }
 
 .bingo-button {
-
     flex: 1;
 
     background: #5428a8;
@@ -1009,7 +911,6 @@ button {
 }
 
 .bingo-button:disabled {
-
     opacity: .45;
 }
 
@@ -1019,14 +920,12 @@ button {
 ========================================================= */
 
 #resultScreen {
-
     background: #c9f0f7;
 
     padding: 12px;
 }
 
 .result-container {
-
     max-width: 650px;
 
     margin: auto;
@@ -1041,12 +940,10 @@ button {
 }
 
 .result-icon {
-
     font-size: 60px;
 }
 
 .result-title {
-
     color: #5428a8;
 
     font-size: 28px;
@@ -1055,7 +952,6 @@ button {
 }
 
 .result-name {
-
     color: #333;
 
     font-size: 21px;
@@ -1066,7 +962,6 @@ button {
 }
 
 .result-pattern {
-
     color: #666;
 
     font-size: 16px;
@@ -1075,7 +970,6 @@ button {
 }
 
 .result-prize {
-
     background: #d9f3df;
 
     color: #168943;
@@ -1092,12 +986,10 @@ button {
 }
 
 .result-board-wrapper {
-
     margin-top: 17px;
 }
 
 .result-message {
-
     margin-top: 17px;
 
     color: #666;
@@ -1111,7 +1003,6 @@ button {
 ========================================================= */
 
 .toast {
-
     position: fixed;
 
     left: 50%;
@@ -1181,12 +1072,14 @@ button {
 
     .bingo-title {
         font-size: 25px;
+
         padding-left: 23px;
     }
 
     .game-columns {
         margin-left: 16px;
         margin-right: 16px;
+
         font-size: 13px;
     }
 
@@ -1235,6 +1128,7 @@ button {
     .free-card {
         margin-left: 16px;
         margin-right: 16px;
+
         padding: 14px 17px;
     }
 
@@ -1262,528 +1156,465 @@ button {
     .nav-item {
         font-size: 14px;
     }
+
 }
 
-</style>
-</head>
-
-
-<body>
-
-
-<!-- =====================================================
+</style></head><body><!-- =====================================================
      LOBBY
-===================================================== -->
+===================================================== --><div id="lobbyScreen" class="screen"><div class="lobby-header">
 
-<div id="lobbyScreen" class="screen">
-
-    <!-- ONLY TITLE
-         X / V / THREE DOTS REMOVED -->
-
-    <div class="lobby-header">
-
-        <div class="header-title">
-            Rodas Friend Zone Bingo
-        </div>
-
+    <div class="header-title">
+        Rodas Friend Zone Bingo
     </div>
 
-
-    <!-- LIVE / BALANCE -->
-
-    <div class="live-balance">
-
-        <div class="live-status">
-
-            <span class="live-dot"></span>
-
-            <span>
-                Live
-            </span>
-
-        </div>
+</div>
 
 
-        <div class="balance">
+<div class="live-balance">
 
-            <span class="card-icon">
-                💳
-            </span>
+    <div class="live-status">
 
-            <span>
-                Balance:
-            </span>
-
-            <strong id="balanceValue">
-                0.00
-            </strong>
-
-        </div>
-
-    </div>
-
-
-    <!-- BINGO GAMES -->
-
-    <div class="bingo-title">
-
-        <span>🎯</span>
+        <span class="live-dot"></span>
 
         <span>
-            BINGO GAMES
+            Live
         </span>
 
     </div>
 
 
-    <!-- COLUMN HEADERS -->
+    <div class="balance">
 
-    <div class="game-columns">
+        <span class="card-icon">
+            💳
+        </span>
 
-        <div>
-            BET
+        <span>
+            Balance:
+        </span>
+
+        <strong id="balanceValue">
+            0.00
+        </strong>
+
+    </div>
+
+</div>
+
+
+<div class="bingo-title">
+
+    <span>🎯</span>
+
+    <span>
+        BINGO GAMES
+    </span>
+
+</div>
+
+
+<div class="game-columns">
+
+    <div>
+        BET
+    </div>
+
+    <div>
+        WIN / PLAYER
+    </div>
+
+    <div>
+        STATUS & JOIN
+    </div>
+
+</div>
+
+
+<div class="game-card">
+
+    <div class="bet-section">
+
+        <div class="bet-number">
+            10
         </div>
 
-        <div>
-            WIN / PLAYER
-        </div>
-
-        <div>
-            STATUS & JOIN
+        <div class="bet-currency">
+            BIRR
         </div>
 
     </div>
 
 
-    <!-- GAME -->
+    <div class="game-info">
 
-    <div class="game-card">
+        <div class="winner">
 
-
-        <!-- BET -->
-
-        <div class="bet-section">
-
-            <div class="bet-number">
-                10
-            </div>
-
-            <div class="bet-currency">
-                BIRR
-            </div>
-
-        </div>
-
-
-        <!-- WIN / PLAYER -->
-
-        <div class="game-info">
-
-            <div class="winner">
-
-                <span class="trophy">
-                    🏆
-                </span>
-
-                <span
-                    id="lobbyWinner"
-                    class="winner-number">
-
-                    0
-
-                </span>
-
-            </div>
-
-            <div class="players">
-
-                <span id="lobbyPlayers">
-                    0
-                </span>
-
-                players
-
-            </div>
-
-        </div>
-
-
-        <!-- STATUS / JOIN -->
-
-        <div class="join-section">
-
-            <div class="ready">
-                READY
-            </div>
-
-            <button
-                class="join-button"
-                onclick="joinGame()">
-
-                JOIN
-
-            </button>
-
-        </div>
-
-    </div>
-
-
-    <!-- FREE -->
-
-    <div class="free-card">
-
-        <div>
-
-            <div class="free-title">
-                🎮 FREE
-            </div>
-
-            <div class="free-description">
-                Practice Mode — No Real Money
-            </div>
-
-        </div>
-
-
-        <button
-            class="open-button"
-            onclick="openFreeGame()">
-
-            OPEN
-
-        </button>
-
-    </div>
-
-
-    <!-- BOTTOM -->
-
-    <div class="bottom-navigation">
-
-        <button
-            class="nav-item active"
-            onclick="showLobby()">
-
-            <span class="nav-icon">
-                🎮
-            </span>
-
-            <span>
-                Game
-            </span>
-
-        </button>
-
-
-        <button class="nav-item">
-
-            <span class="nav-icon">
+            <span class="trophy">
                 🏆
             </span>
 
-            <span>
-                Scores
+            <span
+                id="lobbyWinner"
+                class="winner-number">
+
+                0
+
             </span>
+
+        </div>
+
+        <div class="players">
+
+            <span id="lobbyPlayers">
+                0
+            </span>
+
+            players
+
+        </div>
+
+    </div>
+
+
+    <div class="join-section">
+
+        <div class="ready">
+            READY
+        </div>
+
+        <button
+            id="joinButton"
+            class="join-button"
+            onclick="joinGame()">
+
+            JOIN
 
         </button>
 
-
-        <button class="nav-item">
-
-            <span class="nav-icon">
-                👤
-            </span>
-
-            <span>
-                Profile
-            </span>
-
-        </button>
-
     </div>
 
 </div>
 
 
+<div class="free-card">
 
-<!-- =====================================================
-     CARTELA SELECTION
-===================================================== -->
+    <div>
 
-<div id="selectionScreen" class="screen">
+        <div class="free-title">
+            🎮 FREE
+        </div>
 
-    <div class="selection-container">
-
-        <div class="main-card">
-
-            <div class="app-title">
-                Rodas Friend Zone Bingo
-            </div>
-
-            <div class="selection-subtitle">
-                Choose your cartela
-            </div>
-
-            <div class="selected-display">
-
-                Selected Cartela:
-
-                <span id="selectedCartelaText">
-                    None
-                </span>
-
-            </div>
-
-            <div
-                id="cartelaGrid"
-                class="cartela-grid">
-            </div>
-
-            <button
-                id="proceedButton"
-                class="proceed-button"
-                disabled
-                onclick="proceedGame()">
-
-                PROCEED
-
-            </button>
-
+        <div class="free-description">
+            Practice Mode — No Real Money
         </div>
 
     </div>
 
-</div>
 
+    <button
+        class="open-button"
+        onclick="openFreeGame()">
 
+        OPEN
 
-<!-- =====================================================
-     GAME
-===================================================== -->
-
-<div id="gameScreen" class="screen">
-
-    <div class="game-container">
-
-
-        <div class="game-topbar">
-
-            <div class="game-name">
-                Rodas Friend Zone
-            </div>
-
-            <div class="game-stats">
-
-                <span>
-                    Players:
-                    <b id="gamePlayers">0</b>
-                </span>
-
-                <span>
-                    Bet:
-                    <b id="gameBet">10</b>
-                </span>
-
-            </div>
-
-        </div>
-
-
-        <div class="current-call-card">
-
-            <div class="current-call-label">
-                CURRENT CALL
-            </div>
-
-            <div
-                id="currentCall"
-                class="current-call">
-
-                —
-
-            </div>
-
-        </div>
-
-
-        <div class="number-board">
-
-            <div class="number-header">
-
-                <div>B</div>
-                <div>I</div>
-                <div>N</div>
-                <div>G</div>
-                <div>O</div>
-
-            </div>
-
-            <div id="numberBoardRows"></div>
-
-        </div>
-
-
-        <div class="player-card-container">
-
-            <div class="player-card-title">
-
-                <span>
-
-                    CARTELA
-
-                    <span id="gameCartela">
-                        -
-                    </span>
-
-                </span>
-
-                <span id="playerName">
-                    Player
-                </span>
-
-            </div>
-
-
-            <table class="player-board">
-
-                <thead>
-
-                    <tr>
-
-                        <th>B</th>
-                        <th>I</th>
-                        <th>N</th>
-                        <th>G</th>
-                        <th>O</th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody id="playerBoardBody">
-                </tbody>
-
-            </table>
-
-        </div>
-
-
-        <div class="game-controls">
-
-            <label class="auto-control">
-
-                <input
-                    type="checkbox"
-                    id="autoToggle"
-                    onchange="toggleAuto()">
-
-                AUTO
-
-            </label>
-
-
-            <button
-                id="bingoButton"
-                class="bingo-button"
-                onclick="claimBingo()">
-
-                BINGO WIN
-
-            </button>
-
-        </div>
-
-    </div>
+    </button>
 
 </div>
 
 
+<div class="bottom-navigation">
 
-<!-- =====================================================
-     RESULT
-===================================================== -->
+    <button
+        class="nav-item active"
+        onclick="showLobby()">
 
-<div id="resultScreen" class="screen">
+        <span class="nav-icon">
+            🎮
+        </span>
 
-    <div class="result-container">
+        <span>
+            Game
+        </span>
 
-        <div class="result-icon">
+    </button>
+
+
+    <button class="nav-item">
+
+        <span class="nav-icon">
             🏆
+        </span>
+
+        <span>
+            Scores
+        </span>
+
+    </button>
+
+
+    <button class="nav-item">
+
+        <span class="nav-icon">
+            👤
+        </span>
+
+        <span>
+            Profile
+        </span>
+
+    </button>
+
+</div>
+
+</div><!-- =====================================================
+     CARTELA SELECTION
+===================================================== --><div id="selectionScreen" class="screen"><div class="selection-container">
+
+    <div class="main-card">
+
+        <div class="app-title">
+            Rodas Friend Zone Bingo
         </div>
 
-        <div class="result-title">
-            BINGO WINNER
+        <div class="selection-subtitle">
+            Choose your cartela
+        </div>
+
+        <div class="selected-display">
+
+            Selected Cartela:
+
+            <span id="selectedCartelaText">
+                None
+            </span>
+
         </div>
 
         <div
-            id="winnerName"
-            class="result-name">
-
-            Player
-
+            id="cartelaGrid"
+            class="cartela-grid">
         </div>
 
-        <div
-            id="winnerPattern"
-            class="result-pattern">
+        <button
+            id="proceedButton"
+            class="proceed-button"
+            disabled
+            onclick="proceedGame()">
 
-            Pattern
+            PROCEED
 
-        </div>
-
-        <div
-            id="winnerPrize"
-            class="result-prize">
-
-            Prize: 0
-
-        </div>
-
-
-        <div class="result-board-wrapper">
-
-            <table class="player-board">
-
-                <thead>
-
-                    <tr>
-
-                        <th>B</th>
-                        <th>I</th>
-                        <th>N</th>
-                        <th>G</th>
-                        <th>O</th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody id="resultBoardBody">
-                </tbody>
-
-            </table>
-
-        </div>
-
-
-        <div class="result-message">
-
-            New game will start after 30 seconds.
-
-        </div>
+        </button>
 
     </div>
 
 </div>
 
+</div><!-- =====================================================
+     GAME
+===================================================== --><div id="gameScreen" class="screen"><div class="game-container">
 
 
-<div id="toast" class="toast"></div>
+    <div class="game-topbar">
+
+        <div class="game-name">
+            Rodas Friend Zone
+        </div>
+
+        <div class="game-stats">
+
+            <span>
+                Players:
+                <b id="gamePlayers">0</b>
+            </span>
+
+            <span>
+                Bet:
+                <b id="gameBet">10</b>
+            </span>
+
+        </div>
+
+    </div>
 
 
+    <div class="current-call-card">
 
-<script>
+        <div class="current-call-label">
+            CURRENT CALL
+        </div>
+
+        <div
+            id="currentCall"
+            class="current-call">
+
+            —
+
+        </div>
+
+    </div>
+
+
+    <div class="number-board">
+
+        <div class="number-header">
+
+            <div>B</div>
+            <div>I</div>
+            <div>N</div>
+            <div>G</div>
+            <div>O</div>
+
+        </div>
+
+        <div id="numberBoardRows"></div>
+
+    </div>
+
+
+    <div class="player-card-container">
+
+        <div class="player-card-title">
+
+            <span>
+
+                CARTELA
+
+                <span id="gameCartela">
+                    -
+                </span>
+
+            </span>
+
+            <span id="playerName">
+                Player
+            </span>
+
+        </div>
+
+
+        <table class="player-board">
+
+            <thead>
+
+                <tr>
+
+                    <th>B</th>
+                    <th>I</th>
+                    <th>N</th>
+                    <th>G</th>
+                    <th>O</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody id="playerBoardBody">
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <div class="game-controls">
+
+        <label class="auto-control">
+
+            <input
+                type="checkbox"
+                id="autoToggle"
+                onchange="toggleAuto">
+
+            AUTO
+
+        </label>
+
+
+        <button
+            id="bingoButton"
+            class="bingo-button"
+            onclick="claimBingo()">
+
+            BINGO WIN
+
+        </button>
+
+    </div>
+
+</div>
+
+</div><!-- =====================================================
+     RESULT
+===================================================== --><div id="resultScreen" class="screen"><div class="result-container">
+
+    <div class="result-icon">
+        🏆
+    </div>
+
+    <div class="result-title">
+        BINGO WINNER
+    </div>
+
+    <div
+        id="winnerName"
+        class="result-name">
+
+        Player
+
+    </div>
+
+    <div
+        id="winnerPattern"
+        class="result-pattern">
+
+        Pattern
+
+    </div>
+
+    <div
+        id="winnerPrize"
+        class="result-prize">
+
+        Prize: 0
+
+    </div>
+
+
+    <div class="result-board-wrapper">
+
+        <table class="player-board">
+
+            <thead>
+
+                <tr>
+
+                    <th>B</th>
+                    <th>I</th>
+                    <th>N</th>
+                    <th>G</th>
+                    <th>O</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody id="resultBoardBody">
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <div class="result-message">
+
+        New game will start after 30 seconds.
+
+    </div>
+
+</div>
+
+</div><div id="toast" class="toast"></div><script>
 
 /* =========================================================
    TELEGRAM
@@ -1843,6 +1674,16 @@ let manuallyMarked = new Set();
 let freeMode = false;
 
 
+/*
+   IMPORTANT:
+   This variable prevents the polling system from
+   forcing the user back to the lobby while they are
+   selecting a cartela.
+*/
+
+let userInCartelaSelection = false;
+
+
 /* =========================================================
    API
 ========================================================= */
@@ -1886,7 +1727,9 @@ async function api(endpoint, options = {}) {
             data =
                 await response.json();
 
-        } catch (e) {
+        }
+
+        catch (e) {
 
             data = null;
 
@@ -1959,7 +1802,22 @@ function showScreen(id) {
 }
 
 
+/*
+   SHOW LOBBY
+*/
+
 function showLobby() {
+
+    /*
+       User intentionally returned to lobby.
+       Therefore polling is allowed to show lobby again.
+    */
+
+    userInCartelaSelection = false;
+
+    selectedCartela = null;
+
+    freeMode = false;
 
     showScreen(
         "lobbyScreen"
@@ -2005,20 +1863,56 @@ function showToast(message) {
 
 function joinGame() {
 
+    /*
+       IMPORTANT:
+       Tell the polling system that the user is now
+       inside cartela selection.
+
+       This prevents /api/state from immediately
+       sending the user back to the lobby.
+    */
+
+    userInCartelaSelection = true;
+
     freeMode = false;
 
     selectedCartela = null;
+
+    manuallyMarked.clear();
+
 
     document.getElementById(
         "selectedCartelaText"
     ).textContent =
         "None";
 
+
     document.getElementById(
         "proceedButton"
     ).disabled =
         true;
 
+
+    /*
+       Clear previous cartela highlight.
+    */
+
+    document
+        .querySelectorAll(
+            ".cartela-button"
+        )
+        .forEach(button => {
+
+            button.classList.remove(
+                "selected"
+            );
+
+        });
+
+
+    /*
+       NOW open cartela selection.
+    */
 
     showScreen(
         "selectionScreen"
@@ -2027,21 +1921,44 @@ function joinGame() {
 }
 
 
+/* =========================================================
+   FREE GAME
+========================================================= */
+
 function openFreeGame() {
+
+    userInCartelaSelection = true;
 
     freeMode = true;
 
     selectedCartela = null;
+
+    manuallyMarked.clear();
+
 
     document.getElementById(
         "selectedCartelaText"
     ).textContent =
         "None";
 
+
     document.getElementById(
         "proceedButton"
     ).disabled =
         true;
+
+
+    document
+        .querySelectorAll(
+            ".cartela-button"
+        )
+        .forEach(button => {
+
+            button.classList.remove(
+                "selected"
+            );
+
+        });
 
 
     showScreen(
@@ -2082,8 +1999,11 @@ function createCartelaButtons() {
         button.textContent =
             i;
 
+
         button.onclick =
-            () => selectCartela(i);
+            () =>
+                selectCartela(i);
+
 
         grid.appendChild(
             button
@@ -2099,6 +2019,13 @@ function createCartelaButtons() {
 ========================================================= */
 
 async function selectCartela(number) {
+
+    /*
+       Make sure the user stays in selection mode.
+    */
+
+    userInCartelaSelection = true;
+
 
     selectedCartela =
         number;
@@ -2144,6 +2071,11 @@ async function selectCartela(number) {
     ).disabled =
         false;
 
+
+    /*
+       Send selected cartela to backend
+       for paid game.
+    */
 
     if (!freeMode) {
 
@@ -2207,6 +2139,19 @@ async function proceedGame() {
     }
 
 
+    const proceedButton =
+        document.getElementById(
+            "proceedButton"
+        );
+
+
+    proceedButton.disabled =
+        true;
+
+    proceedButton.textContent =
+        "STARTING...";
+
+
     const result =
         await api(
             "/api/proceed",
@@ -2233,6 +2178,12 @@ async function proceedGame() {
 
     if (!result.ok) {
 
+        proceedButton.disabled =
+            false;
+
+        proceedButton.textContent =
+            "PROCEED";
+
         showToast(
             "Could not start the game."
         );
@@ -2247,6 +2198,12 @@ async function proceedGame() {
         result.data.success === false
     ) {
 
+        proceedButton.disabled =
+            false;
+
+        proceedButton.textContent =
+            "PROCEED";
+
         showToast(
             result.data.message ||
             "Unable to start game."
@@ -2255,6 +2212,17 @@ async function proceedGame() {
         return;
 
     }
+
+
+    /*
+       We successfully proceeded.
+       Now polling is allowed to control the game screen.
+    */
+
+    userInCartelaSelection = false;
+
+    proceedButton.textContent =
+        "PROCEED";
 
 
     showScreen(
@@ -2941,7 +2909,7 @@ function renderGame(state) {
 
 
 /* =========================================================
-   RESULT
+   RESULT BOARD
 ========================================================= */
 
 function renderResultBoard(
@@ -3059,6 +3027,10 @@ function renderResultBoard(
 }
 
 
+/* =========================================================
+   RESULT
+========================================================= */
+
 function renderResult(state) {
 
     document.getElementById(
@@ -3144,9 +3116,21 @@ function renderState(state) {
     }
 
 
+    /* =====================================================
+       RESULT
+    ===================================================== */
+
     if (
         state.phase === "result"
     ) {
+
+        /*
+           Game is finished.
+           Leave cartela-selection mode.
+        */
+
+        userInCartelaSelection = false;
+
 
         renderResult(
             state
@@ -3161,9 +3145,21 @@ function renderState(state) {
     }
 
 
+    /* =====================================================
+       PLAYING
+    ===================================================== */
+
     if (
         state.phase === "playing"
     ) {
+
+        /*
+           Game has started.
+           Cartela selection is finished.
+        */
+
+        userInCartelaSelection = false;
+
 
         renderGame(
             state
@@ -3177,11 +3173,23 @@ function renderState(state) {
 
     }
 
+
+    /* =====================================================
+       STARTING
+    ===================================================== */
 
     if (
         state.phase === "starting"
     ) {
 
+        /*
+           Backend is starting the game.
+           Do not return to lobby.
+        */
+
+        userInCartelaSelection = false;
+
+
         renderGame(
             state
         );
@@ -3195,10 +3203,56 @@ function renderState(state) {
     }
 
 
+    /* =====================================================
+       SELECTION
+    ===================================================== */
+
     if (
-        state.phase === "finished" ||
         state.phase === "selection"
     ) {
+
+        /*
+           THIS IS THE IMPORTANT FIX.
+
+           If the user pressed JOIN, keep them
+           on the cartela selection screen.
+
+           Previously this state always sent them
+           back to the lobby.
+        */
+
+        if (
+            userInCartelaSelection
+        ) {
+
+            showScreen(
+                "selectionScreen"
+            );
+
+        }
+
+        else {
+
+            showScreen(
+                "lobbyScreen"
+            );
+
+        }
+
+        return;
+
+    }
+
+
+    /* =====================================================
+       FINISHED
+    ===================================================== */
+
+    if (
+        state.phase === "finished"
+    ) {
+
+        userInCartelaSelection = false;
 
         showScreen(
             "lobbyScreen"
@@ -3252,15 +3306,25 @@ createCartelaButtons();
 
 buildNumberBoard();
 
+
+/*
+   Always show lobby when the app first opens.
+*/
+
 showScreen(
     "lobbyScreen"
 );
+
+
+/*
+   Start backend state polling.
+*/
 
 pollState();
 
 
 /* =========================================================
-   TELEGRAM
+   TELEGRAM THEME
 ========================================================= */
 
 if (tg) {
@@ -3287,7 +3351,4 @@ if (tg) {
 
 }
 
-</script>
-
-</body>
-</html>
+</script></body></html>
