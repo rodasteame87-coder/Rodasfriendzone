@@ -24,12 +24,13 @@ MIN_PLAYERS = 1            # change to 2 or more for real games
 IDLE_KICK = 60             # seconds without contact before a player is removed
 MIN_DEPOSIT = 10
 MIN_WITHDRAW = 50
+WIN_SCREEN_SECONDS = 12    # how long the winner screen stays after a win
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
 rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None,
-             "seq": [], "secret": "", "hash": ""}
+             "seq": [], "secret": "", "hash": "", "wcells": []}
          for b in BETS}
 wallets, names, seen = {}, {}, {}
 joined, usernames, wins, won = {}, {}, {}, {}      # profile data
@@ -55,6 +56,15 @@ PATTERNS = (
 def has_bingo(card, called):
     hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
     return any(all(hit(r, c) for r, c in p) for p in PATTERNS)
+
+
+def winning_cells(card, called):
+    """Cells of the first completed pattern (shown on the winner screen)."""
+    hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
+    for p in PATTERNS:
+        if all(hit(r, c) for r, c in p):
+            return [list(x) for x in p]
+    return []
 
 
 # ---------- helpers ----------
@@ -164,7 +174,7 @@ async def reaper():
 async def run_round(g):
     g.update(called=[], phase="lobby", winner=None, prize=0,
              round=g["round"] + 1, deadline=None,
-             seq=[], secret="", hash="")
+             seq=[], secret="", hash="", wcells=[])
 
     # wait for the first player, then count down
     while g["deadline"] is None or time.time() < g["deadline"]:
@@ -197,7 +207,7 @@ async def run_round(g):
 
     g["phase"] = "finished"
     record_game(g)
-    await asyncio.sleep(8)
+    await asyncio.sleep(WIN_SCREEN_SECONDS)
     g["players"].clear()
 
 
@@ -245,6 +255,11 @@ async def api_state(req):
         "myCard": my, "card": make_card(my) if my else None,
         "called": g["called"],
         "winner": names.get(g["winner"]), "prize": g["prize"],
+        "wBoard": g["players"].get(g["winner"]) if g["winner"] else None,
+        "wCard": make_card(g["players"][g["winner"]])
+                 if g["winner"] in g["players"] else None,
+        "wCells": g.get("wcells", []),
+        "isWinner": g["winner"] == uid,
         "room": g["bet"], "inRoom": mine["bet"] if mine else None,
         "rooms": [{"bet": r["bet"], "phase": r["phase"],
                    "players": len(r["players"]),
@@ -366,6 +381,7 @@ async def api_bingo(req):
     if has_bingo(make_card(g["players"][uid]), set(g["called"])):
         g["phase"] = "finished"
         g["winner"] = uid
+        g["wcells"] = winning_cells(make_card(g["players"][uid]), set(g["called"]))
         wallets[uid] = wallets.get(uid, 0) + g["prize"]
         wins[uid] = wins.get(uid, 0) + 1
         won[uid] = won.get(uid, 0) + g["prize"]
