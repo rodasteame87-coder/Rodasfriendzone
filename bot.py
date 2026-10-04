@@ -220,6 +220,8 @@ async def main():
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
 
     asyncio.create_task(game_loop())
+
+    await bot.delete_webhook(drop_pending_updates=True)   # fixes the Conflict error
     await dp.start_polling(bot)
 
 
