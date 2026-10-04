@@ -1,4 +1,4 @@
-import asyncio, hashlib, hmac, json, os, random, secrets, string, time
+import asyncio, hashlib, hmac, json, math, os, random, secrets, string, time
 from pathlib import Path
 from urllib.parse import parse_qsl
 from aiohttp import web
@@ -24,13 +24,14 @@ MIN_PLAYERS = 1            # change to 2 or more for real games
 IDLE_KICK = 60             # seconds without contact before a player is removed
 MIN_DEPOSIT = 10
 MIN_WITHDRAW = 50
-WIN_SCREEN_SECONDS = 12    # how long the winner screen stays after a win
+WIN_SCREEN_SECONDS = 10    # how long the winner / loser card stays
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
 rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None,
-             "seq": [], "secret": "", "hash": "", "wcells": []}
+             "seq": [], "secret": "", "hash": "",
+             "wcells": [], "wname": "", "finish_at": 0}
          for b in BETS}
 wallets, names, seen = {}, {}, {}
 joined, usernames, wins, won = {}, {}, {}, {}      # profile data
@@ -51,6 +52,9 @@ PATTERNS = (
        [(0, 0), (0, 4), (1, 2), (2, 2), (3, 2)],              # T corners
        [(1, 1), (1, 2), (1, 3), (2, 2), (3, 2)]]              # center T
 )
+PATTERN_NAMES = (["Horizontal line"] * 5 + ["Vertical line"] * 5
+                 + ["Diagonal"] * 2
+                 + ["Four corners", "Center four", "T corners", "Center T"])
 
 
 def has_bingo(card, called):
@@ -59,12 +63,12 @@ def has_bingo(card, called):
 
 
 def winning_cells(card, called):
-    """Cells of the first completed pattern (shown on the winner screen)."""
+    """Name + cells of the first completed pattern (winner screen)."""
     hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
-    for p in PATTERNS:
+    for p, nm in zip(PATTERNS, PATTERN_NAMES):
         if all(hit(r, c) for r, c in p):
-            return [list(x) for x in p]
-    return []
+            return nm, [list(x) for x in p]
+    return "", []
 
 
 # ---------- helpers ----------
@@ -131,6 +135,13 @@ def lobby_time(g):
     return max(0, int(g["deadline"] - time.time()))
 
 
+def finish_left(g):
+    """Seconds left on the winner / loser card."""
+    if g["phase"] != "finished" or not g["finish_at"]:
+        return 0
+    return max(0, math.ceil(g["finish_at"] - time.time()))
+
+
 def record_game(g):
     """Save a finished game so it shows on the History page."""
     if not g["players"]:
@@ -174,7 +185,8 @@ async def reaper():
 async def run_round(g):
     g.update(called=[], phase="lobby", winner=None, prize=0,
              round=g["round"] + 1, deadline=None,
-             seq=[], secret="", hash="", wcells=[])
+             seq=[], secret="", hash="",
+             wcells=[], wname="", finish_at=0)
 
     # wait for the first player, then count down
     while g["deadline"] is None or time.time() < g["deadline"]:
@@ -206,8 +218,10 @@ async def run_round(g):
         await asyncio.sleep(CALL_EVERY)
 
     g["phase"] = "finished"
+    if not g["finish_at"]:
+        g["finish_at"] = time.time() + WIN_SCREEN_SECONDS
     record_game(g)
-    await asyncio.sleep(WIN_SCREEN_SECONDS)
+    await asyncio.sleep(max(0, g["finish_at"] - time.time()))
     g["players"].clear()
 
 
@@ -259,6 +273,8 @@ async def api_state(req):
         "wCard": make_card(g["players"][g["winner"]])
                  if g["winner"] in g["players"] else None,
         "wCells": g.get("wcells", []),
+        "wName": g.get("wname", ""),
+        "left": finish_left(g),
         "isWinner": g["winner"] == uid,
         "room": g["bet"], "inRoom": mine["bet"] if mine else None,
         "rooms": [{"bet": r["bet"], "phase": r["phase"],
@@ -378,10 +394,12 @@ async def api_bingo(req):
     g = room_of(uid)
     if not g or g["phase"] != "playing":
         return web.json_response({"ok": False})
-    if has_bingo(make_card(g["players"][uid]), set(g["called"])):
+    card = make_card(g["players"][uid])
+    if has_bingo(card, set(g["called"])):
         g["phase"] = "finished"
         g["winner"] = uid
-        g["wcells"] = winning_cells(make_card(g["players"][uid]), set(g["called"]))
+        g["wname"], g["wcells"] = winning_cells(card, set(g["called"]))
+        g["finish_at"] = time.time() + WIN_SCREEN_SECONDS
         wallets[uid] = wallets.get(uid, 0) + g["prize"]
         wins[uid] = wins.get(uid, 0) + 1
         won[uid] = won.get(uid, 0) + g["prize"]
