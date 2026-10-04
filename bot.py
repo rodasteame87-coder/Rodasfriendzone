@@ -1,4 +1,4 @@
-import asyncio, hashlib, hmac, json, os, random
+import asyncio, hashlib, hmac, json, os, random, time
 from pathlib import Path
 from urllib.parse import parse_qsl
 from aiohttp import web
@@ -7,21 +7,25 @@ from aiogram.filters import CommandStart
 from aiogram.types import (Message, InlineKeyboardMarkup,
                            InlineKeyboardButton, WebAppInfo)
 
-TOKEN = os.environ["BOT_TOKEN"]        # from BotFather
-WEBAPP_URL = os.environ["WEBAPP_URL"]  # https://rodasfriendzone.onrender.com
+TOKEN = os.environ["BOT_TOKEN"]
+WEBAPP_URL = os.environ["WEBAPP_URL"]
 PORT = int(os.getenv("PORT", 8080))
 BET = 10
-CALL_EVERY = 4        # seconds between calls
-LOBBY_SECONDS = 30    # wait time before a round starts
+CALL_EVERY = 4         # seconds between calls
+LOBBY_SECONDS = 30     # cartela selection time
+START_BALANCE = 1000   # free test money
+CARD_COUNT = 100       # numbers shown in the picker
+MIN_PLAYERS = 1        # change to 2 or more for real games
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
-game = {"called": [], "players": {}, "phase": "lobby", "winner": None}
+game = {"phase": "lobby", "called": [], "players": {}, "winner": None,
+        "prize": 0, "round": 0, "deadline": time.time() + LOBBY_SECONDS}
+wallets, names = {}, {}
 
 
 # ---------- helpers ----------
 def verify(init_data: str):
-    """Check Telegram's signature; return the user dict or None."""
     data = dict(parse_qsl(init_data, keep_blank_values=True))
     got = data.pop("hash", "")
     check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
@@ -32,8 +36,14 @@ def verify(init_data: str):
     return json.loads(data["user"])
 
 
+def touch(user):
+    uid = user["id"]
+    wallets.setdefault(uid, START_BALANCE)
+    names[uid] = user.get("first_name", "Player")
+    return uid
+
+
 def make_card(no: int):
-    """Same card number always gives the same card. 0 = FREE."""
     r = random.Random(no)
     cols = [r.sample(range(c * 15 + 1, c * 15 + 16), 5) for c in range(5)]
     cols[2][2] = 0
@@ -54,50 +64,82 @@ def has_bingo(card, called):
 # ---------- game loop ----------
 async def game_loop():
     while True:
-        game.update(called=[], phase="lobby", winner=None)
-        await asyncio.sleep(LOBBY_SECONDS)
-        if not game["players"]:
-            continue
+        game.update(called=[], phase="lobby", winner=None, prize=0,
+                    round=game["round"] + 1,
+                    deadline=time.time() + LOBBY_SECONDS)
+        while time.time() < game["deadline"]:
+            await asyncio.sleep(1)
+        if len(game["players"]) < MIN_PLAYERS:
+            continue                      # not enough players, wait again
         game["phase"] = "playing"
+        game["prize"] = int(len(game["players"]) * BET * 0.8)
         for n in random.sample(range(1, 76), 75):
-            if game["phase"] != "playing":
+            if game["phase"] != "playing" or not game["players"]:
                 break
             game["called"].append(n)
             await asyncio.sleep(CALL_EVERY)
-        await asyncio.sleep(5)
+        game["phase"] = "finished"
+        await asyncio.sleep(8)            # let everyone see the result
         game["players"].clear()
 
 
-# ---------- web pages / API ----------
+# ---------- pages / API ----------
 async def index(request):
     if not INDEX_FILE.exists():
         return web.Response(text=f"File not found: {INDEX_FILE}", status=404)
     return web.FileResponse(INDEX_FILE)
 
 
-async def health(request):
-    return web.Response(text="ok")
-
-
 async def api_state(req):
     user = verify(req.query.get("initData", ""))
     if not user:
-        return web.json_response({"error": "auth"}, status=401)
-    try:
-        card_no = max(1, min(400, int(req.query.get("card", 1))))
-    except ValueError:
-        card_no = 1
-    if game["phase"] == "lobby":
-        game["players"][user["id"]] = card_no
+        return web.json_response({"error": "auth"})
+    uid = touch(user)
+    my = game["players"].get(uid)
+    left = max(0, int(game["deadline"] - time.time())) \
+        if game["phase"] == "lobby" else 0
     n = len(game["players"])
     return web.json_response({
-        "players": n,
-        "derash": int(n * BET * 0.8),
-        "bet": BET,
-        "card": make_card(card_no),
-        "cardNo": card_no,
+        "phase": game["phase"], "time": left, "round": game["round"],
+        "players": n, "bet": BET, "derash": int(n * BET * 0.8),
+        "wallet": wallets[uid], "name": names[uid],
+        "count": CARD_COUNT, "taken": list(game["players"].values()),
+        "myCard": my, "card": make_card(my) if my else None,
         "called": game["called"],
+        "winner": names.get(game["winner"]), "prize": game["prize"],
     })
+
+
+async def api_card(req):
+    try:
+        no = max(1, min(CARD_COUNT, int(req.query.get("card", 1))))
+    except ValueError:
+        no = 1
+    return web.json_response({"card": make_card(no)})
+
+
+async def api_join(req):
+    body = await req.json()
+    user = verify(body.get("initData", ""))
+    if not user:
+        return web.json_response({"ok": False, "error": "Open from Telegram"})
+    uid = touch(user)
+    if game["phase"] != "lobby":
+        return web.json_response({"ok": False, "error": "Round already started"})
+    try:
+        card = int(body.get("card", 0))
+    except (TypeError, ValueError):
+        card = 0
+    if not 1 <= card <= CARD_COUNT:
+        return web.json_response({"ok": False, "error": "Bad card number"})
+    if card in game["players"].values() and game["players"].get(uid) != card:
+        return web.json_response({"ok": False, "error": "Card already taken"})
+    if uid not in game["players"]:
+        if wallets[uid] < BET:
+            return web.json_response({"ok": False, "error": "Not enough balance"})
+        wallets[uid] -= BET
+    game["players"][uid] = card
+    return web.json_response({"ok": True})
 
 
 async def api_bingo(req):
@@ -105,12 +147,14 @@ async def api_bingo(req):
     user = verify(body.get("initData", ""))
     if not user or game["phase"] != "playing":
         return web.json_response({"ok": False})
-    card_no = game["players"].get(user["id"])
+    uid = user["id"]
+    card_no = game["players"].get(uid)
     if not card_no:
         return web.json_response({"ok": False})
     if has_bingo(make_card(card_no), set(game["called"])):
         game["phase"] = "finished"
-        game["winner"] = user["id"]
+        game["winner"] = uid
+        wallets[uid] = wallets.get(uid, 0) + game["prize"]
         return web.json_response({"ok": True})
     return web.json_response({"ok": False})
 
@@ -119,7 +163,11 @@ async def api_leave(req):
     body = await req.json()
     user = verify(body.get("initData", ""))
     if user:
-        game["players"].pop(user["id"], None)
+        uid = user["id"]
+        if uid in game["players"]:
+            if game["phase"] == "lobby":
+                wallets[uid] = wallets.get(uid, 0) + BET   # refund
+            game["players"].pop(uid, None)
     return web.json_response({"ok": True})
 
 
@@ -138,8 +186,9 @@ async def main():
     app = web.Application()
     app.add_routes([
         web.get("/", index),
-        web.get("/health", health),
         web.get("/api/state", api_state),
+        web.get("/api/card", api_card),
+        web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
     ])
