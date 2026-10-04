@@ -1,4 +1,4 @@
-import asyncio, hashlib, hmac, json, os, random, time
+import asyncio, hashlib, hmac, json, os, random, secrets, string, time
 from pathlib import Path
 from urllib.parse import parse_qsl
 from aiohttp import web
@@ -28,11 +28,13 @@ MIN_WITHDRAW = 50
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
 
 rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
-             "winner": None, "prize": 0, "round": 0, "deadline": None}
+             "winner": None, "prize": 0, "round": 0, "deadline": None,
+             "seq": [], "secret": "", "hash": ""}
          for b in BETS}
 wallets, names, seen = {}, {}, {}
 joined, usernames, wins, won = {}, {}, {}, {}      # profile data
 history, winlog = {}, {}                           # transactions / wins list
+games, game_counter = [], [0]                      # finished games (History page)
 pending, req_counter = {}, [0]          # deposit / withdraw requests
 
 dp = Dispatcher()
@@ -113,6 +115,34 @@ def lobby_time(g):
     return max(0, int(g["deadline"] - time.time()))
 
 
+def record_game(g):
+    """Save a finished game so it shows on the History page."""
+    if not g["players"]:
+        return
+    game_counter[0] += 1
+    wid = g["winner"]
+    ref = "".join(random.choices(string.ascii_uppercase, k=2)) + \
+          "".join(random.choices(string.digits, k=4))
+    games.insert(0, {
+        "id": game_counter[0], "bet": g["bet"], "t": int(time.time()),
+        "winner": names.get(wid, "Player") if wid else "",
+        "wid": wid, "board": g["players"].get(wid) if wid else None,
+        "ref": ref, "calls": len(g["called"]),
+        "prize": g["prize"] if wid else 0,
+        "called": list(g["called"]), "seq": list(g["seq"]),
+        "secret": g["secret"], "hash": g["hash"],
+        "pl": list(g["players"].keys()),
+    })
+    del games[300:]
+
+
+def summ(r, uid):
+    return {"id": r["id"], "bet": r["bet"], "t": r["t"],
+            "winner": r["winner"], "board": r["board"], "ref": r["ref"],
+            "calls": r["calls"], "prize": r["prize"],
+            "won": r["wid"] == uid, "mine": uid in r["pl"]}
+
+
 # ---------- background jobs ----------
 async def reaper():
     """Remove players who closed the app without pressing LEAVE."""
@@ -127,7 +157,8 @@ async def reaper():
 
 async def run_round(g):
     g.update(called=[], phase="lobby", winner=None, prize=0,
-             round=g["round"] + 1, deadline=None)
+             round=g["round"] + 1, deadline=None,
+             seq=[], secret="", hash="")
 
     # wait for the first player, then count down
     while g["deadline"] is None or time.time() < g["deadline"]:
@@ -144,15 +175,22 @@ async def run_round(g):
             g["players"].clear()
             return
 
+    # provably fair: pick all numbers + secret first, publish the hash
+    g["seq"] = random.sample(range(1, 76), 75)
+    g["secret"] = "".join(secrets.choice(string.ascii_letters) for _ in range(16))
+    g["hash"] = hashlib.sha256(
+        f"{g['secret']}:{','.join(map(str, g['seq']))}".encode()).hexdigest()
+
     g["phase"] = "playing"
     g["prize"] = int(len(g["players"]) * g["bet"] * 0.8)
-    for n in random.sample(range(1, 76), 75):
+    for n in g["seq"]:
         if g["phase"] != "playing" or not g["players"]:
             break
         g["called"].append(n)
         await asyncio.sleep(CALL_EVERY)
 
     g["phase"] = "finished"
+    record_game(g)
     await asyncio.sleep(8)
     g["players"].clear()
 
@@ -221,6 +259,49 @@ async def api_profile(req):
         "tx": history.get(uid, [])[:30],
         "winlist": winlog.get(uid, [])[:30],
     })
+
+
+async def api_history(req):
+    user = verify(req.query.get("initData", ""))
+    if not user:
+        return web.json_response({"error": "auth"})
+    uid = touch(user)
+    scope = req.query.get("scope", "recent")
+    try:
+        bet = int(req.query.get("bet", 0))
+    except ValueError:
+        bet = 0
+    q = req.query.get("q", "").strip().lstrip("#")
+    out = []
+    for r in games:
+        if bet and r["bet"] != bet:
+            continue
+        if scope == "mine" and uid not in r["pl"]:
+            continue
+        if q and q not in str(r["id"]):
+            continue
+        out.append(summ(r, uid))
+        if len(out) >= 50:
+            break
+    return web.json_response({"list": out})
+
+
+async def api_game(req):
+    user = verify(req.query.get("initData", ""))
+    if not user:
+        return web.json_response({"error": "auth"})
+    uid = touch(user)
+    try:
+        gid = int(req.query.get("id", 0))
+    except ValueError:
+        gid = 0
+    for r in games:
+        if r["id"] == gid:
+            d = summ(r, uid)
+            d.update(called=r["called"], seq=r["seq"],
+                     secret=r["secret"], hash=r["hash"])
+            return web.json_response(d)
+    return web.json_response({"error": "not found"})
 
 
 async def api_card(req):
@@ -511,6 +592,8 @@ async def main():
         web.get("/", index),
         web.get("/api/state", api_state),
         web.get("/api/profile", api_profile),
+        web.get("/api/history", api_history),
+        web.get("/api/game", api_game),
         web.get("/api/card", api_card),
         web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
