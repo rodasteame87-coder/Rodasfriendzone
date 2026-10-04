@@ -14,6 +14,7 @@ TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
 DATABASE_URL = os.environ["DATABASE_URL"]             # Render Postgres "Internal Database URL"
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))            # your Telegram ID
+SMS_SECRET = os.getenv("SMS_SECRET", "")              # secret key for the SMS forwarder
 PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
@@ -52,11 +53,12 @@ joined, usernames, wins, won = {}, {}, {}, {}      # profile data
 history, winlog = {}, {}                           # transactions / wins list
 games, game_counter = [], [0]                      # finished games (History page)
 pending, req_counter = {}, [0]          # deposit / withdraw requests
-used_sms = set()                        # SMS already sent (no double use)
+used_sms = set()                        # SMS already sent + used payment numbers ("tok:...")
 referrer, invited = {}, {}              # player -> who invited him / invite count
 ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
 wd_state = {}                           # players in the middle of a withdraw
 phones = {}                             # player -> verified phone number
+bank_sms, bank_by_h = [], set()         # SMS forwarded from YOUR phone (newest first)
 
 dp = Dispatcher()
 
@@ -68,6 +70,7 @@ dp = Dispatcher()
 pool = None
 lock_conn = None
 ready = False
+BOT = None         # the Bot object, set in main()
 _q = None          # asyncio.Queue, created in main()
 
 
@@ -117,6 +120,14 @@ def save_sms(key):
     _enqueue("INSERT INTO used_sms(h) VALUES($1) ON CONFLICT DO NOTHING", key)
 
 
+def save_bank(rec):
+    """Save an SMS that was forwarded from your phone."""
+    _enqueue("INSERT INTO bank_sms(h, t, data) VALUES($1, $2, $3::jsonb) "
+             "ON CONFLICT (h) DO UPDATE SET data = EXCLUDED.data",
+             rec["h"], rec["t"], json.dumps(rec))
+    _enqueue("DELETE FROM bank_sms WHERE t < $1", int(time.time()) - 30 * 86400)
+
+
 def save_room_join(bet, uid, card):
     """Remember a paid cartela, so the stake can be refunded after a restart."""
     _enqueue("INSERT INTO room_players(uid, bet, card) VALUES($1, $2, $3) "
@@ -156,6 +167,7 @@ CREATE TABLE IF NOT EXISTS games(id BIGINT PRIMARY KEY, data JSONB NOT NULL);
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS used_sms(h TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_players(uid BIGINT PRIMARY KEY, bet INT NOT NULL, card INT NOT NULL);
+CREATE TABLE IF NOT EXISTS bank_sms(h TEXT PRIMARY KEY, t BIGINT NOT NULL, data JSONB NOT NULL);
 """
 
 
@@ -185,6 +197,10 @@ async def load_state():
             games.append(json.loads(r["data"]))
         for r in await c.fetch("SELECT h FROM used_sms"):
             used_sms.add(r["h"])
+        for r in await c.fetch("SELECT data FROM bank_sms ORDER BY t DESC LIMIT 500"):
+            rec = json.loads(r["data"])
+            bank_sms.append(rec)
+            bank_by_h.add(rec["h"])
         for r in await c.fetch("SELECT k, v FROM kv"):
             if r["k"] == "req_counter":
                 req_counter[0] = r["v"]
@@ -355,6 +371,160 @@ def summ(r, uid):
             "winner": r["winner"], "board": r["board"], "ref": r["ref"],
             "calls": r["calls"], "prize": r["prize"],
             "won": uid in r["wids"], "mine": uid in r["pl"]}
+
+
+# ---------- automatic deposit checking (SMS forwarded from YOUR phone) ----------
+AMOUNT_RE = re.compile(r"(?:ETB|Birr|BIRR|birr|ብር)\s*([\d,]+(?:\.\d+)?)"
+                       r"|([\d,]+(?:\.\d+)?)\s*(?:ETB|Birr|BIRR|birr|ብር)")
+CREDIT_WORDS = ("credited", "received", "ተቀብለዋል")
+DEBIT_WORDS = ("debited", "transferred", "you have sent", "sent to", "paid to")
+
+
+def parse_amount(text):
+    mt = AMOUNT_RE.search(text)
+    if not mt:
+        return None
+    try:
+        return int(float((mt.group(1) or mt.group(2)).replace(",", "")))
+    except ValueError:
+        return None
+
+
+def sms_tokens(text):
+    """Payment / reference numbers in an SMS: words that mix letters and digits."""
+    out = set()
+    for t in re.findall(r"[A-Za-z0-9]{8,24}", text):
+        t = t.upper()
+        if re.search(r"\d", t) and re.search(r"[A-Z]", t):
+            out.add(t)
+    return out
+
+
+def is_credit(text):
+    """True only for 'money came IN' messages (never for money you sent out)."""
+    low = text.lower()
+    if any(w in low for w in DEBIT_WORDS):
+        return False
+    return any(w in low for w in CREDIT_WORDS)
+
+
+def mark_token(t):
+    key = "tok:" + t
+    if key not in used_sms:
+        used_sms.add(key)
+        save_sms(key)
+
+
+def claim_bank(rec):
+    rec["claimed"] = True
+    save_bank(rec)
+    for t in rec["tokens"]:
+        mark_token(t)
+
+
+def find_bank_sms(amount, tokens):
+    if not tokens:
+        return None
+    for r in bank_sms:                                  # newest first
+        if (r["credit"] and not r["claimed"] and r["amount"] == amount
+                and tokens & set(r["tokens"])):
+            return r
+    return None
+
+
+async def approve_deposit(bot, uid, amount, tokens=()):
+    """Add the money to the player, pay the invite bonus, tell the player."""
+    wallets[uid] = wallets.get(uid, 0) + amount
+    log(uid, "deposit", amount, "Deposit approved")
+    for t in tokens:
+        mark_token(t)
+    inv = referrer.get(uid)
+    if REF_BONUS_PERCENT and inv and uid not in ref_paid:
+        ref_paid.add(uid)                              # first deposit only
+        save_user(uid)
+        bonus = amount * REF_BONUS_PERCENT // 100
+        if bonus > 0:
+            wallets[inv] = wallets.get(inv, 0) + bonus
+            ref_earn[inv] = ref_earn.get(inv, 0) + bonus
+            log(inv, "bonus", bonus, f"Invite bonus · {names.get(uid, uid)}")
+            try:
+                await bot.send_message(
+                    inv, f"🎁 ጋብዘውት የነበረው {names.get(uid, 'ተጫዋች')} ገንዘብ አስገብቷል። "
+                         f"{bonus} ብር ቦነስ አግኝተዋል!")
+            except Exception:
+                pass
+    try:
+        await bot.send_message(uid, f"✅ Your deposit of {amount} birr was approved.")
+    except Exception:
+        pass
+
+
+async def on_bank_sms(rec):
+    """A new SMS came from your phone: check if a player is already waiting for it."""
+    if not rec["credit"] or rec["claimed"] or not rec["tokens"]:
+        return
+    for rid, req in list(pending.items()):
+        if req["type"] != "deposit" or req["amount"] != rec["amount"]:
+            continue
+        if not set(req.get("tokens", [])) & set(rec["tokens"]):
+            continue
+        pending.pop(rid, None)
+        save_pending(rid)
+        claim_bank(rec)
+        await approve_deposit(BOT, req["uid"], rec["amount"])
+        if ADMIN_ID:
+            try:
+                await BOT.send_message(
+                    ADMIN_ID, f"✅ Deposit #{rid} checked automatically.\n"
+                              f"User: {names.get(req['uid'], '')} ({req['uid']})\n"
+                              f"Amount: {rec['amount']} birr")
+            except Exception:
+                pass
+        return
+
+
+async def api_sms_hook(req):
+    """Your phone's SMS-forwarder app sends every SMS here."""
+    if not SMS_SECRET or not hmac.compare_digest(req.query.get("key", ""), SMS_SECRET):
+        return web.json_response({"ok": False}, status=403)
+    data = {}
+    try:
+        if req.content_type == "application/json":
+            data = await req.json()
+        elif req.can_read_body:
+            if req.content_type in ("application/x-www-form-urlencoded",
+                                    "multipart/form-data"):
+                data = dict(await req.post())
+            else:
+                data = {"text": await req.text()}
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {"text": str(data)}
+    merged = {**dict(req.query), **data}
+    text = ""
+    for k in ("text", "message", "body", "msg", "sms", "content"):
+        if merged.get(k):
+            text = str(merged[k])
+            break
+    text = text.strip()
+    if not text:
+        return web.json_response({"ok": False, "error": "no text"}, status=400)
+    sender = str(merged.get("from") or merged.get("sender") or merged.get("number") or "")
+    h = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
+    if h in bank_by_h:                                  # forwarder sent it twice
+        return web.json_response({"ok": True, "dup": True})
+    amount = parse_amount(text) or 0
+    rec = {"h": h, "t": int(time.time()), "amount": amount,
+           "tokens": sorted(sms_tokens(text)),
+           "credit": bool(amount) and is_credit(text), "claimed": False,
+           "text": text[:300], "from": sender[:30]}
+    bank_sms.insert(0, rec)
+    bank_by_h.add(h)
+    del bank_sms[500:]
+    save_bank(rec)
+    await on_bank_sms(rec)
+    return web.json_response({"ok": True})
 
 
 # ---------- background jobs ----------
@@ -1095,6 +1265,24 @@ async def cmd_support(m: Message):
     await m.answer(f"🛟 Need help? Contact {SUPPORT}")
 
 
+@dp.message(Command("lastsms"))
+async def cmd_lastsms(m: Message):
+    """Admin only: shows the last SMS your phone forwarded, and how the bot read them."""
+    if m.from_user.id != ADMIN_ID:
+        return
+    if not bank_sms:
+        await m.answer("No SMS received from your phone yet.")
+        return
+    parts = []
+    for r in bank_sms[:5]:
+        kind = "✅ money IN" if r["credit"] else "➖ not a deposit"
+        used = "used" if r["claimed"] else "not used"
+        parts.append(f"{kind} · {r['amount']} birr · {used}\n"
+                     f"{html.escape(r['text'][:150])}\n"
+                     f"Numbers found: {html.escape(', '.join(r['tokens']) or '-')}")
+    await m.answer("\n\n".join(parts), parse_mode="HTML")
+
+
 @dp.message(F.text & ~F.text.startswith("/"))
 async def sms_deposit(m: Message):
     """Player pastes the payment SMS (CBE / Telebirr / CBE Birr)."""
@@ -1102,14 +1290,7 @@ async def sms_deposit(m: Message):
     if await need_phone(m):
         return
     text = m.text.strip()
-    mt = re.search(r"(?:ETB|Birr|BIRR|birr|ብር)\s*([\d,]+(?:\.\d+)?)"
-                   r"|([\d,]+(?:\.\d+)?)\s*(?:ETB|Birr|BIRR|birr|ብር)", text)
-    amount = None
-    if mt:
-        try:
-            amount = int(float((mt.group(1) or mt.group(2)).replace(",", "")))
-        except ValueError:
-            amount = None
+    amount = parse_amount(text)
     if not amount:
         await m.answer("የገንዘቡን መጠን ማግኘት አልቻልንም። እባክዎ የደረሰዎትን SMS ሙሉ ይላኩ ወይም ይህንን ይጠቀሙ:\n"
                        "/deposit <amount> <transaction number>")
@@ -1117,10 +1298,33 @@ async def sms_deposit(m: Message):
     if amount < MIN_DEPOSIT:
         await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
         return
+    tokens = sms_tokens(text)
+    if any(("tok:" + t) in used_sms for t in tokens):
+        await m.answer("ይህ ክፍያ ቀደም ብሎ ተመዝግቧል። / This payment was already credited.")
+        return
     key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
     if key in used_sms:
         await m.answer("ይህ መልዕክት ቀደም ብሎ ተልኳል። / This message was already sent.")
         return
+
+    # 1) Automatic: the same payment SMS already arrived from YOUR phone
+    rec = find_bank_sms(amount, tokens)
+    if rec:
+        used_sms.add(key)
+        save_sms(key)
+        claim_bank(rec)
+        await approve_deposit(m.bot, uid, rec["amount"])
+        if ADMIN_ID:
+            try:
+                await m.bot.send_message(
+                    ADMIN_ID, f"✅ Deposit checked automatically.\n"
+                              f"User: {names[uid]} ({uid})\nAmount: {rec['amount']} birr")
+            except Exception:
+                pass
+        return
+
+    # 2) Not found (yet): send to the admin. If your phone's SMS arrives
+    #    later, it is approved automatically.
     if not ADMIN_ID:
         await m.answer(f"Deposits are handled by support: {SUPPORT}")
         return
@@ -1128,7 +1332,8 @@ async def sms_deposit(m: Message):
     save_sms(key)
     req_counter[0] += 1
     rid = req_counter[0]
-    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
+                    "tokens": sorted(tokens)}
     save_pending(rid)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
@@ -1136,8 +1341,11 @@ async def sms_deposit(m: Message):
     await m.bot.send_message(
         ADMIN_ID,
         f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
-        f"Amount: {amount} birr\n\nSMS:\n{text[:800]}", reply_markup=kb)
-    await m.answer(f"✅ ጥያቄዎ #{rid} ተልኳል። ሲጸድቅ መልዕክት ይደርስዎታል።")
+        f"Amount: {amount} birr\n"
+        f"⚠️ Not found in your phone's SMS yet. Check your account before approving.\n\n"
+        f"SMS:\n{text[:800]}", reply_markup=kb)
+    await m.answer(f"🔎 ጥያቄዎ #{rid} እየተረጋገጠ ነው። ሲጸድቅ መልዕክት ይደርስዎታል።\n"
+                   f"Your payment #{rid} is being checked. You will get a message soon.")
 
 
 @dp.callback_query()
@@ -1153,26 +1361,10 @@ async def admin_buttons(cb: CallbackQuery):
     save_pending(int(rid))                     # request is finished: delete it
     uid, amount = req["uid"], req["amount"]
     approved = action == "ok"
+    note = None
     if req["type"] == "deposit":
         if approved:
-            wallets[uid] = wallets.get(uid, 0) + amount
-            log(uid, "deposit", amount, "Deposit approved")
-            note = f"✅ Your deposit of {amount} birr was approved."
-            inv = referrer.get(uid)
-            if REF_BONUS_PERCENT and inv and uid not in ref_paid:
-                ref_paid.add(uid)                      # first deposit only
-                save_user(uid)
-                bonus = amount * REF_BONUS_PERCENT // 100
-                if bonus > 0:
-                    wallets[inv] = wallets.get(inv, 0) + bonus
-                    ref_earn[inv] = ref_earn.get(inv, 0) + bonus
-                    log(inv, "bonus", bonus, f"Invite bonus · {names.get(uid, uid)}")
-                    try:
-                        await cb.bot.send_message(
-                            inv, f"🎁 ጋብዘውት የነበረው {names.get(uid, 'ተጫዋች')} ገንዘብ አስገብቷል። "
-                                 f"{bonus} ብር ቦነስ አግኝተዋል!")
-                    except Exception:
-                        pass
+            await approve_deposit(cb.bot, uid, amount, req.get("tokens", []))
         else:
             note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
     else:
@@ -1182,10 +1374,11 @@ async def admin_buttons(cb: CallbackQuery):
             wallets[uid] = wallets.get(uid, 0) + amount        # give it back
             log(uid, "refund", amount, "Withdraw rejected")
             note = f"❌ Your withdrawal was rejected. {amount} birr returned to your balance."
-    try:
-        await cb.bot.send_message(uid, note)
-    except Exception:
-        pass
+    if note:
+        try:
+            await cb.bot.send_message(uid, note)
+        except Exception:
+            pass
     await cb.message.edit_text(
         cb.message.text + ("\n\n✅ DONE" if approved else "\n\n❌ REJECTED"))
     await cb.answer("Done")
@@ -1193,8 +1386,9 @@ async def admin_buttons(cb: CallbackQuery):
 
 # ---------- main ----------
 async def main():
-    global pool, lock_conn, ready, _q
+    global pool, lock_conn, ready, _q, BOT
     bot = Bot(TOKEN)
+    BOT = bot
 
     app = web.Application(middlewares=[wait_ready])
     app.add_routes([
@@ -1207,6 +1401,8 @@ async def main():
         web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
+        web.post("/api/sms-hook", api_sms_hook),
+        web.get("/api/sms-hook", api_sms_hook),
     ])
     runner = web.AppRunner(app)
     await runner.setup()
