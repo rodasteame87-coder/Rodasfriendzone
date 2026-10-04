@@ -7,238 +7,364 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root{
-    --bg:#c5ebf5; --cream:#fffbea; --purple:#9c00a0; --title:#7a0a8c;
-    --b:#2f5fd0; --i:#e8453c; --n:#1e9a4a; --g:#e29a10; --o:#8a0f9a;
+    --bg:#c5ebf5; --cream:#fffbea; --purple:#9c00a0; --title:#6a0d7e;
     --hb:#16a34a; --hi:#f4891f; --hn:#16a34a; --hg:#e5262e; --ho:#8a0f9a;
-    --row:#e9dcf1; --mark:#16a34a; --cell:#ebe7ee; --cellmark:#c9f0d4;
-    --ink:#3a3a3a;
+    --row:#e9dcf1; --mark:#16a34a; --cell:#ebe7ee; --cellmark:#c9f0d4; --ink:#3a3a3a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none!important}
   html,body{margin:0;background:var(--bg);font-family:Roboto,"Segoe UI",system-ui,sans-serif;color:var(--ink)}
-  body{padding:8px 8px 24px;max-width:720px;margin:0 auto}
+  body{padding:8px 8px 96px;max-width:720px;margin:0 auto}
   h1{margin:6px 0 10px;text-align:center;color:var(--title);font-size:26px;font-weight:800}
-  h1 span{font-size:30px;vertical-align:-3px}
+  button{border:0;border-radius:12px;color:#fff;font-weight:800;font-size:21px;padding:0;height:66px;cursor:pointer;width:100%}
+  button:active{transform:scale(.98)} button:disabled{opacity:.45}
 
+  /* shared boxes */
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-  .stat{background:var(--cream);border-radius:12px;padding:8px 4px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .stat{background:var(--cream);border-radius:14px;padding:8px 4px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
   .stat small{display:block;color:var(--purple);font-weight:700;font-size:15px}
   .stat b{font-size:28px;color:#111}
+  .panel{background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 
-  .main{display:grid;grid-template-columns:minmax(0,0.9fr) minmax(0,1.4fr);gap:8px;align-items:start}
+  /* lobby */
+  .bar{background:#7b0a82;color:#fff;text-align:center;font-weight:800;font-size:24px;padding:16px 10px;margin:-8px -8px 14px}
+  .top{display:flex;justify-content:space-between;align-items:center;padding:6px 8px 4px}
+  .live{display:flex;align-items:center;gap:10px;font-size:30px;font-weight:800;color:var(--title)}
+  .dot{width:40px;height:40px;border-radius:50%;background:#16a34a}
+  .bal{font-weight:800;color:var(--title);font-size:22px}.bal b{font-size:28px}
+  .gt{font-size:34px;font-weight:800;color:var(--title);margin:18px 6px 12px}
+  .pill{background:#fff;border-radius:30px;display:grid;grid-template-columns:.8fr 1.3fr 1.6fr;padding:22px 14px;
+        font-weight:800;color:var(--title);font-size:17px;text-align:center;margin-bottom:14px}
+  .gcard{display:grid;grid-template-columns:34% 1fr;border-radius:26px;overflow:hidden;background:var(--cream);box-shadow:0 2px 6px rgba(0,0,0,.15)}
+  .gl{background:#7b0a82;color:#fff;text-align:center;padding:30px 4px;font-weight:800}
+  .gl b{display:block;font-size:64px;line-height:1}.gl span{font-size:24px}
+  .gm{display:flex;align-items:center;justify-content:space-around;padding:12px 6px;gap:6px}
+  .win{text-align:center;color:var(--title);font-weight:800;font-size:20px}
+  .win b{display:block;font-size:40px;color:#16a34a}
+  .gr{display:flex;flex-direction:column;gap:12px;min-width:150px}
+  .ready{background:#d6f0de;color:#16803c;border-radius:20px;padding:12px;text-align:center;font-weight:800;font-size:20px}
+  .joinbtn{background:#16a34a;height:70px;border-radius:24px;font-size:30px}
+  .free{margin-top:22px;background:#dff6fb;border-radius:26px;padding:24px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--title)}
+  .free b{font-size:30px}.free p{margin:6px 0 0;font-size:20px;color:#5b2a8a}
+  .free button{background:#7b0a82;width:180px;height:100px;border-radius:24px;font-size:28px}
+  .nav{position:fixed;left:0;right:0;bottom:0;background:#fff;display:flex;max-width:720px;margin:0 auto;padding:8px 0 10px;box-shadow:0 -2px 8px rgba(0,0,0,.1)}
+  .nav div{flex:1;text-align:center;font-weight:800;font-size:22px;color:#666;cursor:pointer}
+  .nav div i{display:block;font-style:normal;font-size:50px}
+  .nav div.on{color:var(--title)}
+  .pane{padding:24px 12px;font-size:22px;font-weight:700;color:var(--title)}
 
+  /* picker */
+  .pickTitle{background:var(--cream);border-radius:26px;text-align:center;color:var(--title);font-size:38px;font-weight:800;padding:18px 6px;margin-bottom:12px}
+  .prow{display:grid;grid-template-columns:1fr 1fr 82px;gap:10px;margin-bottom:14px}
+  .prow .stat small{color:var(--title);font-size:17px}.prow .stat b{font-size:36px;color:#222}
+  .refresh{background:#2f5fd0;font-size:34px;height:auto}
+  .pgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:7px}
+  .num{background:#fff;border:2px solid #9b59b6;border-radius:10px;color:var(--title);font-weight:800;font-size:18px;
+       height:56px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none}
+  .num.taken{background:#d8d0dc;border-color:#c9c0cf;color:#999;pointer-events:none}
+  .num.mine{background:var(--mark);border-color:var(--mark);color:#fff}
+  .back{background:transparent;color:var(--title);width:auto;height:auto;font-size:20px;padding:4px 8px;margin-bottom:4px}
+
+  /* modal */
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:14px;z-index:5}
+  .mbox{background:#fff;border-radius:18px;padding:14px;width:100%;max-width:420px}
+  .mbox h3{margin:0 0 10px;text-align:center;color:var(--title);font-size:22px}
+  .mbox .cell{height:48px;font-size:19px;cursor:default}
+  .mbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .mbtns button{height:56px;font-size:19px}
+
+  /* game */
+  .main{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr);gap:8px;align-items:start}
   .calls{background:var(--cream);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12)}
   .calls h3{margin:0;padding:8px 0;text-align:center;color:var(--purple);font-size:16px}
   .calls table{width:100%;border-collapse:collapse;table-layout:fixed}
   .calls th{color:#fff;font-size:20px;padding:7px 0}
-  .calls th:nth-child(1){background:var(--hb)} .calls th:nth-child(2){background:var(--hi)}
-  .calls th:nth-child(3){background:var(--hn)} .calls th:nth-child(4){background:var(--hg)}
-  .calls th:nth-child(5){background:var(--ho)}
-  .calls td{background:var(--row);text-align:center;font-weight:700;font-size:15px;color:#555;height:37.5px;border:0}
+  .calls th:nth-child(1){background:var(--hb)}.calls th:nth-child(2){background:var(--hi)}
+  .calls th:nth-child(3){background:var(--hn)}.calls th:nth-child(4){background:var(--hg)}.calls th:nth-child(5){background:var(--ho)}
+  .calls td{background:var(--row);text-align:center;font-weight:700;font-size:15px;color:#555;height:37.5px}
   .calls td.on{background:var(--mark);color:#fff}
-
   .right{display:flex;flex-direction:column;gap:8px}
-  .panel{background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
   .current{background:var(--purple);color:#fff;text-align:center;padding:12px 0 16px}
   .current h3{margin:0 0 10px;font-size:20px}
   .ball{width:104px;height:104px;border-radius:50%;margin:0 auto;background:#ff9800;border:5px solid #fff;
         display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:800;color:#fff}
   .last{display:flex;justify-content:center;padding:10px}
-  .last div{width:82px;height:82px;border-radius:50%;background:#2f6fe0;color:#fff;font-size:34px;font-weight:800;
-            display:flex;align-items:center;justify-content:center}
+  .last div{width:82px;height:82px;border-radius:50%;background:#2f6fe0;color:#fff;font-size:34px;font-weight:800;display:flex;align-items:center;justify-content:center}
   .auto{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-weight:700;font-size:20px;color:#222}
-  .switch{position:relative;width:82px;height:46px}
-  .switch input{display:none}
+  .switch{position:relative;width:82px;height:46px}.switch input{display:none}
   .switch span{position:absolute;inset:0;background:#bbb;border-radius:30px;transition:.2s}
   .switch span::after{content:"";position:absolute;top:5px;left:5px;width:36px;height:36px;border-radius:50%;background:#fff;transition:.2s}
-  .switch input:checked+span{background:#16a34a}
-  .switch input:checked+span::after{left:41px}
-
-  .card{padding:12px 12px 12px}
+  .switch input:checked+span{background:#16a34a}.switch input:checked+span::after{left:41px}
+  .card{padding:12px}
   .card h3{margin:2px 0 10px;text-align:center;color:var(--title);font-size:20px}
   .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
   .grid .h{color:#fff;text-align:center;font-weight:800;font-size:20px;padding:10px 0;border-radius:3px}
-  .h:nth-child(1){background:var(--b)} .h:nth-child(2){background:var(--i)} .h:nth-child(3){background:var(--n)}
-  .h:nth-child(4){background:var(--g)} .h:nth-child(5){background:var(--o)}
-  .cell{background:var(--cell);text-align:center;font-weight:700;font-size:23px;color:#333;height:58px;
-        display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:pointer;user-select:none}
+  .h:nth-child(1){background:#2f5fd0}.h:nth-child(2){background:#e8453c}.h:nth-child(3){background:#1e9a4a}
+  .h:nth-child(4){background:#e29a10}.h:nth-child(5){background:#8a0f9a}
+  .cell{background:var(--cell);text-align:center;font-weight:700;font-size:23px;color:#333;height:58px;display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:pointer;user-select:none}
   .cell.m{background:var(--cellmark);color:var(--mark)}
-  .cell.free{font-size:20px;cursor:default}
   .cardno{text-align:center;color:var(--title);font-weight:800;font-size:20px;margin:14px 0 10px}
-  button{border:0;border-radius:12px;color:#fff;font-weight:800;font-size:21px;padding:0;height:66px;cursor:pointer;width:100%}
-  button:active{transform:scale(.98)}
-  .win{background:#f39c1b;margin-bottom:12px}
+  .winb{background:#f39c1b;margin-bottom:12px}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .leave{background:#e8212f;height:62px} .refresh{background:#1565d8;height:62px}
-  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#222;color:#fff;padding:12px 20px;
-         border-radius:24px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center}
+  .leave{background:#e8212f;height:62px}.rf{background:#1565d8;height:62px}
+  #toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#222;color:#fff;padding:12px 20px;border-radius:24px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:9}
   #toast.show{opacity:1}
 </style>
 </head>
 <body>
 
-<h1><span>🎱</span> Rodas Friend Zone Bingo</h1>
-
-<div class="stats">
-  <div class="stat"><small>Players</small><b id="players">1</b></div>
-  <div class="stat"><small>Derash</small><b id="derash">0</b></div>
-  <div class="stat"><small>Bet</small><b id="bet">10</b></div>
-  <div class="stat"><small>Call</small><b id="callCount">0</b></div>
+<!-- ============ LOBBY ============ -->
+<div id="lobby">
+  <div class="bar">Rodas Friend Zone Bingo</div>
+  <div id="tab-game">
+    <div class="top">
+      <div class="live"><span class="dot"></span>Live</div>
+      <div class="bal">💳 Balance: <b id="bal">0.00</b></div>
+    </div>
+    <div class="gt">🎯 BINGO GAMES</div>
+    <div class="pill"><span>BET</span><span>WIN / PLAYER</span><span>STATUS &amp; JOIN</span></div>
+    <div class="gcard">
+      <div class="gl"><b id="lbBet">10</b><span>BIRR</span></div>
+      <div class="gm">
+        <div class="win">🏆 <b id="lbWin">0</b><span id="lbPlayers">0 players</span></div>
+        <div class="gr">
+          <div class="ready" id="lbStatus">READY</div>
+          <button class="joinbtn" id="joinBtn">JOIN</button>
+        </div>
+      </div>
+    </div>
+    <div class="free">
+      <div><b>🎮 FREE</b><p>Practice Mode — No Real Money</p></div>
+      <button id="openFree">OPEN</button>
+    </div>
+  </div>
+  <div id="tab-scores" class="pane" hidden>🏆 Scores are coming soon.</div>
+  <div id="tab-profile" class="pane" hidden>
+    👤 <span id="pfName">Player</span><br><br>Balance: <span id="pfBal">0.00</span> birr
+  </div>
+  <div class="nav">
+    <div class="on" data-t="game"><i>🎮</i>Game</div>
+    <div data-t="scores"><i>🏆</i>Scores</div>
+    <div data-t="profile"><i>👤</i>Profile</div>
+  </div>
 </div>
 
-<div class="main">
-  <div class="calls">
-    <h3>BINGO CALLS</h3>
-    <table>
-      <thead><tr><th>B</th><th>I</th><th>N</th><th>G</th><th>O</th></tr></thead>
-      <tbody id="callsBody"></tbody>
-    </table>
+<!-- ============ PICK CARTELA ============ -->
+<div id="pick" hidden>
+  <button class="back" id="backBtn">← Back</button>
+  <h1>🎱 Rodas Friend Zone Bingo</h1>
+  <div class="stats">
+    <div class="stat"><small>Players</small><b id="pkPlayers">0</b></div>
+    <div class="stat"><small>Wallet</small><b id="pkWallet">0</b></div>
+    <div class="stat"><small>Bet</small><b id="pkBet">10</b></div>
+    <div class="stat"><small>Time</small><b id="pkTime">30</b></div>
   </div>
+  <div class="pickTitle">Choose Your Cartela</div>
+  <div class="prow">
+    <div class="stat"><small>TIME</small><b id="pkTime2">30</b></div>
+    <div class="stat"><small>PLAYERS</small><b id="pkPlayers2">0</b></div>
+    <button class="refresh" id="pkRefresh">🔄</button>
+  </div>
+  <div class="pgrid" id="pickGrid"></div>
+</div>
 
-  <div class="right">
-    <div class="panel current"><h3>Current Call</h3><div class="ball" id="ball">–</div></div>
-    <div class="panel last"><div id="lastCall">–</div></div>
-    <div class="panel auto">Auto
-      <label class="switch"><input type="checkbox" id="auto" checked><span></span></label>
+<!-- ============ GAME ============ -->
+<div id="game" hidden>
+  <h1>🎱 Rodas Friend Zone Bingo</h1>
+  <div class="stats">
+    <div class="stat"><small>Players</small><b id="gPlayers">0</b></div>
+    <div class="stat"><small>Derash</small><b id="gDerash">0</b></div>
+    <div class="stat"><small>Bet</small><b id="gBet">10</b></div>
+    <div class="stat"><small>Call</small><b id="gCall">0</b></div>
+  </div>
+  <div class="main">
+    <div class="calls">
+      <h3>BINGO CALLS</h3>
+      <table><thead><tr><th>B</th><th>I</th><th>N</th><th>G</th><th>O</th></tr></thead><tbody id="callsBody"></tbody></table>
     </div>
-    <div class="panel card">
-      <h3>Chosen Cartela</h3>
-      <div class="grid" id="cardGrid"></div>
-      <div class="cardno">Card Number: <span id="cardNo">35</span></div>
-      <button class="win" id="winBtn">BINGO WIN</button>
-      <div class="row">
-        <button class="leave" id="leaveBtn">LEAVE</button>
-        <button class="refresh" id="refreshBtn">REFRESH</button>
+    <div class="right">
+      <div class="panel current"><h3 id="ballTitle">Current Call</h3><div class="ball" id="ball">–</div></div>
+      <div class="panel last"><div id="lastCall">–</div></div>
+      <div class="panel auto">Auto
+        <label class="switch"><input type="checkbox" id="auto" checked><span></span></label>
+      </div>
+      <div class="panel card">
+        <h3>Chosen Cartela</h3>
+        <div class="grid" id="cardGrid"></div>
+        <div class="cardno">Card Number: <span id="cardNo">0</span></div>
+        <button class="winb" id="winBtn">BINGO WIN</button>
+        <div class="row">
+          <button class="leave" id="leaveBtn">LEAVE</button>
+          <button class="rf" id="refreshBtn">REFRESH</button>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- preview popup -->
+<div id="modal" hidden>
+  <div class="mbox">
+    <h3 id="pvTitle">Cartela</h3>
+    <div class="grid" id="pvGrid"></div>
+    <div class="mbtns">
+      <button style="background:#888" id="pvCancel">CANCEL</button>
+      <button style="background:#16a34a" id="pvOk">CONFIRM</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
-/* ---------- Telegram ---------- */
 const tg = window.Telegram && Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor && tg.setHeaderColor('#1e2836'); }
-
-/* ---------- Config ---------- */
-const API = "/api";        // set to "" for demo mode (no server needed)
-const DEMO = !API;
-
-/* ---------- State ---------- */
+if (tg) { tg.ready(); tg.expand(); }
+const API = "/api";
+const $ = id => document.getElementById(id);
 const COLS = ["B","I","N","G","O"];
-const state = {
-  card: [[15,21,42,50,67],[7,23,44,51,74],[2,30,0,56,65],[5,29,41,47,70],[12,24,43,49,72]], // 0 = FREE
-  cardNo: 35, called: [], marked: new Set(), players: 1, derash: 0, bet: 10
+const st = { card:null, cardNo:0, called:[], marked:new Set() };
+let S = null, screen = "lobby", pv = 0, lastRound = -1, shownRound = -1;
+
+const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2400); };
+const initData = () => (tg && tg.initData) || "";
+async function get(p){ const r=await fetch(API+p+(p.includes("?")?"&":"?")+"initData="+encodeURIComponent(initData())); return r.json(); }
+async function post(p,b){ const r=await fetch(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})}); return r.json(); }
+function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
+
+/* ---------- builders ---------- */
+function cardHTML(card, marked){
+  let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
+  card.forEach(row=>row.forEach(n=>{
+    h += n===0 ? `<div class="cell free m">FREE</div>`
+               : `<div class="cell${marked.has(n)?" m":""}" data-n="${n}">${n}</div>`;
+  }));
+  return h;
+}
+function buildCalls(){
+  let h="";
+  for(let r=0;r<15;r++){ h+="<tr>"; for(let c=0;c<5;c++){ const n=c*15+r+1; h+=`<td id="c${n}">${n}</td>`; } h+="</tr>"; }
+  $("callsBody").innerHTML=h;
+}
+function resetGame(){
+  st.called=[]; st.marked=new Set();
+  document.querySelectorAll("#callsBody td.on").forEach(td=>td.classList.remove("on"));
+}
+function onCall(n){
+  if(st.called.includes(n)) return;
+  st.called.push(n);
+  $("c"+n).classList.add("on");
+  if($("auto").checked && st.card && st.card.flat().includes(n)) st.marked.add(n);
+}
+function hasBingo(){
+  if(!st.card) return false;
+  const m=(r,c)=>st.card[r][c]===0||st.marked.has(st.card[r][c]);
+  const L=[];
+  for(let i=0;i<5;i++){ L.push([0,1,2,3,4].map(c=>[i,c])); L.push([0,1,2,3,4].map(r=>[r,i])); }
+  L.push([0,1,2,3,4].map(i=>[i,i])); L.push([0,1,2,3,4].map(i=>[i,4-i]));
+  return L.some(l=>l.every(([r,c])=>m(r,c)));
+}
+
+/* ---------- render from server state ---------- */
+function render(){
+  if(!S) return;
+  if(S.error){ toast("Please open this from the bot in Telegram"); return; }
+  if(S.round!==lastRound){ resetGame(); lastRound=S.round; }
+
+  // lobby
+  $("bal").textContent=S.wallet.toFixed(2);
+  $("lbBet").textContent=S.bet; $("lbWin").textContent=S.derash;
+  $("lbPlayers").textContent=S.players+" players";
+  $("lbStatus").textContent=S.phase==="lobby"?"READY":"PLAYING";
+  $("joinBtn").disabled=S.phase!=="lobby";
+  $("pfName").textContent=S.name; $("pfBal").textContent=S.wallet.toFixed(2);
+
+  // picker
+  $("pkPlayers").textContent=$("pkPlayers2").textContent=S.players;
+  $("pkWallet").textContent=S.wallet; $("pkBet").textContent=S.bet;
+  $("pkTime").textContent=$("pkTime2").textContent=S.time;
+  let g="";
+  for(let n=1;n<=S.count;n++){
+    const c=S.myCard===n?" mine":S.taken.includes(n)?" taken":"";
+    g+=`<div class="num${c}" data-n="${n}">${n}</div>`;
+  }
+  $("pickGrid").innerHTML=g;
+
+  // game
+  if(S.myCard){
+    if(st.cardNo!==S.myCard){ st.marked=new Set(); }
+    st.card=S.card; st.cardNo=S.myCard;
+    S.called.forEach(onCall);
+    $("cardGrid").innerHTML=cardHTML(st.card, st.marked);
+    $("cardNo").textContent=st.cardNo;
+  }
+  $("gPlayers").textContent=S.players; $("gDerash").textContent=S.derash;
+  $("gBet").textContent=S.bet; $("gCall").textContent=st.called.length;
+  const last = st.called.length ? st.called[st.called.length-1] : "–";
+  $("ballTitle").textContent = S.phase==="lobby" ? "Starting in" : "Current Call";
+  $("ball").textContent = S.phase==="lobby" ? S.time : last;
+  $("lastCall").textContent = last;
+
+  // routing
+  if(S.myCard && screen!=="game") show("game");
+  if(!S.myCard && screen==="game") show("lobby");
+
+  if(S.phase==="finished" && S.winner && shownRound!==S.round){
+    shownRound=S.round; toast("🏆 "+S.winner+" won "+S.prize+" birr");
+  }
+}
+async function sync(){ try{ S=await get("/state"); render(); }catch(e){} }
+
+/* ---------- events ---------- */
+document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
+  document.querySelectorAll(".nav div").forEach(x=>x.classList.toggle("on",x===d));
+  ["game","scores","profile"].forEach(t=>$("tab-"+t).hidden = t!==d.dataset.t);
+});
+$("openFree").onclick=()=>toast("Practice mode is coming soon");
+$("joinBtn").onclick=()=>{ show("pick"); sync(); };
+$("backBtn").onclick=()=>show("lobby");
+$("pkRefresh").onclick=sync;
+
+$("pickGrid").onclick=async e=>{
+  const el=e.target.closest(".num"); if(!el) return;
+  pv=+el.dataset.n;
+  const r=await fetch(API+"/card?card="+pv).then(r=>r.json());
+  $("pvTitle").textContent="Cartela "+pv;
+  $("pvGrid").innerHTML=cardHTML(r.card,new Set());
+  $("modal").hidden=false;
+};
+$("pvCancel").onclick=()=>$("modal").hidden=true;
+$("pvOk").onclick=async()=>{
+  const r=await post("/join",{card:pv});
+  $("modal").hidden=true;
+  if(!r.ok) toast(r.error||"Could not join");
+  await sync();
 };
 
-/* ---------- Render ---------- */
-const $ = id => document.getElementById(id);
-const toast = msg => { const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); };
-
-function buildCalls(){
-  let h = "";
-  for (let r=0;r<15;r++){
-    h += "<tr>";
-    for (let c=0;c<5;c++){ const n=c*15+r+1; h += `<td id="c${n}">${n}</td>`; }
-    h += "</tr>";
+$("cardGrid").onclick=e=>{
+  const el=e.target.closest(".cell"); if(!el||!el.dataset.n) return;
+  const n=+el.dataset.n;
+  if($("auto").checked) return toast("Turn Auto off to mark manually");
+  if(!st.called.includes(n)) return toast("That number hasn't been called");
+  st.marked.has(n)?st.marked.delete(n):st.marked.add(n);
+  $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
+};
+$("auto").onchange=()=>{
+  if($("auto").checked && st.card){
+    st.called.forEach(n=>{ if(st.card.flat().includes(n)) st.marked.add(n); });
+    $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
   }
-  $("callsBody").innerHTML = h;
-}
+};
+$("winBtn").onclick=async()=>{
+  if(!hasBingo()) return toast("No bingo yet — keep playing");
+  const r=await post("/bingo",{});
+  toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
+  sync();
+};
+$("leaveBtn").onclick=async()=>{ await post("/leave",{}); await sync(); show("lobby"); };
+$("refreshBtn").onclick=sync;
 
-function buildCard(){
-  let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
-  state.card.forEach((row,r)=>row.forEach((n,c)=>{
-    if (n===0) h += `<div class="cell free m" data-free="1">FREE</div>`;
-    else h += `<div class="cell${state.marked.has(n)?" m":""}" data-n="${n}">${n}</div>`;
-  }));
-  $("cardGrid").innerHTML = h;
-  $("cardNo").textContent = state.cardNo;
-}
-
-function renderStats(){
-  $("players").textContent = state.players;
-  $("derash").textContent  = state.derash;
-  $("bet").textContent     = state.bet;
-  $("callCount").textContent = state.called.length;
-}
-
-/* ---------- Game logic ---------- */
-function onCall(n){
-  if (state.called.includes(n)) return;
-  state.called.push(n);
-  $("c"+n).classList.add("on");
-  $("lastCall").textContent = n;
-  $("ball").textContent = n;
-  if ($("auto").checked && state.card.flat().includes(n)) state.marked.add(n);
-  buildCard(); renderStats();
-}
-
-function hasBingo(){
-  const m = (r,c) => state.card[r][c]===0 || state.marked.has(state.card[r][c]);
-  const lines = [];
-  for (let i=0;i<5;i++){
-    lines.push([0,1,2,3,4].map(c=>[i,c]));
-    lines.push([0,1,2,3,4].map(r=>[r,i]));
-  }
-  lines.push([0,1,2,3,4].map(i=>[i,i]));
-  lines.push([0,1,2,3,4].map(i=>[i,4-i]));
-  return lines.some(l=>l.every(([r,c])=>m(r,c)));
-}
-
-$("cardGrid").addEventListener("click", e=>{
-  const el = e.target.closest(".cell"); if(!el || el.dataset.free) return;
-  const n = +el.dataset.n;
-  if ($("auto").checked) return toast("Turn Auto off to mark manually");
-  if (!state.called.includes(n)) return toast("That number hasn't been called");
-  state.marked.has(n) ? state.marked.delete(n) : state.marked.add(n);
-  buildCard();
-});
-
-$("auto").addEventListener("change", ()=>{
-  if ($("auto").checked){
-    state.called.forEach(n=>{ if(state.card.flat().includes(n)) state.marked.add(n); });
-    buildCard();
-  }
-});
-
-$("winBtn").addEventListener("click", async ()=>{
-  if (!hasBingo()) return toast("No bingo yet — keep playing");
-  if (!DEMO){
-    const r = await fetch(API+"/bingo", {method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({initData: tg && tg.initData, cardNo: state.cardNo})}).then(r=>r.json()).catch(()=>null);
-    return toast(r && r.ok ? "Bingo confirmed! 🎉" : "Bingo rejected");
-  }
-  toast("BINGO! 🎉");
-});
-
-$("leaveBtn").addEventListener("click", ()=>{
-  if (!DEMO) fetch(API+"/leave",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData: tg && tg.initData})});
-  tg ? tg.close() : toast("Left the game");
-});
-
-$("refreshBtn").addEventListener("click", ()=> DEMO ? toast("Refreshed") : sync());
-
-/* ---------- Server sync ---------- */
-async function sync(){
-  try{
-    const s = await fetch(API+"/state?card="+state.cardNo+"&initData="+encodeURIComponent((tg&&tg.initData)||"")).then(r=>r.json());
-    Object.assign(state,{players:s.players,derash:s.derash,bet:s.bet});
-    if (s.card) state.card = s.card;
-    if (s.cardNo) state.cardNo = s.cardNo;
-    buildCard(); renderStats();
-    (s.called||[]).forEach(onCall);
-  }catch(e){ toast("Connection problem"); }
-}
-
-/* ---------- Init ---------- */
-buildCalls(); buildCard(); renderStats();
-
-if (DEMO){
-  const pool = Array.from({length:75},(_,i)=>i+1).sort(()=>Math.random()-.5);
-  setInterval(()=>{ if(pool.length) onCall(pool.pop()); }, 4000);
-} else {
-  sync(); setInterval(sync, 3000);
-}
+/* ---------- start ---------- */
+buildCalls();
+sync(); setInterval(sync, 2000);
 </script>
 </body>
 </html>
