@@ -1,6 +1,6 @@
 import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
 from pathlib import Path
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command, CommandObject
@@ -23,6 +23,7 @@ TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "Rodas Teame")
 CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "0978856625")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "Rodas Teame")
 DEPOSIT_SUPPORT = "@Rodasfriendzonesupport"
+REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off)
 
 BETS = [10, 20, 50, 100]   # room prices (birr per cartela)
 CALL_EVERY = 4             # seconds between calls
@@ -49,6 +50,8 @@ history, winlog = {}, {}                           # transactions / wins list
 games, game_counter = [], [0]                      # finished games (History page)
 pending, req_counter = {}, [0]          # deposit / withdraw requests
 used_sms = set()                        # SMS already sent (no double use)
+referrer, invited = {}, {}              # player -> who invited him / invite count
+ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
 
 dp = Dispatcher()
 
@@ -562,8 +565,20 @@ async def deposit_buttons(cb: CallbackQuery):
 
 
 @dp.message(CommandStart())
-async def cmd_start(m: Message):
-    ensure(m.from_user)
+async def cmd_start(m: Message, command: CommandObject):
+    is_new = m.from_user.id not in wallets
+    uid = ensure(m.from_user)
+    arg = command.args or ""
+    if is_new and arg.startswith("ref_") and arg[4:].isdigit():
+        inviter = int(arg[4:])
+        if inviter != uid and inviter in wallets:
+            referrer[uid] = inviter
+            invited[inviter] = invited.get(inviter, 0) + 1
+            try:
+                await m.bot.send_message(
+                    inviter, f"🎉 {names[uid]} በእርስዎ ሊንክ ተቀላቅሏል!")
+            except Exception:
+                pass
     await m.answer("🎯 Rodas Friend Zone Bingo\n\n"
                    "Tap the button below to open the Bingo game.",
                    reply_markup=play_kb())
@@ -697,8 +712,20 @@ async def cmd_instruction(m: Message):
 async def cmd_invite(m: Message):
     uid = ensure(m.from_user)
     me = await m.bot.get_me()
-    await m.answer("👥 Invite your friends with this link:\n"
-                   f"https://t.me/{me.username}?start=ref_{uid}")
+    link = f"https://t.me/{me.username}?start=ref_{uid}"
+    text = ("👥 ጓደኞችዎን ይጋብዙ!\n\n"
+            "ይህን ሊንክ ለጓደኞችዎና ለቤተሰብዎ ያጋሩ።\n")
+    if REF_BONUS_PERCENT:
+        text += (f"💵 የጋበዙት ሰው ለመጀመሪያ ጊዜ ገንዘብ ሲያስገባ "
+                 f"ከተቀማጩ ገንዘብ {REF_BONUS_PERCENT}% ቦነስ ያገኛሉ!\n")
+    text += (f"\n🔗 የእርስዎ ሊንክ:\n{link}\n\n"
+             f"👤 የጋበዟቸው ሰዎች: {invited.get(uid, 0)}\n"
+             f"💰 ያገኙት ቦነስ: {ref_earn.get(uid, 0)} ብር")
+    share = ("https://t.me/share/url?url=" + quote(link) +
+             "&text=" + quote("🎯 Rodas Friend Zone Bingo ተጫወቱ!"))
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📤 Share / አጋራ", url=share)]])
+    await m.answer(text, reply_markup=kb)
 
 
 @dp.message(Command("support"))
@@ -764,6 +791,20 @@ async def admin_buttons(cb: CallbackQuery):
             wallets[uid] = wallets.get(uid, 0) + amount
             log(uid, "deposit", amount, "Deposit approved")
             note = f"✅ Your deposit of {amount} birr was approved."
+            inv = referrer.get(uid)
+            if REF_BONUS_PERCENT and inv and uid not in ref_paid:
+                ref_paid.add(uid)                      # first deposit only
+                bonus = amount * REF_BONUS_PERCENT // 100
+                if bonus > 0:
+                    wallets[inv] = wallets.get(inv, 0) + bonus
+                    ref_earn[inv] = ref_earn.get(inv, 0) + bonus
+                    log(inv, "bonus", bonus, f"Invite bonus · {names.get(uid, uid)}")
+                    try:
+                        await cb.bot.send_message(
+                            inv, f"🎁 ጋብዘውት የነበረው {names.get(uid, 'ተጫዋች')} ገንዘብ አስገብቷል። "
+                                 f"{bonus} ብር ቦነስ አግኝተዋል!")
+                    except Exception:
+                        pass
         else:
             note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
     else:
