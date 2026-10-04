@@ -633,7 +633,7 @@ function render(){
 
   // routing
   if(S.myCard && screen!=="game") show("game");
-  if(!S.myCard && screen==="game") show("lobby");
+  if(!S.myCard && screen==="game") show("pick");
 
   if(S.phase==="finished" && S.winners && S.winners.length && shownRound!==key){
     shownRound=key;
