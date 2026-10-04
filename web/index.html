@@ -173,6 +173,16 @@
   .leave{background:#e8212f;height:38px}.rf{background:#1565d8;height:38px}
   #toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:12}
   #toast.show{opacity:1}
+
+  /* winner screen */
+  #win{position:fixed;inset:0;background:#f5d0f7;z-index:9;overflow-y:auto;padding:14px 12px 30px;max-width:520px;margin:0 auto}
+  .wban{background:#f26d05;color:#fff;text-align:center;border-radius:6px;padding:18px 10px;margin-bottom:16px;border:2px solid #fff}
+  .wban h2{margin:0 0 10px;font-size:44px;font-weight:800}
+  .wban p{margin:0;font-size:17px;font-weight:600}
+  .wban p span{background:#16a34a;padding:0 5px;border-radius:3px;font-weight:700}
+  .cell.w{background:var(--green);color:#fff}
+  .wprize{text-align:center;color:var(--title);font-weight:700;margin-top:4px}
+  .wlast{background:#f26d05;color:#fff;text-align:center;font-size:30px;font-weight:800;border-radius:8px;padding:16px;margin-top:16px}
 </style>
 </head>
 <body>
@@ -329,6 +339,21 @@
     </div>
   </div>
 </div>
+
+<!-- ============ WINNER SCREEN ============ -->
+<div id="win" hidden>
+  <div class="wban">
+    <h2>BINGO!</h2>
+    <p id="wMsg"></p>
+  </div>
+  <div class="panel card">
+    <div class="grid" id="wGrid"></div>
+    <div class="cardno">Board #: <span id="wNo"></span></div>
+    <div class="wprize" id="wPrize"></div>
+  </div>
+  <div class="wlast" id="wLast"></div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -495,6 +520,29 @@ function copyText(t){
   } else fallback();
 }
 
+/* ---------- winner screen ---------- */
+function drawWin(){
+  const on = S.phase==="finished" && S.winner && S.wCard && screen==="game";
+  $("win").hidden = !on;
+  if(!on) return;
+  const called = new Set(S.called||[]);
+  const hot = new Set((S.wCells||[]).map(([r,c])=>r+","+c));
+  let h = COLS.map(l=>`<div class="h">${l}</div>`).join("");
+  S.wCard.forEach((row,r)=>row.forEach((n,c)=>{
+    const w = hot.has(r+","+c) ? " w" : "";
+    h += n===0 ? `<div class="cell freecell m${w}">FREE</div>`
+               : `<div class="cell${called.has(n)?" m":""}${w}">${n}</div>`;
+  }));
+  $("wGrid").innerHTML = h;
+  $("wNo").textContent = S.wBoard;
+  $("wPrize").textContent = "Prize: " + S.prize + " birr";
+  $("wMsg").innerHTML = S.isWinner
+    ? `🎉 Congratulations <span>${esc(S.winner)}</span>, you won! 🎉`
+    : `🎉 <span>${esc(S.winner)}</span> has won the game! 🎉`;
+  const last = (S.called||[]).slice(-1)[0];
+  $("wLast").textContent = last ? label(last) : "";
+}
+
 /* ---------- render from server state ---------- */
 function render(){
   if(!S) return;
@@ -552,6 +600,8 @@ function render(){
   if(S.phase==="finished" && S.winner && shownRound!==key){
     shownRound=key; toast("🏆 "+S.winner+" won "+S.prize+" birr");
   }
+
+  drawWin();
 }
 async function sync(){
   try{ S=await get("/state?room="+R); errShown=false; render(); }
