@@ -40,6 +40,23 @@ pending, req_counter = {}, [0]          # deposit / withdraw requests
 dp = Dispatcher()
 
 
+# ---------- winning patterns ----------
+PATTERNS = (
+    [[(r, c) for c in range(5)] for r in range(5)]            # horizontal lines
+    + [[(r, c) for r in range(5)] for c in range(5)]          # vertical lines
+    + [[(i, i) for i in range(5)], [(i, 4 - i) for i in range(5)]]   # diagonals
+    + [[(0, 0), (0, 4), (4, 0), (4, 4)],                      # four corners
+       [(1, 1), (1, 3), (3, 1), (3, 3)],                      # center four
+       [(0, 0), (0, 4), (1, 2), (2, 2), (3, 2)],              # T corners
+       [(1, 1), (1, 2), (1, 3), (2, 2), (3, 2)]]              # center T
+)
+
+
+def has_bingo(card, called):
+    hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
+    return any(all(hit(r, c) for r, c in p) for p in PATTERNS)
+
+
 # ---------- helpers ----------
 def verify(init_data: str):
     data = dict(parse_qsl(init_data, keep_blank_values=True))
@@ -74,17 +91,6 @@ def make_card(no: int):
     cols = [r.sample(range(c * 15 + 1, c * 15 + 16), 5) for c in range(5)]
     cols[2][2] = 0
     return [[cols[c][row] for c in range(5)] for row in range(5)]
-
-
-def has_bingo(card, called):
-    hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
-    lines = []
-    for i in range(5):
-        lines.append([(i, c) for c in range(5)])
-        lines.append([(r, i) for r in range(5)])
-    lines.append([(i, i) for i in range(5)])
-    lines.append([(i, 4 - i) for i in range(5)])
-    return any(all(hit(r, c) for r, c in line) for line in lines)
 
 
 def room_of(uid):
@@ -531,8 +537,12 @@ async def cmd_instruction(m: Message):
         "2) Choose a cartela number. It costs the room price.\n"
         "3) When the countdown ends, numbers are called one by one.\n"
         "4) Keep Auto on to mark numbers automatically.\n"
-        "5) Complete a row, column or diagonal, then press BINGO WIN.\n\n"
-        "The first player to press BINGO WIN with a real bingo wins the prize.")
+        "5) Complete any winning pattern, then press BINGO WIN.\n\n"
+        "🏆 Winning Patterns:\n"
+        "• Horizontal line\n• Vertical line\n• Diagonal\n• Four corners\n"
+        "• Center four\n• T corners\n• Center T\n\n"
+        "Complete any pattern to win the round prize!\n\n"
+        "The first player to press BINGO WIN with a real pattern wins the prize.")
 
 
 @dp.message(Command("invite"))
