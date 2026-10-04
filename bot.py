@@ -843,7 +843,6 @@ async def cmd_balance(m: Message):
         "<blockquote>"
         f"Name:  {html.escape(names[uid])}\n"
         f"Phone Number:  {phones.get(uid, '-')}\n"
-        f"Telegram ID:  {uid}\n"
         f"Withdrawable Balance:  {bal:.2f} ETB\n"
         f"Non-withdrawable Bal:  0.00 ETB\n"
         "----------------------------------------\n"
@@ -1007,24 +1006,36 @@ async def withdraw_steps(m: Message):
         await submit_withdraw(m, uid, s["amount"], text[:100], WD_NAMES[s["m"]])
 
 
+def find_by_phone(text):
+    """Find a player by phone number. 0912345678 and +251912345678 both work."""
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if len(digits) < 9:
+        return None
+    last9 = digits[-9:]
+    for uid, ph in phones.items():
+        if ph.endswith(last9):
+            return uid
+    return None
+
+
 @dp.message(Command("transfer"))
 async def cmd_transfer(m: Message, command: CommandObject):
     uid = ensure(m.from_user)
     if await need_phone(m):
         return
     args = (command.args or "").split()
-    if len(args) != 2 or not args[0].isdigit() or not to_amount(args[1]):
+    if len(args) != 2 or not to_amount(args[1]):
         await m.answer(
             "🔁 Transfer\n\n"
-            "Send:\n/transfer <user ID> <amount>\n\n"
-            "Example:\n/transfer 123456789 50\n\n"
-            "Ask your friend to send /balance to see their ID.")
+            "Send:\n/transfer <phone number> <amount>\n\n"
+            "Example:\n/transfer 0912345678 50")
         return
-    to, amount = int(args[0]), int(args[1])
-    if to == uid:
+    to, amount = find_by_phone(args[0]), int(args[1])
+    if not to:
+        await m.answer("No player found with that phone number.\n"
+                       "They must start the bot and share their number first.")
+    elif to == uid:
         await m.answer("You can't transfer to yourself.")
-    elif to not in wallets:
-        await m.answer("That user hasn't started the bot yet.")
     elif wallets[uid] < amount:
         await m.answer("Not enough balance.")
     else:
