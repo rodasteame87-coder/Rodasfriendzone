@@ -1,6 +1,7 @@
 import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
 from pathlib import Path
 from urllib.parse import parse_qsl, quote
+import asyncpg
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command, CommandObject
@@ -11,6 +12,7 @@ from aiogram.types import (Message, CallbackQuery, BotCommand,
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
+DATABASE_URL = os.environ["DATABASE_URL"]             # Render Postgres "Internal Database URL"
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))            # your Telegram ID
 PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
@@ -57,6 +59,154 @@ wd_state = {}                           # players in the middle of a withdraw
 phones = {}                             # player -> verified phone number
 
 dp = Dispatcher()
+
+
+# ---------- DATABASE (Postgres) ----------
+# Memory stays the fast working copy. Every change is also put in a queue and
+# written to Postgres in ONE transaction (changes made together are saved
+# together). When the bot starts, everything is loaded back from Postgres.
+pool = None
+lock_conn = None
+ready = False
+_q = None          # asyncio.Queue, created in main()
+
+
+def _enqueue(sql, *args):
+    _q.put_nowait((sql, args))
+
+
+def save_user(uid):
+    snap = {"bal": wallets.get(uid, 0), "name": names.get(uid, "Player"),
+            "username": usernames.get(uid, ""), "joined": joined.get(uid, 0),
+            "wins": wins.get(uid, 0), "won": won.get(uid, 0),
+            "hist": history.get(uid, []), "winlog": winlog.get(uid, []),
+            "phone": phones.get(uid), "ref": referrer.get(uid),
+            "inv": invited.get(uid, 0), "earn": ref_earn.get(uid, 0),
+            "paid": uid in ref_paid}
+    _enqueue("INSERT INTO users(uid, data) VALUES($1, $2::jsonb) "
+             "ON CONFLICT (uid) DO UPDATE SET data = EXCLUDED.data",
+             uid, json.dumps(snap))
+
+
+def _save_counter(key, value):
+    _enqueue("INSERT INTO kv(k, v) VALUES($1, $2) "
+             "ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v", key, value)
+
+
+def save_pending(rid):
+    """Save a deposit / withdraw request (or delete it if it is finished)."""
+    r = pending.get(rid)
+    if r:
+        _enqueue("INSERT INTO pending(rid, data) VALUES($1, $2::jsonb) "
+                 "ON CONFLICT (rid) DO UPDATE SET data = EXCLUDED.data",
+                 rid, json.dumps(r))
+    else:
+        _enqueue("DELETE FROM pending WHERE rid = $1", rid)
+    _save_counter("req_counter", req_counter[0])
+
+
+def save_game(r):
+    _enqueue("INSERT INTO games(id, data) VALUES($1, $2::jsonb) "
+             "ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+             r["id"], json.dumps(r))
+    _enqueue("DELETE FROM games WHERE id <= $1", r["id"] - 300)
+    _save_counter("game_counter", game_counter[0])
+
+
+def save_sms(key):
+    _enqueue("INSERT INTO used_sms(h) VALUES($1) ON CONFLICT DO NOTHING", key)
+
+
+def save_room_join(bet, uid, card):
+    """Remember a paid cartela, so the stake can be refunded after a restart."""
+    _enqueue("INSERT INTO room_players(uid, bet, card) VALUES($1, $2, $3) "
+             "ON CONFLICT (uid) DO UPDATE SET bet = EXCLUDED.bet, card = EXCLUDED.card",
+             uid, bet, card)
+
+
+def save_room_leave(uid):
+    _enqueue("DELETE FROM room_players WHERE uid = $1", uid)
+
+
+def save_room_clear(bet):
+    _enqueue("DELETE FROM room_players WHERE bet = $1", bet)
+
+
+async def db_writer():
+    while True:
+        batch = [await _q.get()]
+        while not _q.empty():
+            batch.append(_q.get_nowait())
+        while True:                                   # never drop a write
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.transaction():
+                        for sql, args in batch:
+                            await conn.execute(sql, *args)
+                break
+            except Exception as e:
+                print("db write failed, retrying:", repr(e))
+                await asyncio.sleep(3)
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS users(uid BIGINT PRIMARY KEY, data JSONB NOT NULL);
+CREATE TABLE IF NOT EXISTS pending(rid BIGINT PRIMARY KEY, data JSONB NOT NULL);
+CREATE TABLE IF NOT EXISTS games(id BIGINT PRIMARY KEY, data JSONB NOT NULL);
+CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS used_sms(h TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS room_players(uid BIGINT PRIMARY KEY, bet INT NOT NULL, card INT NOT NULL);
+"""
+
+
+async def load_state():
+    async with pool.acquire() as c:
+        for r in await c.fetch("SELECT uid, data FROM users"):
+            uid, d = r["uid"], json.loads(r["data"])
+            wallets[uid] = d.get("bal", 0)
+            names[uid] = d.get("name", "Player")
+            usernames[uid] = d.get("username", "")
+            joined[uid] = d.get("joined") or int(time.time())
+            wins[uid] = d.get("wins", 0)
+            won[uid] = d.get("won", 0)
+            history[uid] = d.get("hist", [])
+            winlog[uid] = d.get("winlog", [])
+            if d.get("phone"):
+                phones[uid] = d["phone"]
+            if d.get("ref"):
+                referrer[uid] = d["ref"]
+            invited[uid] = d.get("inv", 0)
+            ref_earn[uid] = d.get("earn", 0)
+            if d.get("paid"):
+                ref_paid.add(uid)
+        for r in await c.fetch("SELECT rid, data FROM pending"):
+            pending[r["rid"]] = json.loads(r["data"])
+        for r in await c.fetch("SELECT id, data FROM games ORDER BY id DESC LIMIT 300"):
+            games.append(json.loads(r["data"]))
+        for r in await c.fetch("SELECT h FROM used_sms"):
+            used_sms.add(r["h"])
+        for r in await c.fetch("SELECT k, v FROM kv"):
+            if r["k"] == "req_counter":
+                req_counter[0] = r["v"]
+            elif r["k"] == "game_counter":
+                game_counter[0] = r["v"]
+        # players who had paid for a cartela when the bot stopped: give it back
+        stuck = await c.fetch("SELECT uid, bet FROM room_players")
+    for r in stuck:
+        uid, bet = r["uid"], r["bet"]
+        wallets[uid] = wallets.get(uid, 0) + bet
+        log(uid, "refund", bet, f"Room {bet} refund (bot restarted)")
+    if stuck:
+        _enqueue("DELETE FROM room_players")
+    print(f"loaded {len(wallets)} users, {len(pending)} pending, "
+          f"{len(games)} games, refunded {len(stuck)} cartelas")
+
+
+@web.middleware
+async def wait_ready(request, handler):
+    if not ready and request.path.startswith("/api/"):
+        return web.json_response({"error": "starting"}, status=503)
+    return await handler(request)
 
 
 # ---------- winning patterns ----------
@@ -115,15 +265,22 @@ def log(uid, kind, amount, note=""):
     h = history.setdefault(uid, [])
     h.insert(0, {"t": int(time.time()), "k": kind, "a": amount, "n": note})
     del h[50:]
+    save_user(uid)                 # wallet + history saved to the database
 
 
 def touch(user):
     uid = user["id"]
+    new = uid not in wallets
     wallets.setdefault(uid, START_BALANCE)
     joined.setdefault(uid, int(time.time()))
-    names[uid] = user.get("first_name", "Player")
-    usernames[uid] = user.get("username", "") or ""
+    nm = user.get("first_name", "Player")
+    un = user.get("username", "") or ""
+    changed = new or names.get(uid) != nm or usernames.get(uid) != un
+    names[uid] = nm
+    usernames[uid] = un
     seen[uid] = time.time()
+    if changed:
+        save_user(uid)
     return uid
 
 
@@ -150,6 +307,7 @@ def remove_player(uid):
         wallets[uid] = wallets.get(uid, 0) + g["bet"]     # refund
         log(uid, "refund", g["bet"], f"Room {g['bet']} refund")
     g["players"].pop(uid, None)
+    save_room_leave(uid)
     if g["phase"] == "lobby" and not g["players"]:
         g["deadline"] = None                              # stop countdown
 
@@ -189,6 +347,7 @@ def record_game(g):
         "pl": list(g["players"].keys()),
     })
     del games[300:]
+    save_game(games[0])
 
 
 def summ(r, uid):
@@ -230,6 +389,7 @@ async def run_round(g):
                 wallets[uid] = wallets.get(uid, 0) + g["bet"]
                 log(uid, "refund", g["bet"], f"Room {g['bet']} refund")
             g["players"].clear()
+            save_room_clear(g["bet"])
             return
 
     # provably fair: pick all numbers + secret first, publish the hash
@@ -247,6 +407,7 @@ async def run_round(g):
         await asyncio.sleep(CALL_EVERY)
 
     g["phase"] = "finished"
+    save_room_clear(g["bet"])              # round is over: stakes are settled
     if not g["finish_at"]:
         g["finish_at"] = time.time() + WIN_SCREEN_SECONDS
     record_game(g)
@@ -260,7 +421,13 @@ async def room_loop(g):
             await run_round(g)
         except Exception as e:                 # never let a room die
             print("room loop error:", repr(e))
+            # if the round was cut short before anybody was paid, give stakes back
+            if g["phase"] in ("lobby", "playing") and not g["winners"]:
+                for uid in list(g["players"]):
+                    wallets[uid] = wallets.get(uid, 0) + g["bet"]
+                    log(uid, "refund", g["bet"], f"Room {g['bet']} refund")
             g["players"].clear()
+            save_room_clear(g["bet"])
             g["phase"] = "lobby"
             g["deadline"] = None
             await asyncio.sleep(2)
@@ -417,6 +584,7 @@ async def api_join(req):
     wallets[uid] -= g["bet"]
     log(uid, "bet", -g["bet"], f"Room {g['bet']} · cartela {card}")
     g["players"][uid] = card
+    save_room_join(g["bet"], uid, card)
     if g["deadline"] is None:                  # first player starts the clock
         g["deadline"] = time.time() + LOBBY_SECONDS
     return web.json_response({"ok": True})
@@ -468,6 +636,7 @@ async def api_bingo(req):
             del wl[50:]
             log(u, "win", share,
                 f"Won in room {g['bet']}" + (" (shared)" if shared else ""))
+        save_room_clear(g["bet"])              # prize paid: stakes are settled
         g["wname"], g["wcells"] = g["wlist"][0]["pat"], g["wlist"][0]["cells"]
         g["finish_at"] = time.time() + WIN_SCREEN_SECONDS
         return web.json_response({"ok": True})
@@ -484,10 +653,16 @@ async def api_leave(req):
 
 # ---------- bot commands ----------
 def ensure(u):
+    new = u.id not in wallets
     wallets.setdefault(u.id, START_BALANCE)
     joined.setdefault(u.id, int(time.time()))
-    names[u.id] = u.first_name or "Player"
-    usernames[u.id] = u.username or ""
+    nm = u.first_name or "Player"
+    un = u.username or ""
+    changed = new or names.get(u.id) != nm or usernames.get(u.id) != un
+    names[u.id] = nm
+    usernames[u.id] = un
+    if changed:
+        save_user(u.id)
     return u.id
 
 
@@ -620,6 +795,7 @@ async def got_contact(m: Message):
                        reply_markup=phone_kb())
         return
     phones[uid] = "".join(ch for ch in c.phone_number if ch.isdigit())
+    save_user(uid)
     await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
                    reply_markup=ReplyKeyboardRemove())
     await m.answer(WELCOME_TEXT, reply_markup=play_kb())
@@ -635,6 +811,8 @@ async def cmd_start(m: Message, command: CommandObject):
         if inviter != uid and inviter in wallets:
             referrer[uid] = inviter
             invited[inviter] = invited.get(inviter, 0) + 1
+            save_user(uid)
+            save_user(inviter)
             try:
                 await m.bot.send_message(
                     inviter, f"🎉 {names[uid]} በእርስዎ ሊንክ ተቀላቅሏል!")
@@ -695,6 +873,7 @@ async def cmd_deposit(m: Message, command: CommandObject):
     req_counter[0] += 1
     rid = req_counter[0]
     pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    save_pending(rid)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
         InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
@@ -750,6 +929,7 @@ async def submit_withdraw(m: Message, uid, amount, account, method):
     req_counter[0] += 1
     rid = req_counter[0]
     pending[rid] = {"type": "withdraw", "uid": uid, "amount": amount}
+    save_pending(rid)                            # saved in the same transaction as the hold
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Paid", callback_data=f"ok:{rid}"),
         InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
@@ -934,9 +1114,11 @@ async def sms_deposit(m: Message):
         await m.answer(f"Deposits are handled by support: {SUPPORT}")
         return
     used_sms.add(key)
+    save_sms(key)
     req_counter[0] += 1
     rid = req_counter[0]
     pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    save_pending(rid)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
         InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
@@ -957,6 +1139,7 @@ async def admin_buttons(cb: CallbackQuery):
     if not req:
         await cb.answer("Already handled")
         return
+    save_pending(int(rid))                     # request is finished: delete it
     uid, amount = req["uid"], req["amount"]
     approved = action == "ok"
     if req["type"] == "deposit":
@@ -967,6 +1150,7 @@ async def admin_buttons(cb: CallbackQuery):
             inv = referrer.get(uid)
             if REF_BONUS_PERCENT and inv and uid not in ref_paid:
                 ref_paid.add(uid)                      # first deposit only
+                save_user(uid)
                 bonus = amount * REF_BONUS_PERCENT // 100
                 if bonus > 0:
                     wallets[inv] = wallets.get(inv, 0) + bonus
@@ -998,9 +1182,10 @@ async def admin_buttons(cb: CallbackQuery):
 
 # ---------- main ----------
 async def main():
+    global pool, lock_conn, ready, _q
     bot = Bot(TOKEN)
 
-    app = web.Application()
+    app = web.Application(middlewares=[wait_ready])
     app.add_routes([
         web.get("/", index),
         web.get("/api/state", api_state),
@@ -1014,7 +1199,19 @@ async def main():
     ])
     runner = web.AppRunner(app)
     await runner.setup()
-    await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()   # port open: Render sees us as live
+
+    # database: wait until an older copy of the bot (during a redeploy) has stopped,
+    # so two copies never write to the database at the same time
+    lock_conn = await asyncpg.connect(DATABASE_URL)
+    await lock_conn.execute("SELECT pg_advisory_lock(727001)")
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=3)
+    async with pool.acquire() as c:
+        await c.execute(SCHEMA)
+    _q = asyncio.Queue()
+    asyncio.create_task(db_writer())
+    await load_state()
+    ready = True
 
     asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
