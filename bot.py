@@ -6,7 +6,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (Message, CallbackQuery, BotCommand,
                            InlineKeyboardMarkup, InlineKeyboardButton,
-                           WebAppInfo)
+                           ReplyKeyboardMarkup, KeyboardButton,
+                           ReplyKeyboardRemove, WebAppInfo)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
@@ -53,6 +54,7 @@ used_sms = set()                        # SMS already sent (no double use)
 referrer, invited = {}, {}              # player -> who invited him / invite count
 ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
 wd_state = {}                           # players in the middle of a withdraw
+phones = {}                             # player -> verified phone number
 
 dp = Dispatcher()
 
@@ -387,6 +389,9 @@ async def api_join(req):
     if not user:
         return web.json_response({"ok": False, "error": "Open from Telegram"})
     uid = touch(user)
+    if uid not in phones:
+        return web.json_response({"ok": False,
+                                  "error": "Press /start in the bot and share your phone number first"})
     try:
         g = rooms.get(int(body.get("room")))
     except (TypeError, ValueError):
@@ -565,6 +570,61 @@ async def deposit_buttons(cb: CallbackQuery):
     await cb.answer()
 
 
+# ---------- first start: Start button -> share phone number ----------
+START_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
+              "እንኳን በደህና መጡ! ለመጀመር «Start» ቁልፍን ይንኩ።\n\n"
+              "Welcome! Tap Start to begin.")
+PHONE_TEXT = ("📱 ለመቀጠል ስልክ ቁጥርዎን ያጋሩ\n\n"
+              "ከታች ያለውን «ስልክ ቁጥር ያጋሩ» ቁልፍ ይንኩ።\n\n"
+              "To continue, tap the button below to share your phone number.")
+WELCOME_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
+                "Tap the button below to open the Bingo game.")
+
+
+def start_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="▶️ Start", callback_data="start:go")]])
+
+
+def phone_kb():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 ስልክ ቁጥር ያጋሩ / Share phone number",
+                                  request_contact=True)]],
+        resize_keyboard=True, one_time_keyboard=True)
+
+
+async def need_phone(m: Message):
+    """True (and shows the Start button) if the player has not shared a phone yet."""
+    if m.from_user.id in phones:
+        return False
+    await m.answer(START_TEXT, reply_markup=start_kb())
+    return True
+
+
+@dp.callback_query(F.data == "start:go")
+async def start_go(cb: CallbackQuery):
+    if cb.from_user.id in phones:
+        await cb.message.answer(WELCOME_TEXT, reply_markup=play_kb())
+    else:
+        await cb.message.answer(PHONE_TEXT, reply_markup=phone_kb())
+    await cb.answer()
+
+
+@dp.message(F.contact)
+async def got_contact(m: Message):
+    uid = ensure(m.from_user)
+    c = m.contact
+    if c.user_id != uid:                        # must be the player's OWN number
+        await m.answer("እባክዎ የራስዎን ስልክ ቁጥር ለማጋራት ከታች ያለውን ቁልፍ ይጠቀሙ።\n"
+                       "Please use the button to share your own number.",
+                       reply_markup=phone_kb())
+        return
+    phones[uid] = "".join(ch for ch in c.phone_number if ch.isdigit())
+    await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
+                   reply_markup=ReplyKeyboardRemove())
+    await m.answer(WELCOME_TEXT, reply_markup=play_kb())
+
+
 @dp.message(CommandStart())
 async def cmd_start(m: Message, command: CommandObject):
     is_new = m.from_user.id not in wallets
@@ -580,25 +640,31 @@ async def cmd_start(m: Message, command: CommandObject):
                     inviter, f"🎉 {names[uid]} በእርስዎ ሊንክ ተቀላቅሏል!")
             except Exception:
                 pass
-    await m.answer("🎯 Rodas Friend Zone Bingo\n\n"
-                   "Tap the button below to open the Bingo game.",
-                   reply_markup=play_kb())
+    if uid in phones:
+        await m.answer(WELCOME_TEXT, reply_markup=play_kb())
+    else:
+        await m.answer(START_TEXT, reply_markup=start_kb())
 
 
 @dp.message(Command("play"))
 async def cmd_play(m: Message):
     ensure(m.from_user)
+    if await need_phone(m):
+        return
     await m.answer("Tap the button below to play 👇", reply_markup=play_kb())
 
 
 @dp.message(Command("balance"))
 async def cmd_balance(m: Message):
     uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
     bal = wallets[uid]
     await m.answer(
         "Your wallet's detail currently is:\n\n"
         "<blockquote>"
         f"Name:  {html.escape(names[uid])}\n"
+        f"Phone Number:  {phones.get(uid, '-')}\n"
         f"Telegram ID:  {uid}\n"
         f"Withdrawable Balance:  {bal:.2f} ETB\n"
         f"Non-withdrawable Bal:  0.00 ETB\n"
@@ -612,6 +678,8 @@ async def cmd_balance(m: Message):
 @dp.message(Command("deposit"))
 async def cmd_deposit(m: Message, command: CommandObject):
     uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
     args = (command.args or "").split(maxsplit=1)
     amount = to_amount(args[0]) if args else None
     if not amount:
@@ -698,6 +766,8 @@ async def submit_withdraw(m: Message, uid, amount, account, method):
 @dp.message(Command("withdraw"))
 async def cmd_withdraw(m: Message, command: CommandObject):
     uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
     wd_state.pop(uid, None)
     args = (command.args or "").split(maxsplit=1)
     amount = to_amount(args[0]) if args else None
@@ -760,6 +830,8 @@ async def withdraw_steps(m: Message):
 @dp.message(Command("transfer"))
 async def cmd_transfer(m: Message, command: CommandObject):
     uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
     args = (command.args or "").split()
     if len(args) != 2 or not args[0].isdigit() or not to_amount(args[1]):
         await m.answer(
@@ -808,6 +880,8 @@ async def cmd_instruction(m: Message):
 @dp.message(Command("invite"))
 async def cmd_invite(m: Message):
     uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
     me = await m.bot.get_me()
     link = f"https://t.me/{me.username}?start=ref_{uid}"
     text = ("👥 ጓደኞችዎን ይጋብዙ!\n\n"
@@ -834,6 +908,8 @@ async def cmd_support(m: Message):
 async def sms_deposit(m: Message):
     """Player pastes the payment SMS (CBE / Telebirr / CBE Birr)."""
     uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
     text = m.text.strip()
     mt = re.search(r"(?:ETB|Birr|BIRR|birr|ብር)\s*([\d,]+(?:\.\d+)?)"
                    r"|([\d,]+(?:\.\d+)?)\s*(?:ETB|Birr|BIRR|birr|ብር)", text)
