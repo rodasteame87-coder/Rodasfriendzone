@@ -69,11 +69,11 @@ h1{font-size:26px;margin:6px 0 2px;letter-spacing:.2px}
 .hint{text-align:center;color:var(--dim);font-size:14px;margin:8px 0}
 /* card */
 .card{background:var(--cream);color:var(--ink);border-radius:14px;padding:8px;margin:8px 0 12px}
-.hd{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px}
+.hd{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-bottom:4px}
 .hd b{text-align:center;color:#fff;border-radius:8px;padding:5px 0;font-size:18px}
 .L0{background:var(--tomato)}.L1{background:var(--brass);color:var(--ink)!important}
 .L2{background:#2b2b2b}.L3{background:var(--sage)}.L4{background:var(--blue)}
-.cells{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.cells{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
 .cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;
   background:#fff;font-weight:800;font-size:20px;border:2px solid #e3d9ba}
 .cell.free{background:var(--brass)}
@@ -100,6 +100,20 @@ h1{font-size:26px;margin:6px 0 2px;letter-spacing:.2px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--cream);
   color:var(--ink);padding:10px 16px;border-radius:12px;font-weight:700;display:none;max-width:90%}
 @media (prefers-reduced-motion:no-preference){.cell,.num{transition:background .15s}}
+/* selection: sticky compact card */
+.selTop{position:sticky;top:0;z-index:5;background:var(--felt);margin:0 -12px 10px;padding:2px 12px 10px;box-shadow:0 6px 10px -6px rgba(0,0,0,.5)}
+.selRow{display:flex;gap:10px;align-items:flex-start}
+#preview{flex:0 0 50%;min-width:0}
+#preview .card{margin:0;padding:5px;border-radius:12px}
+#preview .hd{gap:3px;margin-bottom:3px}
+#preview .hd b{font-size:13px;padding:3px 0;border-radius:6px}
+#preview .cells{gap:3px}
+#preview .cell{font-size:14px;border-radius:7px;border-width:1px}
+#preview .empty{aspect-ratio:1/1.12;border:2px dashed var(--felt2);border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--dim);font-size:14px;padding:8px}
+.selSide{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.selTitle{font-size:22px;font-weight:900;color:var(--brass)}
+.selSide .sub{margin:0}
+.selSide .btn{padding:14px 8px;font-size:18px}
 </style>
 </head>
 <body>
@@ -144,15 +158,21 @@ h1{font-size:26px;margin:6px 0 2px;letter-spacing:.2px}
 
   <!-- CARTELA SELECTION -->
   <section id="select" class="screen">
-    <div class="bar">
-      <button class="back" id="leaveBtn">‹ Leave</button>
-      <span class="pill" id="selTimer">Waiting</span>
+    <div class="selTop">
+      <div class="bar">
+        <button class="back" id="leaveBtn">‹ Leave</button>
+        <span class="pill" id="selTimer">Waiting</span>
+      </div>
+      <div class="selRow">
+        <div id="preview"></div>
+        <div class="selSide">
+          <div class="selTitle" id="selTitle">Pick a cartela</div>
+          <p class="sub" id="selHint">Tap a number from 1 to 100. Tap it again to remove it.</p>
+          <button class="btn" id="proceedBtn" disabled>Play</button>
+        </div>
+      </div>
     </div>
-    <h1>Choose your cartela</h1>
-    <p class="sub">Tap a number from 1 to 100. Tap it again to remove it.</p>
     <div class="grid" id="grid"></div>
-    <div id="preview"></div>
-    <button class="btn" id="proceedBtn" disabled>Play with this cartela</button>
   </section>
 
   <!-- GAME -->
@@ -263,10 +283,12 @@ function renderSelect() {
   }
   $('grid').innerHTML = g;
   if (mine && cartelas && cartelas[mine]) {
-    $('preview').innerHTML = '<div class="hint">Cartela ' + mine + '</div>' + cardHTML(cartelas[mine], () => false);
+    $('preview').innerHTML = cardHTML(cartelas[mine], () => false);
   } else {
-    $('preview').innerHTML = '<div class="hint">Your card will show here</div>';
+    $('preview').innerHTML = '<div class="empty">Your card shows here</div>';
   }
+  $('selTitle').textContent = mine ? 'Cartela ' + mine : 'Pick a cartela';
+  $('selHint').style.display = mine ? 'none' : 'block';
   $('proceedBtn').disabled = !mine;
 }
 
