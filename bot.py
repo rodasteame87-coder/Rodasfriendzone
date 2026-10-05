@@ -278,7 +278,9 @@ async def wait_ready(request, handler):
     if not ready and request.path.startswith("/api/"):
         return web.json_response({"error": "starting"}, status=503)
     return await handler(request)
-  # ---------- winning patterns (same 8 as the picture) ----------
+
+
+# ---------- winning patterns (same 8 as the picture) ----------
 PATTERNS = (
     [[(r, c) for c in range(5)] for r in range(5)]            # horizontal lines
     + [[(r, c) for r in range(5)] for c in range(5)]          # vertical lines
@@ -707,7 +709,9 @@ async def api_sms_hook(req):
     save_bank(rec)
     await on_bank_sms(rec)
     return web.json_response({"ok": True})
-  # ---------- AMHARIC NUMBER SOUND (each player chooses) ----------
+
+
+# ---------- AMHARIC NUMBER SOUND (each player chooses) ----------
 sound_on = set()          # players who turned sound ON (saved in the database)
 audio_ids = {}            # number -> Telegram file_id (fast resend)
 AUDIO_DIR = Path(__file__).parent / "audio"
@@ -733,9 +737,36 @@ async def make_audio(n):
     AUDIO_DIR.mkdir(exist_ok=True)
     path = AUDIO_DIR / f"{n}.mp3"
     if not path.exists():
+        tmp = AUDIO_DIR / f"{n}.{secrets.token_hex(4)}.tmp"
         text = f"{LETTER_SOUND[call_letter(n)]}፣ {amharic(n)}"
-        await edge_tts.Communicate(text, VOICE).save(str(path))
+        await edge_tts.Communicate(text, VOICE).save(str(tmp))
+        tmp.replace(path)
     return path
+
+
+async def api_audio(req):
+    try:
+        n = int(req.match_info["n"])
+    except ValueError:
+        return web.Response(status=404)
+    if not 1 <= n <= 75:
+        return web.Response(status=404)
+    try:
+        path = await make_audio(n)
+    except Exception as e:
+        print("audio failed:", repr(e))
+        return web.Response(status=503)
+    return web.FileResponse(
+        path, headers={"Cache-Control": "public, max-age=86400"})
+
+
+async def pregen_audio():
+    for n in range(1, 76):
+        try:
+            await make_audio(n)
+        except Exception as e:
+            print("pregen failed:", repr(e))
+            await asyncio.sleep(5)
 
 
 async def send_call_audio(n, uids):
@@ -1086,7 +1117,9 @@ async def api_leave(req):
     if user:
         remove_player(user["id"])
     return web.json_response({"ok": True})
-  # ---------- bot commands ----------
+
+
+# ---------- bot commands ----------
 def ensure(u):
     new = u.id not in wallets
     wallets.setdefault(u.id, START_BALANCE)
@@ -1674,7 +1707,9 @@ async def menu_buttons(cb: CallbackQuery):
         await cmd_invite(m)
     elif action == "support":
         await cmd_support(m)
-      # ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
+
+
+# ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
 def is_admin(m: Message):
     return bool(ADMIN_ID) and m.from_user.id == ADMIN_ID
 
@@ -2043,6 +2078,7 @@ async def main():
         web.get("/api/history", api_history),
         web.get("/api/game", api_game),
         web.get("/api/card", api_card),
+        web.get("/audio/{n}.mp3", api_audio),
         web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
@@ -2067,6 +2103,7 @@ async def main():
 
     asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
+    asyncio.create_task(pregen_audio())
 
     await bot.delete_webhook(drop_pending_updates=True)
 
@@ -2109,4 +2146,3 @@ async def main():
 
 
 asyncio.run(main())
-  
