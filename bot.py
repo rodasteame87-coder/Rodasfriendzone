@@ -31,6 +31,10 @@ REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 =
 
 BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
 
+# ---------- WAGERING (turnover) RULE ----------
+FIRST_DEPOSIT_TURNOVER = 1.0   # a player's FIRST deposit must be played 1x before withdrawing
+NEXT_DEPOSIT_TURNOVER = 0.5    # every deposit after the first must be played 0.5x
+
 BETS = [10, 20, 50, 100]   # room prices (birr per cartela)
 CALL_EVERY = 4             # seconds between calls
 LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
@@ -57,7 +61,9 @@ rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
          for b in BETS}
 wallets, names, seen = {}, {}, {}
 joined, usernames, wins, won = {}, {}, {}, {}      # profile data
-deposited, wagered = {}, {}                        # turnover rule: total deposited / total played
+deposited, wagered = {}, {}                        # total money added / total played
+required = {}                                      # total turnover the player has to play (1x first deposit, 0.5x later)
+dep_count = {}                                     # how many real deposits were approved (0 = next one is the FIRST)
 stake_used = {}                                    # uid -> how much of the CURRENT cartela counted as turnover
 history, winlog = {}, {}                           # transactions / wins list
 games, game_counter = [], [0]                      # finished games (History page)
@@ -119,7 +125,8 @@ def save_user(uid):
             "phone": phones.get(uid), "ref": referrer.get(uid),
             "inv": invited.get(uid, 0), "earn": ref_earn.get(uid, 0),
             "paid": uid in ref_paid, "ban": uid in banned,
-            "dep": deposited.get(uid, 0), "wag": wagered.get(uid, 0)}
+            "dep": deposited.get(uid, 0), "wag": wagered.get(uid, 0),
+            "req": required.get(uid, 0), "dc": dep_count.get(uid, 0)}
     _enqueue("INSERT INTO users(uid, data) VALUES($1, $2::jsonb) "
              "ON CONFLICT (uid) DO UPDATE SET data = EXCLUDED.data",
              uid, json.dumps(snap))
@@ -221,8 +228,12 @@ async def load_state():
             history[uid] = d.get("hist", [])
             winlog[uid] = d.get("winlog", [])
             deposited[uid] = d.get("dep", 0)
-            # extra play above the deposited amount must not carry over to future deposits
-            wagered[uid] = min(d.get("wag", 0), deposited[uid])
+            # players saved before this update owe what they owed before (= deposited)
+            required[uid] = d.get("req", deposited[uid])
+            # players who already deposited before count as "not first deposit" from now on
+            dep_count[uid] = d.get("dc", 1 if deposited[uid] > 0 else 0)
+            # extra play above what is required must not carry over to future deposits
+            wagered[uid] = min(d.get("wag", 0), required[uid])
             if d.get("phone"):
                 phones[uid] = d["phone"]
             if d.get("ref"):
@@ -347,19 +358,46 @@ def refund_stake(uid, bet, note, used=None):
 
 
 def turnover_left(uid):
-    """Birr the player must still play before he can withdraw (deposit must be played once)."""
-    return max(0, deposited.get(uid, 0) - wagered.get(uid, 0))
+    """Birr the player must still play before he can withdraw."""
+    return max(0, required.get(uid, 0) - wagered.get(uid, 0))
 
 
 def turnover_info(uid):
     """Played / required / left, for messages and for the web app."""
-    dep = deposited.get(uid, 0)
-    wag = min(wagered.get(uid, 0), dep)
-    return {"played": wag, "required": dep, "left": max(0, dep - wag)}
+    req = required.get(uid, 0)
+    wag = min(wagered.get(uid, 0), req)
+    return {"played": wag, "required": req, "left": max(0, req - wag)}
+
+
+def deposit_multiplier(uid):
+    """1x for the player's first deposit, 0.5x for every deposit after that."""
+    return FIRST_DEPOSIT_TURNOVER if dep_count.get(uid, 0) == 0 else NEXT_DEPOSIT_TURNOVER
+
+
+def fmt_x(v):
+    """1.0 -> '1x', 0.5 -> '0.5x'"""
+    return (f"{v:g}") + "x"
+
+
+def rule_text(uid):
+    """The wagering rule that applies to this player's NEXT deposit (shown before paying)."""
+    if dep_count.get(uid, 0) == 0:
+        return ("ℹ️ ማሳሰቢያ: ለመጀመሪያ ጊዜ ያስገቡትን ገንዘብ ከማውጣትዎ በፊት "
+                f"አንድ ጊዜ ({fmt_x(FIRST_DEPOSIT_TURNOVER)}) መጫወት አለብዎት። "
+                f"ከዚያ በኋላ ለሚያስገቡት ግማሹን ({fmt_x(NEXT_DEPOSIT_TURNOVER)}) ብቻ።\n"
+                "Note: your first deposit must be played "
+                f"{fmt_x(FIRST_DEPOSIT_TURNOVER)} before you can withdraw. "
+                f"Later deposits only need {fmt_x(NEXT_DEPOSIT_TURNOVER)}. "
+                "Your winnings are yours to withdraw.")
+    return ("ℹ️ ማሳሰቢያ: ለሚያስገቡት ገንዘብ ግማሹን "
+            f"({fmt_x(NEXT_DEPOSIT_TURNOVER)}) ከማውጣትዎ በፊት መጫወት አለብዎት።\n"
+            "Note: this deposit must be played "
+            f"{fmt_x(NEXT_DEPOSIT_TURNOVER)} (half the amount) before you can withdraw. "
+            "Your winnings are yours to withdraw.")
 
 
 def progress_text(uid):
-    """Short 'Played 150 / 200 birr' line (empty if the player never deposited)."""
+    """Short 'Played 150 / 200 birr' line (empty if the player has nothing to play)."""
     t = turnover_info(uid)
     if t["required"] <= 0:
         return ""
@@ -561,9 +599,14 @@ def find_bank_sms(amount, tokens):
 
 
 async def approve_deposit(bot, uid, amount, tokens=()):
-    """Add the money to the player, pay the invite bonus, tell the player."""
+    """Add the money to the player, set the wagering requirement
+    (1x for the first deposit, 0.5x after that), pay the invite bonus, tell the player."""
+    mult = deposit_multiplier(uid)
+    added = math.ceil(amount * mult)                       # whole birr, rounded up
     wallets[uid] = wallets.get(uid, 0) + amount
-    deposited[uid] = deposited.get(uid, 0) + amount        # turnover rule counts real deposits
+    deposited[uid] = deposited.get(uid, 0) + amount
+    required[uid] = required.get(uid, 0) + added
+    dep_count[uid] = dep_count.get(uid, 0) + 1
     log(uid, "deposit", amount, "Deposit approved")
     for t in tokens:
         mark_token(t)
@@ -575,7 +618,8 @@ async def approve_deposit(bot, uid, amount, tokens=()):
         if bonus > 0:
             wallets[inv] = wallets.get(inv, 0) + bonus
             ref_earn[inv] = ref_earn.get(inv, 0) + bonus
-            deposited[inv] = deposited.get(inv, 0) + bonus   # bonus must be played before withdrawing
+            deposited[inv] = deposited.get(inv, 0) + bonus
+            required[inv] = required.get(inv, 0) + bonus     # bonus must be played 1x before withdrawing
             log(inv, "bonus", bonus, f"Invite bonus · {names.get(uid, uid)}")
             try:
                 await bot.send_message(
@@ -586,8 +630,8 @@ async def approve_deposit(bot, uid, amount, tokens=()):
     try:
         await bot.send_message(
             uid, f"✅ Your deposit of {amount} birr was approved.\n\n"
-                 f"ℹ️ ገንዘብ ከማውጣትዎ በፊት ያስገቡትን ገንዘብ አንድ ጊዜ መጫወት አለብዎት።\n"
-                 f"Play your deposit amount once before withdrawing.\n\n"
+                 f"ℹ️ ገንዘብ ከማውጣትዎ በፊት {added} ብር ({fmt_x(mult)}) መጫወት አለብዎት።\n"
+                 f"Play {added} birr ({fmt_x(mult)}) before withdrawing.\n\n"
                  + progress_text(uid))
     except Exception:
         pass
@@ -993,12 +1037,10 @@ def to_amount(text):
 
 
 # ---------- deposit menu (CBE / Telebirr / CBE Birr) ----------
-DEPOSIT_RULE_TEXT = ("ℹ️ ማሳሰቢያ: ገንዘብ ከማውጣትዎ በፊት ያስገቡትን ገንዘብ አንድ ጊዜ መጫወት አለብዎት።\n"
-                     "Note: you must play your deposit amount once before you can withdraw. "
-                     "Your winnings are yours to withdraw.")
-DEPOSIT_MENU_TEXT = ("እባክዎ የሚፈልጉትን የመክፈያ አማራጭ ይምረጡ 👇\n\n"
-                     "Please select the top-up option you wish to use:\n\n"
-                     + DEPOSIT_RULE_TEXT)
+def deposit_menu_text(uid):
+    return ("እባክዎ የሚፈልጉትን የመክፈያ አማራጭ ይምረጡ 👇\n\n"
+            "Please select the top-up option you wish to use:\n\n"
+            + rule_text(uid))
 
 
 def deposit_kb():
@@ -1014,7 +1056,7 @@ def back_kb():
         InlineKeyboardButton(text="⬅️ ተመለስ / Back", callback_data="dep:menu")]])
 
 
-def deposit_steps(target, sender):
+def deposit_steps(target, sender, uid):
     return (
         "<b>መመሪያ</b>\n"
         f"1) ከላይ በተቀመጠው የ {target} ገንዘቡን ያስገቡ።\n"
@@ -1025,10 +1067,10 @@ def deposit_steps(target, sender):
         f"{DEPOSIT_SUPPORT}\n"
         "ማውራት ትችላላችሁ።\n"
         "እናመሰግናለን!\n\n"
-        + html.escape(DEPOSIT_RULE_TEXT))
+        + html.escape(rule_text(uid)))
 
 
-def deposit_details(kind):
+def deposit_details(kind, uid):
     not_set = f"Payment details are not available right now. Contact {DEPOSIT_SUPPORT}"
     if kind == "cbe":
         if not CBE_ACCOUNT:
@@ -1036,32 +1078,33 @@ def deposit_details(kind):
         return (
             "የ CBE አካውንት\n"
             f"<code>{html.escape(CBE_ACCOUNT)}</code> _{html.escape(CBE_NAME)}\n\n"
-            + deposit_steps("CBE አካውንት ቁጥር", "CBE"))
+            + deposit_steps("CBE አካውንት ቁጥር", "CBE", uid))
     if kind == "telebirr":
         if not TELEBIRR_PHONE:
             return html.escape(not_set)
         return (
             "የቴሌብር (Telebirr) ቁጥር\n"
             f"<code>{html.escape(TELEBIRR_PHONE)}</code> _{html.escape(TELEBIRR_NAME)}\n\n"
-            + deposit_steps("ቴሌብር ስልክ ቁጥር", "Telebirr"))
+            + deposit_steps("ቴሌብር ስልክ ቁጥር", "Telebirr", uid))
     if kind == "cbebirr":
         if not CBEBIRR_PHONE:
             return html.escape(not_set)
         return (
             "የ CBE Birr ቁጥር\n"
             f"<code>{html.escape(CBEBIRR_PHONE)}</code> _{html.escape(CBEBIRR_NAME)}\n\n"
-            + deposit_steps("CBE Birr ስልክ ቁጥር", "CBE Birr"))
+            + deposit_steps("CBE Birr ስልክ ቁጥር", "CBE Birr", uid))
     return None
 
 
 @dp.callback_query(F.data.startswith("dep:"))
 async def deposit_buttons(cb: CallbackQuery):
+    uid = ensure(cb.from_user)
     kind = (cb.data or "").split(":", 1)[1]
     try:
         if kind == "menu":
-            await cb.message.edit_text(DEPOSIT_MENU_TEXT, reply_markup=deposit_kb())
+            await cb.message.edit_text(deposit_menu_text(uid), reply_markup=deposit_kb())
         else:
-            text = deposit_details(kind)
+            text = deposit_details(kind, uid)
             if text:
                 await cb.message.edit_text(text, parse_mode="HTML",
                                            reply_markup=back_kb())
@@ -1165,7 +1208,7 @@ async def cmd_balance(m: Message):
         return
     bal = wallets[uid]
     left = turnover_left(uid)
-    # while the deposit has not been played once, nothing can be withdrawn
+    # while the required amount has not been played, nothing can be withdrawn
     withdrawable = 0 if left > 0 else bal
     locked = bal - withdrawable
     prog = progress_text(uid)
@@ -1192,7 +1235,7 @@ async def cmd_deposit(m: Message, command: CommandObject):
     args = (command.args or "").split(maxsplit=1)
     amount = to_amount(args[0]) if args else None
     if not amount:
-        await m.answer(DEPOSIT_MENU_TEXT, reply_markup=deposit_kb())
+        await m.answer(deposit_menu_text(uid), reply_markup=deposit_kb())
         return
     if amount < MIN_DEPOSIT:
         await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
@@ -1224,7 +1267,7 @@ WD_MENU_TEXT = ("💸 ገንዘብ ማውጣት\n\n"
 
 def turnover_msg(uid):
     t = turnover_info(uid)
-    return (f"⚠️ ገንዘብ ከማውጣትዎ በፊት ያስገቡትን ገንዘብ መጫወት አለብዎት።\n"
+    return (f"⚠️ ገንዘብ ከማውጣትዎ በፊት ማጫወት ያለብዎትን ገንዘብ መጫወት አለብዎት።\n"
             f"🎯 ተጫውተዋል: {t['played']} / {t['required']} ብር · ቀሪ: {t['left']} ብር\n\n"
             f"You must play {t['left']} more birr before you can withdraw.\n"
             f"Played {t['played']} / {t['required']} birr.")
@@ -1391,9 +1434,10 @@ async def cmd_transfer(m: Message, command: CommandObject):
     else:
         wallets[uid] -= amount
         wallets[to] += amount
-        # the receiver must play transferred money before withdrawing it
+        # the receiver must play transferred money 1x before withdrawing it
         # (stops "deposit -> transfer to 2nd account -> withdraw" tricks)
         deposited[to] = deposited.get(to, 0) + amount
+        required[to] = required.get(to, 0) + amount
         log(uid, "transfer", -amount, f"Transfer to {names.get(to, to)}")
         log(to, "transfer", amount, f"Transfer from {names[uid]}")
         await m.answer(f"✅ Sent {amount} birr to {names.get(to, to)}.\n"
@@ -1422,9 +1466,11 @@ async def cmd_instruction(m: Message):
         "ℹ️ If a round cannot start, your stake is refunded.\n"
         "ℹ️ If you close the app during a round, your cartela stays in the game and "
         "a win is added to your balance automatically.\n\n"
-        "💸 Withdrawing: play your deposit amount once (every bet counts, win or lose). "
-        "Your winnings are yours to withdraw. Use /balance to see your progress.\n"
-        "ገንዘብ ለማውጣት ያስገቡትን ገንዘብ አንድ ጊዜ ይጫወቱ። ያሸነፉት ገንዘብ የእርስዎ ነው።\n\n"
+        "💸 Withdrawing: your first deposit must be played "
+        f"{fmt_x(FIRST_DEPOSIT_TURNOVER)} before you can withdraw. Later deposits only need "
+        f"{fmt_x(NEXT_DEPOSIT_TURNOVER)}. Every bet counts, win or lose, and your winnings "
+        "are yours to withdraw. Use /balance to see your progress.\n"
+        "የመጀመሪያ ገንዘብዎን አንድ ጊዜ፣ ቀጣይ ገንዘብዎን ግማሽ ጊዜ ይጫወቱ። ያሸነፉት ገንዘብ የእርስዎ ነው።\n\n"
         + BRAND)
 
 
@@ -1617,7 +1663,8 @@ async def cmd_addbalance(m: Message, command: CommandObject):
         return
     wallets[uid] = wallets.get(uid, 0) + amount
     if amount > 0:
-        deposited[uid] = deposited.get(uid, 0) + amount     # admin-added money must be played too
+        deposited[uid] = deposited.get(uid, 0) + amount
+        required[uid] = required.get(uid, 0) + amount       # admin-added money must be played 1x too
         log(uid, "deposit", amount, "Added by admin")
         note = f"💰 {amount} birr was added to your balance."
     else:
