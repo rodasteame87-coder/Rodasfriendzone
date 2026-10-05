@@ -65,6 +65,7 @@ phones = {}                             # player -> verified phone number
 bank_sms, bank_by_h = [], set()         # SMS forwarded from YOUR phone (newest first)
 banned = set()                          # blocked players
 bc_pending = {}                         # admin's broadcast waiting for confirmation
+rf_pending = {}                         # admin's /resetfree list waiting for confirmation
 bg_tasks = set()                        # keeps background tasks alive
 
 dp = Dispatcher()
@@ -1371,6 +1372,7 @@ async def cmd_admin(m: Message):
         "🛠 Admin commands\n\n"
         "/stats\nPlayers, money, waiting requests, last 24h\n\n"
         "/addbalance <phone> <amount>\nAdd money to a player. Use a minus to remove: -50\n\n"
+        "/resetfree\nRemove free balance from players who never deposited\n\n"
         "/ban <phone>\nBlock a player\n\n"
         "/unban <phone>\nUnblock a player\n\n"
         "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
@@ -1524,6 +1526,72 @@ async def broadcast_buttons(cb: CallbackQuery):
     task = asyncio.create_task(run_broadcast(cb.bot, text, cb.from_user.id))
     bg_tasks.add(task)
     task.add_done_callback(bg_tasks.discard)
+
+
+# ---------- /resetfree: remove free test money from players who never deposited ----------
+def free_money_players():
+    """Players who have a balance but never made a real deposit (free test money)."""
+    out = []
+    for uid, bal in wallets.items():
+        if uid == ADMIN_ID or bal <= 0:
+            continue
+        if deposited.get(uid, 0) > 0:
+            continue                      # deposited after the update: keep
+        if any(t.get("k") == "deposit" for t in history.get(uid, [])):
+            continue                      # has a deposit in history: keep
+        out.append(uid)
+    return out
+
+
+@dp.message(Command("resetfree"))
+async def cmd_resetfree(m: Message):
+    if not is_admin(m):
+        return
+    uids = free_money_players()
+    if not uids:
+        await m.answer("No players with free balance found.")
+        return
+    rf_pending[m.from_user.id] = uids
+    total = sum(wallets[u] for u in uids)
+    lines = [f"{names.get(u, 'Player')} ({phones.get(u, '-')}): {wallets[u]}"
+             for u in uids[:25]]
+    more = f"\n…and {len(uids) - 25} more" if len(uids) > 25 else ""
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Reset {len(uids)} players", callback_data="rf:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="rf:cancel")]])
+    await m.answer(f"⚠️ These players have balance but NO deposit in their history.\n"
+                   f"Total: {total} birr\n\n" + "\n".join(lines) + more +
+                   "\n\nCheck the list, then confirm.", reply_markup=kb)
+
+
+@dp.callback_query(F.data.startswith("rf:"))
+async def resetfree_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    uids = rf_pending.pop(cb.from_user.id, None)
+    if action != "go" or not uids:
+        try:
+            await cb.message.edit_text("❌ Cancelled.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    n = total = 0
+    for u in uids:
+        amt = wallets.get(u, 0)
+        if amt <= 0:
+            continue
+        wallets[u] = 0
+        log(u, "withdraw", -amt, "Free test balance removed")
+        n += 1
+        total += amt
+    try:
+        await cb.message.edit_text(f"✅ Done. Reset {n} players ({total} birr removed).")
+    except Exception:
+        pass
+    await cb.answer()
 
 
 @dp.message(Command("lastsms"))
@@ -1704,6 +1772,7 @@ async def main():
                     BotCommand(command="admin", description="Admin commands"),
                     BotCommand(command="stats", description="Stats"),
                     BotCommand(command="addbalance", description="Add / remove balance"),
+                    BotCommand(command="resetfree", description="Remove free balances"),
                     BotCommand(command="ban", description="Block a player"),
                     BotCommand(command="unban", description="Unblock a player"),
                     BotCommand(command="broadcast", description="Message all players"),
