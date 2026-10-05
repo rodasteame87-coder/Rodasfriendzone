@@ -369,7 +369,10 @@
 <div id="toast"></div>
 
 <script>
-window.onerror = (m, s, l) => { alert("JS error: " + m + " (line " + l + ")"); };
+window.onerror = (m, s, l) => {
+  if (m === "Script error." || !l) return true;   // ignore errors from Telegram's own script
+  console.error("JS error: " + m + " (line " + l + ")");
+};
 
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
