@@ -8,7 +8,7 @@ from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeChat,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
-                           ReplyKeyboardRemove, WebAppInfo)
+                           ReplyKeyboardRemove, WebAppInfo, FSInputFile)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
@@ -42,6 +42,7 @@ WIN_SCREEN_SECONDS = 10    # how long the winner / loser card stays
 AUTH_MAX_AGE = 86400       # Telegram initData older than this (seconds) is rejected
 
 INDEX_FILE = Path(__file__).parent / "web" / "index.html"
+PATTERNS_IMG = Path(__file__).parent / "patterns.png"     # winning patterns picture
 
 rng = random.SystemRandom()      # unpredictable randomness for the called numbers
 
@@ -256,18 +257,18 @@ async def wait_ready(request, handler):
     return await handler(request)
 
 
-# ---------- winning patterns ----------
+# ---------- winning patterns (same 8 as the picture) ----------
 PATTERNS = (
     [[(r, c) for c in range(5)] for r in range(5)]            # horizontal lines
     + [[(r, c) for r in range(5)] for c in range(5)]          # vertical lines
-    + [[(i, i) for i in range(5)], [(i, 4 - i) for i in range(5)]]   # diagonals
+    + [[(i, i) for i in range(5)], [(i, 4 - i) for i in range(5)]]   # diagonal, anti-diagonal
     + [[(0, 0), (0, 4), (4, 0), (4, 4)],                      # four corners
        [(1, 1), (1, 3), (3, 1), (3, 3)],                      # center four
-       [(0, 0), (0, 4), (1, 2), (2, 2), (3, 2)],              # T corners
-       [(1, 1), (1, 2), (1, 3), (2, 2), (3, 2)]]              # center T
+       [(0, 2), (2, 0), (2, 4), (4, 2)],                      # T corners (like the picture)
+       [(1, 2), (2, 1), (2, 3), (3, 2)]]                      # center T (like the picture)
 )
 PATTERN_NAMES = (["Horizontal line"] * 5 + ["Vertical line"] * 5
-                 + ["Diagonal"] * 2
+                 + ["Diagonal", "Anti-diagonal"]
                  + ["Four corners", "Center four", "T corners", "Center T"])
 
 
@@ -990,8 +991,8 @@ START_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
 PHONE_TEXT = ("📱 ለመቀጠል ስልክ ቁጥርዎን ያጋሩ\n\n"
               "ከታች ያለውን «ስልክ ቁጥር ያጋሩ» ቁልፍ ይንኩ።\n\n"
               "To continue, tap the button below to share your phone number.")
-WELCOME_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
-                "Tap the button below to open the Bingo game.")
+WELCOME_TEXT = ("👋 እንኳን በደህና መጡ! ቢንጎ ለመጫወት ዝግጁ ነዎት?\n\n"
+                "Welcome! Ready to play Bingo?")
 
 
 def start_kb():
@@ -1017,7 +1018,7 @@ async def need_phone(m: Message):
 @dp.callback_query(F.data == "start:go")
 async def start_go(cb: CallbackQuery):
     if cb.from_user.id in phones:
-        await cb.message.answer(WELCOME_TEXT, reply_markup=play_kb())
+        await cb.message.answer(WELCOME_TEXT, reply_markup=menu_kb())
     else:
         await cb.message.answer(PHONE_TEXT, reply_markup=phone_kb())
     await cb.answer()
@@ -1036,7 +1037,7 @@ async def got_contact(m: Message):
     save_user(uid)
     await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
                    reply_markup=ReplyKeyboardRemove())
-    await m.answer(WELCOME_TEXT, reply_markup=play_kb())
+    await m.answer(WELCOME_TEXT, reply_markup=menu_kb())
 
 
 @dp.message(CommandStart())
@@ -1057,7 +1058,7 @@ async def cmd_start(m: Message, command: CommandObject):
             except Exception:
                 pass
     if uid in phones:
-        await m.answer(WELCOME_TEXT, reply_markup=play_kb())
+        await m.answer(WELCOME_TEXT, reply_markup=menu_kb())
     else:
         await m.answer(START_TEXT, reply_markup=start_kb())
 
@@ -1324,7 +1325,7 @@ async def cmd_instruction(m: Message):
         "4) Keep Auto on to mark numbers automatically.\n"
         "5) Complete any winning pattern, then press BINGO WIN.\n\n"
         "🏆 Winning Patterns:\n"
-        "• Horizontal line\n• Vertical line\n• Diagonal\n• Four corners\n"
+        "• Horizontal line\n• Vertical line\n• Diagonal\n• Anti-diagonal\n• Four corners\n"
         "• Center four\n• T corners\n• Center T\n\n"
         "Complete any pattern to win the round prize!\n\n"
         "The first player to press BINGO WIN with a real pattern wins the prize.\n\n"
@@ -1357,6 +1358,102 @@ async def cmd_invite(m: Message):
 @dp.message(Command("support"))
 async def cmd_support(m: Message):
     await m.answer(f"🛟 Need help? Contact {SUPPORT}")
+
+
+# ---------- start screen: button menu ----------
+def menu_kb():
+    b = InlineKeyboardButton
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [b(text="🎮 ጨዋታ ተጫወት", web_app=WebAppInfo(url=WEBAPP_URL)),
+         b(text="🏆 የማሸነፊያ ስርዓቶች", callback_data="menu:patterns")],
+        [b(text="📝 የጨዋታ መመሪያ", callback_data="menu:instr"),
+         b(text="💰 የእኔ ቀሪ ሂሳብ", callback_data="menu:balance")],
+        [b(text="💵 ገንዘብ አስገባ", callback_data="menu:deposit"),
+         b(text="💸 ገንዘብ አውጣ", callback_data="menu:withdraw")],
+        [b(text="📜 የእኔ ግብይቶች", callback_data="menu:tx"),
+         b(text="👥 ጓደኞችን ጋብዝ", callback_data="menu:invite")],
+        [b(text="📞 ድጋፍ ያግኙ", callback_data="menu:support")],
+    ])
+
+
+WIN_PATTERNS_TEXT = (
+    "🏆 የማሸነፊያ ስርዓቶች / Winning Patterns\n\n"
+    "• አግድም መስመር (Horizontal line)\n"
+    "• ቁም መስመር (Vertical line)\n"
+    "• ዲያጎናል / ሰያፍ (Diagonal)\n"
+    "• ተቃራኒ ዲያጎናል (Anti-diagonal)\n"
+    "• አራቱም ማዕዘኖች (Four corners)\n"
+    "• የመካከል አራት (Center four)\n"
+    "• የT ማዕዘኖች (T corners)\n"
+    "• የመካከል T (Center T)\n\n"
+    "ማንኛውንም አንዱን ሲያሟሉ ያሸንፋሉ!\n"
+    "Complete any pattern to win the round prize!")
+
+_patterns_file_id = [None]       # Telegram remembers the picture after the first send
+
+
+async def send_patterns(m: Message):
+    """Send the winning patterns picture (text only if the picture file is missing)."""
+    try:
+        if _patterns_file_id[0]:
+            await m.answer_photo(_patterns_file_id[0], caption=WIN_PATTERNS_TEXT)
+            return
+        if PATTERNS_IMG.exists():
+            sent = await m.answer_photo(FSInputFile(PATTERNS_IMG),
+                                        caption=WIN_PATTERNS_TEXT)
+            _patterns_file_id[0] = sent.photo[-1].file_id
+            return
+    except Exception as e:
+        print("patterns picture failed:", repr(e))
+    await m.answer(WIN_PATTERNS_TEXT)
+
+
+TX_ICONS = {"deposit": "💵", "withdraw": "💸", "bet": "🎯", "win": "🏆",
+            "refund": "↩️", "bonus": "🎁", "transfer": "🔁"}
+
+
+@dp.message(Command("transactions"))
+async def cmd_transactions(m: Message):
+    uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
+    rows = history.get(uid, [])[:10]
+    if not rows:
+        await m.answer("📜 ምንም ግብይት የለም።\nNo transactions yet.")
+        return
+    lines = []
+    for t in rows:
+        when = time.strftime("%d %b %H:%M", time.gmtime(t["t"] + 3 * 3600))
+        sign = "+" if t["a"] > 0 else ""
+        lines.append(f"{TX_ICONS.get(t['k'], '•')} {sign}{t['a']} ETB · "
+                     f"{html.escape(t.get('n') or t['k'])}\n🕒 {when}")
+    await m.answer("📜 <b>My Transactions</b> (last 10)\n\n" + "\n\n".join(lines),
+                   parse_mode="HTML")
+
+
+@dp.callback_query(F.data.startswith("menu:"))
+async def menu_buttons(cb: CallbackQuery):
+    action = (cb.data or "").split(":", 1)[1]
+    await cb.answer()
+    # same message, but "from" is the player who pressed the button,
+    # so the normal command handlers work unchanged
+    m = cb.message.model_copy(update={"from_user": cb.from_user})
+    if action == "patterns":
+        await send_patterns(m)
+    elif action == "instr":
+        await cmd_instruction(m)
+    elif action == "balance":
+        await cmd_balance(m)
+    elif action == "deposit":
+        await cmd_deposit(m, CommandObject(command="deposit", args=None))
+    elif action == "withdraw":
+        await cmd_withdraw(m, CommandObject(command="withdraw", args=None))
+    elif action == "tx":
+        await cmd_transactions(m)
+    elif action == "invite":
+        await cmd_invite(m)
+    elif action == "support":
+        await cmd_support(m)
 
 
 # ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
@@ -1754,29 +1851,28 @@ async def main():
 
     await bot.delete_webhook(drop_pending_updates=True)
     public_commands = [
-        BotCommand(command="start", description="Start Rodas Friend Zone"),
-        BotCommand(command="play", description="Play Bingo"),
-        BotCommand(command="deposit", description="Deposit"),
-        BotCommand(command="balance", description="Check balance"),
-        BotCommand(command="withdraw", description="Withdraw"),
-        BotCommand(command="transfer", description="Transfer"),
-        BotCommand(command="instruction", description="How to play"),
-        BotCommand(command="invite", description="Invite friends"),
-        BotCommand(command="support", description="Support"),
+        BotCommand(command="start", description="Start the bot"),
+        BotCommand(command="play", description="🎮 Play Bingo"),
+        BotCommand(command="balance", description="💰 Check Balance"),
+        BotCommand(command="deposit", description="💵 Deposit"),
+        BotCommand(command="withdraw", description="💸 Withdraw"),
+        BotCommand(command="transactions", description="📜 My Transactions"),
+        BotCommand(command="invite", description="👥 Invite Friends"),
+        BotCommand(command="support", description="📞 Support"),
     ]
     await bot.set_my_commands(public_commands)
     if ADMIN_ID:                                  # extra menu only you can see
         try:
             await bot.set_my_commands(
                 public_commands + [
-                    BotCommand(command="admin", description="Admin commands"),
-                    BotCommand(command="stats", description="Stats"),
-                    BotCommand(command="addbalance", description="Add / remove balance"),
-                    BotCommand(command="resetfree", description="Remove free balances"),
-                    BotCommand(command="ban", description="Block a player"),
-                    BotCommand(command="unban", description="Unblock a player"),
-                    BotCommand(command="broadcast", description="Message all players"),
-                    BotCommand(command="lastsms", description="Last forwarded SMS"),
+                    BotCommand(command="admin", description="🛠 Admin commands"),
+                    BotCommand(command="stats", description="📊 Stats"),
+                    BotCommand(command="addbalance", description="➕ Add / remove balance"),
+                    BotCommand(command="resetfree", description="🧹 Remove free balances"),
+                    BotCommand(command="ban", description="🚫 Block a player"),
+                    BotCommand(command="unban", description="✅ Unblock a player"),
+                    BotCommand(command="broadcast", description="📢 Message all players"),
+                    BotCommand(command="lastsms", description="📩 Last forwarded SMS"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
