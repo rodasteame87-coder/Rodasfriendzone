@@ -2,6 +2,7 @@ import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string
 from pathlib import Path
 from urllib.parse import parse_qsl, quote
 import asyncpg
+import edge_tts
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, BaseMiddleware
 from aiogram.filters import CommandStart, Command, CommandObject
@@ -259,6 +260,8 @@ async def load_state():
                 req_counter[0] = r["v"]
             elif r["k"] == "game_counter":
                 game_counter[0] = r["v"]
+            elif r["k"].startswith("snd:") and r["v"] == 1:
+                sound_on.add(int(r["k"][4:]))
         # players who had paid for a cartela when the bot stopped: give it back
         stuck = await c.fetch("SELECT uid, bet, used FROM room_players")
     for r in stuck:
@@ -275,9 +278,7 @@ async def wait_ready(request, handler):
     if not ready and request.path.startswith("/api/"):
         return web.json_response({"error": "starting"}, status=503)
     return await handler(request)
-
-
-# ---------- winning patterns (same 8 as the picture) ----------
+  # ---------- winning patterns (same 8 as the picture) ----------
 PATTERNS = (
     [[(r, c) for c in range(5)] for r in range(5)]            # horizontal lines
     + [[(r, c) for r in range(5)] for c in range(5)]          # vertical lines
@@ -706,6 +707,82 @@ async def api_sms_hook(req):
     save_bank(rec)
     await on_bank_sms(rec)
     return web.json_response({"ok": True})
+  # ---------- AMHARIC NUMBER SOUND (each player chooses) ----------
+sound_on = set()          # players who turned sound ON (saved in the database)
+audio_ids = {}            # number -> Telegram file_id (fast resend)
+AUDIO_DIR = Path(__file__).parent / "audio"
+VOICE = "am-ET-AmehaNeural"
+ONES = ["", "አንድ", "ሁለት", "ሦስት", "አራት", "አምስት", "ስድስት", "ሰባት", "ስምንት", "ዘጠኝ"]
+TENS = {2: "ሃያ", 3: "ሠላሳ", 4: "አርባ", 5: "ሃምሳ", 6: "ስድሳ", 7: "ሰባ"}
+LETTER_SOUND = {"B": "ቢ", "I": "አይ", "N": "ኤን", "G": "ጂ", "O": "ኦ"}
+
+
+def amharic(n):
+    if n == 10: return "አስር"
+    if n < 10: return ONES[n]
+    if n < 20: return "አስራ " + ONES[n - 10]
+    t, o = divmod(n, 10)
+    return (TENS[t] + " " + ONES[o]).strip()
+
+
+def call_letter(n):
+    return "BINGO"[(n - 1) // 15]
+
+
+async def make_audio(n):
+    AUDIO_DIR.mkdir(exist_ok=True)
+    path = AUDIO_DIR / f"{n}.mp3"
+    if not path.exists():
+        text = f"{LETTER_SOUND[call_letter(n)]}፣ {amharic(n)}"
+        await edge_tts.Communicate(text, VOICE).save(str(path))
+    return path
+
+
+async def send_call_audio(n, uids):
+    targets = [u for u in uids if u in sound_on]
+    if not targets:
+        return
+    try:
+        src = audio_ids.get(n) or FSInputFile(await make_audio(n))
+    except Exception as e:
+        print("audio failed:", repr(e))
+        return
+    for uid in targets:
+        try:
+            msg = await BOT.send_voice(uid, src, caption=f"{call_letter(n)}{n}")
+            audio_ids[n] = msg.voice.file_id
+            src = audio_ids[n]
+        except Exception:
+            pass
+
+
+def sound_kb(uid):
+    text = "🔊 Sound ON" if uid in sound_on else "🔇 Sound OFF"
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=text, callback_data="snd:toggle")]])
+
+
+@dp.message(Command("sound"))
+async def cmd_sound(m: Message):
+    uid = ensure(m.from_user)
+    await m.answer("🔊 የአማርኛ ቁጥር ጥሪ ድምጽ / Amharic number call sound\n"
+                   "Tap the button to turn it ON or OFF.",
+                   reply_markup=sound_kb(uid))
+
+
+@dp.callback_query(F.data == "snd:toggle")
+async def sound_toggle(cb: CallbackQuery):
+    uid = ensure(cb.from_user)
+    if uid in sound_on:
+        sound_on.discard(uid)
+    else:
+        sound_on.add(uid)
+    _save_counter(f"snd:{uid}", 1 if uid in sound_on else 0)
+    try:
+        await cb.message.edit_reply_markup(reply_markup=sound_kb(uid))
+    except Exception:
+        pass
+    await cb.answer("Sound ON 🔊" if uid in sound_on else "Sound OFF 🔇")
 
 
 # ---------- background jobs ----------
@@ -759,6 +836,10 @@ async def run_round(g):
         if g["phase"] != "playing" or not g["players"]:
             break
         g["called"].append(n)
+        if sound_on:                       # Amharic voice for players who turned sound ON
+            t = asyncio.create_task(send_call_audio(n, list(g["players"])))
+            bg_tasks.add(t)
+            t.add_done_callback(bg_tasks.discard)
 
         # a player who is AWAY (app closed) cannot press BINGO: claim it for them
         now = time.time()
@@ -1005,9 +1086,7 @@ async def api_leave(req):
     if user:
         remove_player(user["id"])
     return web.json_response({"ok": True})
-
-
-# ---------- bot commands ----------
+  # ---------- bot commands ----------
 def ensure(u):
     new = u.id not in wallets
     wallets.setdefault(u.id, START_BALANCE)
@@ -1595,9 +1674,7 @@ async def menu_buttons(cb: CallbackQuery):
         await cmd_invite(m)
     elif action == "support":
         await cmd_support(m)
-
-
-# ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
+      # ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
 def is_admin(m: Message):
     return bool(ADMIN_ID) and m.from_user.id == ADMIN_ID
 
@@ -2008,6 +2085,7 @@ async def main():
         BotCommand(command="withdraw", description="💸 Withdraw"),
         BotCommand(command="transactions", description="📜 My Transactions"),
         BotCommand(command="invite", description="👥 Invite Friends"),
+        BotCommand(command="sound", description="🔊 Sound ON/OFF"),
         BotCommand(command="support", description="📞 Support"),
     ]
     await bot.set_my_commands(public_commands)
@@ -2031,3 +2109,4 @@ async def main():
 
 
 asyncio.run(main())
+  
