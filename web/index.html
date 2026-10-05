@@ -322,6 +322,9 @@
       <table><thead><tr><th>B</th><th>I</th><th>N</th><th>G</th><th>O</th></tr></thead><tbody id="callsBody"></tbody></table>
     </div>
     <div class="right">
+      <div class="panel auto">🔊 Sound
+        <label class="switch"><input type="checkbox" id="snd"><span></span></label>
+      </div>
       <div class="panel current"><h3 id="ballTitle">Current Call</h3><div class="ball" id="ball">–</div></div>
       <div class="panel lastbox"><div class="big" id="lastCall">–</div><div id="recent"></div></div>
       <div class="panel auto">Auto
@@ -620,6 +623,7 @@ function render(){
   // calls
   st.called = (S.called||[]).slice();
   const last = paintCalls();
+  playNew();
 
   // my card
   if(S.myCard){
@@ -733,6 +737,37 @@ $("winBtn").onclick=async()=>{
 };
 $("leaveBtn").onclick=async()=>{ await post("/leave",{}); await sync(); show("lobby"); };
 $("refreshBtn").onclick=sync;
+
+/* ---------- Amharic call sound ---------- */
+let sndOn = false, lastSpoken = -1, sndKey = "";
+try { sndOn = localStorage.getItem("snd") === "1"; } catch (e) {}
+$("snd").checked = sndOn;
+
+function speak(n){
+  try {
+    const a = new Audio("/audio/" + n + ".mp3");
+    a.play().catch(() => {});
+  } catch (e) {}
+}
+
+$("snd").onchange = () => {
+  sndOn = $("snd").checked;
+  try { localStorage.setItem("snd", sndOn ? "1" : "0"); } catch (e) {}
+  if (sndOn && st.called.length) speak(st.called[st.called.length - 1]);
+  toast(sndOn ? "Sound ON 🔊" : "Sound OFF 🔇");
+};
+
+function playNew(){
+  const key = S.room + ":" + S.round;
+  const len = st.called.length;
+  if (key !== sndKey) { sndKey = key; lastSpoken = len; return; }
+  if (len > lastSpoken) {
+    if (sndOn && screen === "game" && S.phase === "playing") {
+      speak(st.called[len - 1]);
+    }
+    lastSpoken = len;
+  }
+}
 
 /* ---------- start ---------- */
 buildCalls();
