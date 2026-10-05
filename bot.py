@@ -29,6 +29,8 @@ CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
 REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off)
 
+BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
+
 BETS = [10, 20, 50, 100]   # room prices (birr per cartela)
 CALL_EVERY = 4             # seconds between calls
 LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
@@ -1076,7 +1078,8 @@ PHONE_TEXT = ("📱 ለመቀጠል ስልክ ቁጥርዎን ያጋሩ\n\n"
               "ከታች ያለውን «ስልክ ቁጥር ያጋሩ» ቁልፍ ይንኩ።\n\n"
               "To continue, tap the button below to share your phone number.")
 WELCOME_TEXT = ("👋 እንኳን በደህና መጡ! ቢንጎ ለመጫወት ዝግጁ ነዎት?\n\n"
-                "Welcome! Ready to play Bingo?")
+                "Welcome! Ready to play Bingo?\n\n"
+                f"{BRAND}")
 
 
 def start_kb():
@@ -1177,7 +1180,7 @@ async def cmd_balance(m: Message):
         "----------------------------------------\n"
         f"<b>Total Balance: {bal:.2f} ETB</b>\n"
         "----------------------------------------"
-        "</blockquote>" + html.escape(extra),
+        "</blockquote>" + html.escape(extra + "\n\n" + BRAND),
         parse_mode="HTML")
 
 
@@ -1421,7 +1424,8 @@ async def cmd_instruction(m: Message):
         "a win is added to your balance automatically.\n\n"
         "💸 Withdrawing: play your deposit amount once (every bet counts, win or lose). "
         "Your winnings are yours to withdraw. Use /balance to see your progress.\n"
-        "ገንዘብ ለማውጣት ያስገቡትን ገንዘብ አንድ ጊዜ ይጫወቱ። ያሸነፉት ገንዘብ የእርስዎ ነው።")
+        "ገንዘብ ለማውጣት ያስገቡትን ገንዘብ አንድ ጊዜ ይጫወቱ። ያሸነፉት ገንዘብ የእርስዎ ነው።\n\n"
+        + BRAND)
 
 
 @dp.message(Command("invite"))
@@ -1941,6 +1945,14 @@ async def main():
     asyncio.create_task(reaper())
 
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # branding on the bot's profile page
+    try:
+        await bot.set_my_description(f"🎯 Rodas Friend Zone Bingo\n\n{BRAND}")
+        await bot.set_my_short_description(BRAND)
+    except Exception as e:
+        print("could not set bot description:", repr(e))
+
     public_commands = [
         BotCommand(command="start", description="Start the bot"),
         BotCommand(command="play", description="🎮 Play Bingo"),
