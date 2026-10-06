@@ -630,12 +630,20 @@ async def approve_deposit(bot, uid, amount, tokens=()):
                          f"{bonus} ብር ቦነስ አግኝተዋል!")
             except Exception:
                 pass
+    # CHANGED: success message now looks like the "Deposit successful!" card
     try:
         await bot.send_message(
-            uid, f"✅ Your deposit of {amount} birr was approved.\n\n"
-                 f"ℹ️ ገንዘብ ከማውጣትዎ በፊት {added} ብር ({fmt_x(mult)}) መጫወት አለብዎት።\n"
-                 f"Play {added} birr ({fmt_x(mult)}) before withdrawing.\n\n"
-                 + progress_text(uid))
+            uid,
+            "✅ <b>Deposit successful!</b>\n"
+            "<blockquote>"
+            f"Your wallet has been credited with {amount:.2f} ETB\n"
+            f"Your wallet balance: {wallets[uid]:.2f}"
+            "</blockquote>\n"
+            "🙏 Thank you for choosing us! ❤️\n\n"
+            f"ℹ️ ገንዘብ ከማውጣትዎ በፊት {added} ብር ({fmt_x(mult)}) መጫወት አለብዎት።\n"
+            f"Play {added} birr ({fmt_x(mult)}) before withdrawing.\n\n"
+            + html.escape(progress_text(uid)),
+            parse_mode="HTML")
     except Exception:
         pass
 
@@ -1561,7 +1569,7 @@ async def cmd_transfer(m: Message, command: CommandObject):
             pass
 
 
-# NEW: /instruction and /instructions both work (the menu uses /instructions)
+# /instruction and /instructions both work (the menu uses /instructions)
 @dp.message(Command("instruction", "instructions"))
 async def cmd_instruction(m: Message):
     await m.answer(
@@ -1662,7 +1670,7 @@ async def send_patterns(m: Message):
     await m.answer(WIN_PATTERNS_TEXT)
 
 
-# NEW: the /winning_patterns command (shows in the menu list)
+# the /winning_patterns command (shows in the menu list)
 @dp.message(Command("winning_patterns"))
 async def cmd_winning_patterns(m: Message):
     ensure(m.from_user)
@@ -1995,6 +2003,10 @@ async def sms_deposit(m: Message):
         await m.answer("ይህ መልዕክት ቀደም ብሎ ተልኳል። / This message was already sent.")
         return
 
+    # CHANGED: tell the player right away that the request was received
+    await m.answer("Deposit request received. Your top-up will be done in a minute.\n"
+                   "ጥያቄዎ ደርሶናል። በአንድ ደቂቃ ውስጥ ገንዘቡ ይገባል።")
+
     # 1) Automatic: the same payment SMS already arrived from YOUR phone
     rec = find_bank_sms(amount, tokens)
     if rec:
@@ -2122,7 +2134,6 @@ async def main():
     except Exception as e:
         print("could not set bot description:", repr(e))
 
-    # NEW menu: Winning Patterns + Game Instructions added (same order as Jutebingo)
     public_commands = [
         BotCommand(command="start", description="Start the bot"),
         BotCommand(command="play", description="🎮 Play Bingo"),
