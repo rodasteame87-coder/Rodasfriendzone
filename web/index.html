@@ -743,7 +743,6 @@ $("auto").onchange=()=>{
 };
 $("winBtn").onclick=async()=>{
   if(S && S.dq) return toast("Your cartela is banned this round");
-  if(!hasBingo()) return toast("No bingo yet — keep playing");
   const r=await post("/bingo",{});
   if(r.disq) toast("🚫 False bingo — your cartela is banned this round");
   else toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
