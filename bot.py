@@ -32,6 +32,17 @@ REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 =
 
 BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
 
+# shown in the empty chat before a player presses Start (max 512 characters)
+BOT_DESCRIPTION = (
+    "🎯 Rodas Friend Zone Bingo\n"
+    "🎉 Fair & exciting bingo games\n"
+    "💰 Clear prizes & rules\n"
+    "🔒 Secure & simple\n"
+    "🤝 Support available\n"
+    "🔞 18+ Play responsibly")
+# the "Bio" on the bot's profile page (max 120 characters)
+BOT_SHORT = "© 2026 Rodas Friend Zone Bingo • Play with Friends 🤝"
+
 # ---------- WAGERING (turnover) RULE ----------
 FIRST_DEPOSIT_TURNOVER = 1.0   # a player's FIRST deposit must be played 1x before withdrawing
 NEXT_DEPOSIT_TURNOVER = 0.5    # every deposit after the first must be played 0.5x
@@ -2253,8 +2264,8 @@ async def main():
 
     # branding on the bot's profile page
     try:
-        await bot.set_my_description(f"🎯 Rodas Friend Zone Bingo\n\n{BRAND}")
-        await bot.set_my_short_description(BRAND)
+        await bot.set_my_description(BOT_DESCRIPTION)
+        await bot.set_my_short_description(BOT_SHORT)
     except Exception as e:
         print("could not set bot description:", repr(e))
 
