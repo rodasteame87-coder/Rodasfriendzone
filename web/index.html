@@ -175,6 +175,10 @@
   #toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:12}
   #toast.show{opacity:1}
 
+  /* banned cartela (false bingo) */
+  #dqBanner{background:#e8212f;color:#fff;text-align:center;font-weight:700;padding:10px;border-radius:10px;margin-bottom:8px;font-size:14px;line-height:1.4}
+  .winb:disabled{background:#9ca3af;opacity:.7;cursor:not-allowed}
+
   /* winner / loser card */
   #win{position:fixed;inset:0;background:rgba(20,5,30,.6);z-index:9;overflow-y:auto;padding:16px 12px;display:flex;align-items:flex-start;justify-content:center}
   .wcard{background:#202938;color:#fff;border-radius:16px;padding:22px 14px 18px;width:100%;max-width:380px;margin:auto;text-align:center}
@@ -308,6 +312,7 @@
     <div class="stat"><small>Bet</small><b id="gBet">10</b></div>
     <div class="stat"><small>Call</small><b id="gCall">0</b></div>
   </div>
+  <div id="dqBanner" hidden>🚫 ካርታዎ ታግዷል / Your cartela is banned from this round. The game continues without you.</div>
   <details class="panel" style="padding:10px 14px;margin-bottom:8px">
     <summary style="font-weight:700;color:var(--title)">🏆 Winning Patterns</summary>
     <div style="font-size:13px;line-height:1.7;margin-top:6px">
@@ -453,6 +458,7 @@ function autoMark(){
 /* Auto ON: press BINGO WIN for the player as soon as a pattern is complete */
 async function autoClaim(){
   if(!S || S.error || !$("auto").checked) return;
+  if(S.dq) return;                           // banned this round: never claim
   if(S.phase!=="playing" || !st.card) return;
   const key = S.room+":"+S.round;
   if(claimedKey===key || !hasBingo()) return;
@@ -460,6 +466,7 @@ async function autoClaim(){
   try{
     const r = await post("/bingo",{});
     if(r.ok) toast("Bingo claimed automatically! 🎉");
+    else if(r.disq) toast("🚫 False bingo — your cartela is banned this round");
     else claimedKey = "";                    // not accepted, may try again
   }catch(e){ claimedKey = ""; }
   sync();
@@ -650,6 +657,11 @@ function render(){
       : "🏆 "+S.winner+" won "+S.prize+" birr");
   }
 
+  // banned cartela: show the banner and lock the BINGO button
+  const dq = !!S.dq && S.phase === "playing";
+  $("dqBanner").hidden = !dq;
+  $("winBtn").disabled = dq;
+
   drawWin();
   autoClaim();
 }
@@ -730,9 +742,11 @@ $("auto").onchange=()=>{
   autoClaim();
 };
 $("winBtn").onclick=async()=>{
+  if(S && S.dq) return toast("Your cartela is banned this round");
   if(!hasBingo()) return toast("No bingo yet — keep playing");
   const r=await post("/bingo",{});
-  toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
+  if(r.disq) toast("🚫 False bingo — your cartela is banned this round");
+  else toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
   sync();
 };
 $("leaveBtn").onclick=async()=>{ await post("/leave",{}); await sync(); show("lobby"); };
