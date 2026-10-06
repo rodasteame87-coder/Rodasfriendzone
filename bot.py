@@ -1499,7 +1499,9 @@ async def submit_withdraw(m: Message, uid, amount, account, method):
     log(uid, "withdraw", -amount, f"Withdraw request · {method}")
     req_counter[0] += 1
     rid = req_counter[0]
-    pending[rid] = {"type": "withdraw", "uid": uid, "amount": amount}
+    # method + account are saved so the player gets a detailed message when you press Paid
+    pending[rid] = {"type": "withdraw", "uid": uid, "amount": amount,
+                    "method": method, "account": account}
     save_pending(rid)                            # saved in the same transaction as the hold
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Paid", callback_data=f"ok:{rid}"),
@@ -2176,7 +2178,22 @@ async def admin_buttons(cb: CallbackQuery):
             note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
     else:
         if approved:
-            note = f"✅ Your withdrawal of {amount} birr was paid."
+            method = req.get("method") or "—"
+            acct = str(req.get("account") or "—")
+            ben = names.get(uid, "Player")
+            if method == "CBE":                    # CBE: "number Full Name"
+                parts = acct.split(maxsplit=1)
+                acct = parts[0]
+                if len(parts) > 1:
+                    ben = parts[1]
+            note = ("✅ Withdrawal Approved\n"
+                    f"Request ID: #{rid}\n\n"
+                    f"Amount: {amount:.2f}\n"
+                    f"Provider: {method.upper()}\n"
+                    f"Account: {acct}\n"
+                    f"Beneficiary: {ben}\n"
+                    "Status: Approved\n\n"
+                    "ገንዘቡ ተልኳል። / Your money has been sent.")
         else:
             wallets[uid] = wallets.get(uid, 0) + amount        # give it back
             log(uid, "refund", amount, "Withdraw rejected")
