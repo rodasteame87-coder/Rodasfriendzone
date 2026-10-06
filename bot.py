@@ -44,7 +44,7 @@ CARD_COUNT = 100
 MIN_PLAYERS = 1            # a round needs at least 1 player (testing)
 IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
-MIN_DEPOSIT = 10
+MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
 MIN_WITHDRAW = 100
 WIN_SCREEN_SECONDS = 10    # how long the winner / loser card stays
 AUTH_MAX_AGE = 86400       # Telegram initData older than this (seconds) is rejected
@@ -1235,6 +1235,7 @@ def to_amount(text):
 def deposit_menu_text(uid):
     return ("እባክዎ የሚፈልጉትን የመክፈያ አማራጭ ይምረጡ 👇\n\n"
             "Please select the top-up option you wish to use:\n\n"
+            f"💵 ዝቅተኛው ማስገቢያ {MIN_DEPOSIT} ብር ነው። / Minimum deposit: {MIN_DEPOSIT} birr.\n\n"
             + rule_text(uid))
 
 
@@ -1433,7 +1434,7 @@ async def cmd_deposit(m: Message, command: CommandObject):
         await m.answer(deposit_menu_text(uid), reply_markup=deposit_kb())
         return
     if amount < MIN_DEPOSIT:
-        await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
+        await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
         return
     if not ADMIN_ID:
         await m.answer(f"Deposits are handled by support: {SUPPORT}")
@@ -2101,7 +2102,7 @@ async def sms_deposit(m: Message):
                        "/deposit <amount> <transaction number>")
         return
     if amount < MIN_DEPOSIT:
-        await m.answer(f"Minimum deposit is {MIN_DEPOSIT} birr.")
+        await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
         return
     tokens = sms_tokens(text)
     if any(("tok:" + t) in used_sms for t in tokens):
