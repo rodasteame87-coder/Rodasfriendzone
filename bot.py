@@ -1769,9 +1769,11 @@ async def cmd_transactions(m: Message):
     uid = ensure(m.from_user)
     if await need_phone(m):
         return
-    rows = history.get(uid, [])[:10]
+    # only deposits and withdrawals are shown here
+    rows = [t for t in history.get(uid, [])
+            if t.get("k") in ("deposit", "withdraw")][:10]
     if not rows:
-        await m.answer("📜 ምንም ግብይት የለም።\nNo transactions yet.")
+        await m.answer("📜 ምንም ግብይት የለም።\nNo deposits or withdrawals yet.")
         return
     lines = []
     for t in rows:
@@ -1779,7 +1781,7 @@ async def cmd_transactions(m: Message):
         sign = "+" if t["a"] > 0 else ""
         lines.append(f"{TX_ICONS.get(t['k'], '•')} {sign}{t['a']} ETB · "
                      f"{html.escape(t.get('n') or t['k'])}\n🕒 {when}")
-    await m.answer("📜 <b>My Transactions</b> (last 10)\n\n" + "\n\n".join(lines),
+    await m.answer("📜 <b>My Transactions</b> · Deposits & Withdrawals (last 10)\n\n" + "\n\n".join(lines),
                    parse_mode="HTML")
 
 
