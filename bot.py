@@ -428,8 +428,7 @@ def progress_text(uid):
         return (f"🎯 ተጫውተዋል / Played: {t['played']} / {t['required']} birr\n"
                 f"⏳ ከተቀማጭዎ {t['left']} ብር መጫወት ይቀራል\n"
                 f"Play {t['left']} more birr to unlock your deposit.")
-    return (f"🎯 ተጫውተዋል / Played: {t['played']} / {t['required']} birr\n"
-            "✅ ገንዘብ ማውጣት ይችላሉ። / Withdrawals unlocked.")
+    return ""                  # requirement finished: show nothing
 
 
 def turnover_msg(uid):
