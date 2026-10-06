@@ -1561,7 +1561,8 @@ async def cmd_transfer(m: Message, command: CommandObject):
             pass
 
 
-@dp.message(Command("instruction"))
+# NEW: /instruction and /instructions both work (the menu uses /instructions)
+@dp.message(Command("instruction", "instructions"))
 async def cmd_instruction(m: Message):
     await m.answer(
         "📖 How to play\n\n"
@@ -1659,6 +1660,13 @@ async def send_patterns(m: Message):
     except Exception as e:
         print("patterns picture failed:", repr(e))
     await m.answer(WIN_PATTERNS_TEXT)
+
+
+# NEW: the /winning_patterns command (shows in the menu list)
+@dp.message(Command("winning_patterns"))
+async def cmd_winning_patterns(m: Message):
+    ensure(m.from_user)
+    await send_patterns(m)
 
 
 TX_ICONS = {"deposit": "💵", "withdraw": "💸", "bet": "🎯", "win": "🏆",
@@ -2114,9 +2122,12 @@ async def main():
     except Exception as e:
         print("could not set bot description:", repr(e))
 
+    # NEW menu: Winning Patterns + Game Instructions added (same order as Jutebingo)
     public_commands = [
         BotCommand(command="start", description="Start the bot"),
         BotCommand(command="play", description="🎮 Play Bingo"),
+        BotCommand(command="winning_patterns", description="🏆 Winning Patterns"),
+        BotCommand(command="instructions", description="📝 Game Instructions"),
         BotCommand(command="balance", description="💰 Check Balance"),
         BotCommand(command="deposit", description="💵 Deposit"),
         BotCommand(command="withdraw", description="💸 Withdraw"),
