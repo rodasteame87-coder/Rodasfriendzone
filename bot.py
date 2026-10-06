@@ -58,7 +58,7 @@ rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None,
              "seq": [], "secret": "", "hash": "",
              "wcells": [], "wname": "", "finish_at": 0,
-             "winners": [], "wlist": [], "share": 0}
+             "winners": [], "wlist": [], "share": 0, "dq": set()}
          for b in BETS}
 wallets, names, seen = {}, {}, {}                  # wallets = real, withdrawable-type money
 bonus = {}                                         # PLAY-ONLY bonus money (never withdrawn / transferred)
@@ -544,7 +544,7 @@ def award_winners(g):
     automatically for a player who is away.
     Prizes always go to the cash wallet (withdrawable), even if the stake was bonus."""
     firsts = {u: first_bingo_call(make_card(no), g["called"])
-              for u, no in g["players"].items()}
+              for u, no in g["players"].items() if u not in g["dq"]}
     firsts = {u: i for u, i in firsts.items() if i is not None}
     if not firsts:
         return []
@@ -882,7 +882,7 @@ async def run_round(g):
              round=g["round"] + 1, deadline=None,
              seq=[], secret="", hash="",
              wcells=[], wname="", finish_at=0,
-             winners=[], wlist=[], share=0)
+             winners=[], wlist=[], share=0, dq=set())
 
     # wait for the first player, then count down
     while g["deadline"] is None or time.time() < g["deadline"]:
@@ -908,7 +908,8 @@ async def run_round(g):
     g["phase"] = "playing"
     g["prize"] = int(len(g["players"]) * g["bet"] * 0.8)
     for n in g["seq"]:
-        if g["phase"] != "playing" or not g["players"]:
+        if (g["phase"] != "playing" or not g["players"]
+                or all(u in g["dq"] for u in g["players"])):
             break
         g["called"].append(n)
         if sound_on:                       # Amharic voice for players who turned sound ON
@@ -921,6 +922,7 @@ async def run_round(g):
         called_now = set(g["called"])
         away_wins = [u for u, no in g["players"].items()
                      if now - seen.get(u, 0) > IDLE_KICK
+                     and u not in g["dq"]
                      and has_bingo(make_card(no), called_now)]
         if away_wins:
             winners = award_winners(g)
@@ -1016,6 +1018,7 @@ async def api_state(req):
         "wName": g.get("wname", ""),
         "left": finish_left(g),
         "isWinner": uid in g.get("winners", []),
+        "dq": uid in g["dq"],
         "room": g["bet"], "inRoom": mine["bet"] if mine else None,
         "rooms": [{"bet": r["bet"], "phase": r["phase"],
                    "players": len(r["players"]),
@@ -1147,6 +1150,18 @@ async def api_join(req):
     return web.json_response({"ok": True})
 
 
+async def notify_false_bingo(uid, card_no, bet):
+    try:
+        await BOT.send_message(
+            uid,
+            "🚫 ቢንጎ አላሸነፉም! ካርታዎ #" + str(card_no) + " ከዚህ ጨዋታ ታግዷል።\n"
+            "You pressed BINGO but you did not win. "
+            f"Your cartela #{card_no} is banned from this game. "
+            "The game continues without you.")
+    except Exception:
+        pass
+
+
 async def api_bingo(req):
     body = await req.json()
     user = verify(body.get("initData", ""))
@@ -1163,12 +1178,20 @@ async def api_bingo(req):
         return web.json_response({"ok": True})
     if g["phase"] != "playing":
         return web.json_response({"ok": False})
+    if uid in g["dq"]:                         # already banned in this round
+        return web.json_response({"ok": False, "disq": True})
     called = set(g["called"])
     card = make_card(g["players"][uid])
     if has_bingo(card, called):
         award_winners(g)
         return web.json_response({"ok": True})
-    return web.json_response({"ok": False})
+    # FALSE BINGO: the cartela is closed for the rest of this round.
+    # The stake stays in the prize pool and the game continues without him.
+    g["dq"].add(uid)
+    t = asyncio.create_task(notify_false_bingo(uid, g["players"][uid], g["bet"]))
+    bg_tasks.add(t)
+    t.add_done_callback(bg_tasks.discard)
+    return web.json_response({"ok": False, "disq": True})
 
 
 async def api_leave(req):
