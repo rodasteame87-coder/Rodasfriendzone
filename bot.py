@@ -94,6 +94,7 @@ banned = set()                          # blocked players
 bc_pending = {}                         # admin's broadcast waiting for confirmation
 rf_pending = {}                         # admin's /resetfree list waiting for confirmation
 bg_tasks = set()                        # keeps background tasks alive
+auto_pref = {}                          # uid -> True if the player has "Auto" switched ON in the web app
 
 dp = Dispatcher()
 
@@ -325,26 +326,22 @@ PATTERN_NAMES = (["Horizontal line"] * 5 + ["Vertical line"] * 5
 
 
 def has_bingo(card, called):
+    """Any complete pattern at all (old or new)."""
     hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
     return any(all(hit(r, c) for r, c in p) for p in PATTERNS)
 
 
-def winning_cells(card, called):
-    """Name + cells of the first completed pattern (winner screen)."""
+def fresh_pattern(card, called_list):
+    """A pattern completed by the LATEST called number: (name, cells) or None.
+    A pattern that was already complete before the latest call is 'passed'
+    and can no longer win; only patterns that include the latest number count."""
+    if not called_list:
+        return None
+    called, last = set(called_list), called_list[-1]
     hit = lambda r, c: card[r][c] == 0 or card[r][c] in called
     for p, nm in zip(PATTERNS, PATTERN_NAMES):
-        if all(hit(r, c) for r, c in p):
+        if any(card[r][c] == last for r, c in p) and all(hit(r, c) for r, c in p):
             return nm, [list(x) for x in p]
-    return "", []
-
-
-def first_bingo_call(card, called_list):
-    """Index of the call where this card first got a bingo (None if never)."""
-    seen_nums = set()
-    for i, n in enumerate(called_list):
-        seen_nums.add(n)
-        if has_bingo(card, seen_nums):
-            return i
     return None
 
 
@@ -559,19 +556,21 @@ def summ(r, uid):
 
 def award_winners(g):
     """Finish the round and pay the winner(s).
-    The earliest call that gave anybody a bingo decides the winners:
-    only players who finished on that SAME call share the prize.
-    Used both when a player presses BINGO and when a bingo is claimed
-    automatically for a player who is away.
+    Rule: only a pattern completed by the LATEST called number can win.
+    Every (not banned) player whose card completed a pattern on this same
+    call shares the prize equally. A pattern completed on an earlier call
+    has 'passed' and can no longer win.
     Prizes always go to the cash wallet (withdrawable), even if the stake was bonus."""
-    firsts = {u: first_bingo_call(make_card(no), g["called"])
-              for u, no in g["players"].items() if u not in g["dq"]}
-    firsts = {u: i for u, i in firsts.items() if i is not None}
-    if not firsts:
+    hits = {}
+    for u, no in g["players"].items():
+        if u in g["dq"]:
+            continue
+        fp = fresh_pattern(make_card(no), g["called"])
+        if fp:
+            hits[u] = fp
+    if not hits:
         return []
-    best = min(firsts.values())
-    winners = [u for u, i in firsts.items() if i == best]
-    wcalled = set(g["called"][:best + 1])
+    winners = list(hits)
     share = g["prize"] // len(winners)
     shared = len(winners) > 1
     g["phase"] = "finished"
@@ -581,7 +580,7 @@ def award_winners(g):
     g["wlist"] = []
     for u in winners:
         no = g["players"][u]
-        nm, cells = winning_cells(make_card(no), wcalled)
+        nm, cells = hits[u]
         g["wlist"].append({"uid": u, "name": names.get(u, "Player"),
                            "board": no, "pat": nm, "cells": cells})
         wallets[u] = wallets.get(u, 0) + share
@@ -779,7 +778,7 @@ async def api_sms_hook(req):
     return web.json_response({"ok": True})
 
 
-# ---------- AMHARIC NUMBER SOUND (each player chooses) ----------
+# ---------- AMHARIC NUMBER SOUND (each player chooses, button in the start menu) ----------
 sound_on = set()          # players who turned sound ON (saved in the database)
 audio_ids = {}            # number -> Telegram file_id (fast resend)
 AUDIO_DIR = Path(__file__).parent / "audio"
@@ -855,35 +854,6 @@ async def send_call_audio(n, uids):
             pass
 
 
-def sound_kb(uid):
-    text = "🔊 Sound ON" if uid in sound_on else "🔇 Sound OFF"
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=text, callback_data="snd:toggle")]])
-
-
-@dp.message(Command("sound"))
-async def cmd_sound(m: Message):
-    uid = ensure(m.from_user)
-    await m.answer("🔊 የአማርኛ ቁጥር ጥሪ ድምጽ / Amharic number call sound\n"
-                   "Tap the button to turn it ON or OFF.",
-                   reply_markup=sound_kb(uid))
-
-
-@dp.callback_query(F.data == "snd:toggle")
-async def sound_toggle(cb: CallbackQuery):
-    uid = ensure(cb.from_user)
-    if uid in sound_on:
-        sound_on.discard(uid)
-    else:
-        sound_on.add(uid)
-    _save_counter(f"snd:{uid}", 1 if uid in sound_on else 0)
-    try:
-        await cb.message.edit_reply_markup(reply_markup=sound_kb(uid))
-    except Exception:
-        pass
-    await cb.answer("Sound ON 🔊" if uid in sound_on else "Sound OFF 🔇")
-
-
 # ---------- background jobs ----------
 async def reaper():
     """Remove players who closed the app without pressing LEAVE.
@@ -941,17 +911,20 @@ async def run_round(g):
             bg_tasks.add(t)
             t.add_done_callback(bg_tasks.discard)
 
-        # a player who is AWAY (app closed) cannot press BINGO: claim it for them
+        # The server claims BINGO right on the call for two kinds of players:
+        #   - players with Auto ON in the web app (they never miss a call)
+        #   - players who are AWAY (app closed)
+        # Manual players must press BINGO themselves before the next number is called.
         now = time.time()
-        called_now = set(g["called"])
-        away_wins = [u for u, no in g["players"].items()
-                     if now - seen.get(u, 0) > IDLE_KICK
-                     and u not in g["dq"]
-                     and has_bingo(make_card(no), called_now)]
-        if away_wins:
+        away = {u for u in g["players"] if now - seen.get(u, 0) > IDLE_KICK}
+        claimers = [u for u, no in g["players"].items()
+                    if u not in g["dq"]
+                    and (u in away or auto_pref.get(u))
+                    and fresh_pattern(make_card(no), g["called"])]
+        if claimers:
             winners = award_winners(g)
             for u in winners:
-                if u in away_wins:
+                if u in away:
                     try:
                         await BOT.send_message(
                             u, f"🏆 ካርታዎ አሸንፏል! {g['share']} ብር ወደ ሂሳብዎ ገብቷል።\n"
@@ -965,7 +938,7 @@ async def run_round(g):
     g["phase"] = "finished"
     if not g["winners"]:                   # nobody won: give bets back, except cheaters
         for uid in list(g["players"]):
-            if uid in g["dq"]:             # banned for false bingo: no refund
+            if uid in g["dq"]:             # banned for false / late bingo: no refund
                 continue
             refund_stake(uid, g["bet"], f"Room {g['bet']} refund (no winner)")
             try:
@@ -1023,6 +996,8 @@ async def api_state(req):
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
+    if "auto" in req.query:                      # the web app tells us if Auto is ON
+        auto_pref[uid] = req.query.get("auto") == "1"
     mine = room_of(uid)
     try:
         asked = rooms.get(int(req.query.get("room", 0)))
@@ -1189,14 +1164,20 @@ async def api_join(req):
     return web.json_response({"ok": True})
 
 
-async def notify_false_bingo(uid, card_no, bet):
+async def notify_false_bingo(uid, card_no, bet, late=False):
     try:
-        await BOT.send_message(
-            uid,
-            "🚫 ቢንጎ አላሸነፉም! ካርታዎ #" + str(card_no) + " ከዚህ ጨዋታ ታግዷል።\n"
-            "You pressed BINGO but you did not win. "
-            f"Your cartela #{card_no} is banned from this game. "
-            "The game continues without you.")
+        if late:
+            msg = ("🚫 ቢንጎ ዘግይተው ነው የነኩት! ቁጥሩ ቀድሞ አልፏል። ካርታዎ #" + str(card_no) +
+                   " ከዚህ ጨዋታ ታግዷል።\n"
+                   "You pressed BINGO too late: that number had already passed. "
+                   f"Your cartela #{card_no} is banned from this game. "
+                   "The game continues without you.")
+        else:
+            msg = ("🚫 ቢንጎ አላሸነፉም! ካርታዎ #" + str(card_no) + " ከዚህ ጨዋታ ታግዷል።\n"
+                   "You pressed BINGO but you did not win. "
+                   f"Your cartela #{card_no} is banned from this game. "
+                   "The game continues without you.")
+        await BOT.send_message(uid, msg)
     except Exception:
         pass
 
@@ -1219,18 +1200,24 @@ async def api_bingo(req):
         return web.json_response({"ok": False})
     if uid in g["dq"]:                         # already banned in this round
         return web.json_response({"ok": False, "disq": True})
-    called = set(g["called"])
     card = make_card(g["players"][uid])
-    if has_bingo(card, called):
+    # VALID press: a pattern completed by the latest called number.
+    # Everybody else whose card completed on this same call shares the prize.
+    if fresh_pattern(card, g["called"]):
         award_winners(g)
         return web.json_response({"ok": True})
-    # FALSE BINGO: the cartela is closed for the rest of this round.
+    # INVALID press = ban for the rest of this round:
+    #   late  = the card had a real pattern, but it was completed by an earlier call
+    #   false = the card has no complete pattern at all
     # The stake stays in the prize pool and the game continues without him.
+    late = has_bingo(card, set(g["called"]))
     g["dq"].add(uid)
-    t = asyncio.create_task(notify_false_bingo(uid, g["players"][uid], g["bet"]))
+    t = asyncio.create_task(
+        notify_false_bingo(uid, g["players"][uid], g["bet"], late))
     bg_tasks.add(t)
     t.add_done_callback(bg_tasks.discard)
-    return web.json_response({"ok": False, "disq": True})
+    return web.json_response({"ok": False, "disq": True,
+                              "reason": "late" if late else "false"})
 
 
 async def api_leave(req):
@@ -1391,7 +1378,7 @@ async def need_phone(m: Message):
 @dp.callback_query(F.data == "start:go")
 async def start_go(cb: CallbackQuery):
     if cb.from_user.id in phones:
-        await cb.message.answer(WELCOME_TEXT, reply_markup=menu_kb())
+        await cb.message.answer(WELCOME_TEXT, reply_markup=menu_kb(cb.from_user.id))
     else:
         await cb.message.answer(PHONE_TEXT, reply_markup=phone_kb())
     await cb.answer()
@@ -1410,7 +1397,7 @@ async def got_contact(m: Message):
     save_user(uid)
     await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
                    reply_markup=ReplyKeyboardRemove())
-    await m.answer(WELCOME_TEXT, reply_markup=menu_kb())
+    await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
 
 
 @dp.message(CommandStart())
@@ -1431,7 +1418,7 @@ async def cmd_start(m: Message, command: CommandObject):
             except Exception:
                 pass
     if uid in phones:
-        await m.answer(WELCOME_TEXT, reply_markup=menu_kb())
+        await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
     else:
         await m.answer(START_TEXT, reply_markup=start_kb())
 
@@ -1701,13 +1688,16 @@ async def cmd_instruction(m: Message):
         "1) Tap /play and choose a room (10, 20, 50 or 100 birr).\n"
         "2) Choose a cartela number. It costs the room price.\n"
         "3) When the countdown ends, numbers are called one by one.\n"
-        "4) Keep Auto on to mark numbers automatically.\n"
-        "5) Complete any winning pattern, then press BINGO WIN.\n\n"
+        "4) Keep Auto on to mark numbers automatically and claim BINGO for you.\n"
+        "5) With Auto off, mark numbers yourself and press BINGO WIN.\n\n"
         "🏆 Winning Patterns:\n"
         "• Horizontal line\n• Vertical line\n• Diagonal\n• Anti-diagonal\n• Four corners\n"
         "• Center four\n• T corners\n• Center T\n\n"
         "Complete any pattern to win the round prize!\n\n"
-        "The first player to press BINGO WIN with a real pattern wins the prize.\n\n"
+        "⚠️ A pattern wins only on the call that completes it. If you press BINGO "
+        "after the next number was already called, or without a real pattern, "
+        "your cartela is banned for that round. Players who complete a pattern on "
+        "the same call share the prize.\n\n"
         "ℹ️ If a round cannot start, your stake is refunded.\n"
         "ℹ️ If you close the app during a round, your cartela stays in the game and "
         "a win is added to your balance automatically.\n\n"
@@ -1750,8 +1740,9 @@ async def cmd_support(m: Message):
 
 
 # ---------- start screen: button menu ----------
-def menu_kb():
+def menu_kb(uid=None):
     b = InlineKeyboardButton
+    snd = "🔊 ድምጽ: ON" if uid in sound_on else "🔇 ድምጽ: OFF"
     return InlineKeyboardMarkup(inline_keyboard=[
         [b(text="🎮 ጨዋታ ተጫወት", web_app=WebAppInfo(url=WEBAPP_URL)),
          b(text="🏆 የማሸነፊያ ስርዓቶች", callback_data="menu:patterns")],
@@ -1762,6 +1753,7 @@ def menu_kb():
         [b(text="📜 የእኔ ግብይቶች", callback_data="menu:tx"),
          b(text="👥 ጓደኞችን ጋብዝ", callback_data="menu:invite")],
         [b(text="📞 ድጋፍ ያግኙ", callback_data="menu:support")],
+        [b(text=snd, callback_data="menu:sound")],
     ])
 
 
@@ -1832,6 +1824,22 @@ async def cmd_transactions(m: Message):
 @dp.callback_query(F.data.startswith("menu:"))
 async def menu_buttons(cb: CallbackQuery):
     action = (cb.data or "").split(":", 1)[1]
+
+    # Sound ON/OFF button: flips the setting and redraws the menu button
+    if action == "sound":
+        uid = ensure(cb.from_user)
+        if uid in sound_on:
+            sound_on.discard(uid)
+        else:
+            sound_on.add(uid)
+        _save_counter(f"snd:{uid}", 1 if uid in sound_on else 0)
+        try:
+            await cb.message.edit_reply_markup(reply_markup=menu_kb(uid))
+        except Exception:
+            pass
+        await cb.answer("Sound ON 🔊" if uid in sound_on else "Sound OFF 🔇")
+        return
+
     await cb.answer()
     # same message, but "from" is the player who pressed the button,
     # so the normal command handlers work unchanged
@@ -2388,6 +2396,7 @@ async def main():
     except Exception as e:
         print("could not set bot description:", repr(e))
 
+    # note: /sound is no longer a command; the Sound ON/OFF button is in the start menu
     public_commands = [
         BotCommand(command="start", description="Start the bot"),
         BotCommand(command="play", description="🎮 Play Bingo"),
@@ -2398,7 +2407,6 @@ async def main():
         BotCommand(command="withdraw", description="💸 Withdraw"),
         BotCommand(command="transactions", description="📜 My Transactions"),
         BotCommand(command="invite", description="👥 Invite Friends"),
-        BotCommand(command="sound", description="🔊 Sound ON/OFF"),
         BotCommand(command="support", description="📞 Support"),
     ]
     await bot.set_my_commands(public_commands)
