@@ -2482,8 +2482,7 @@ async def main():
     asyncio.create_task(db_writer())
     await load_state()
     ready = True
-  
-  asyncio.create_task(game_loop())
+    asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
 
