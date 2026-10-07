@@ -86,6 +86,7 @@ pending, req_counter = {}, [0]          # deposit / withdraw requests
 used_sms = set()                        # SMS already sent + used payment numbers ("tok:...")
 referrer, invited = {}, {}              # player -> who invited him / invite count
 ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
+ref_phones = set()                      # phone numbers (last 9 digits) that already gave an invite bonus
 wd_state = {}                           # players in the middle of a withdraw
 phones = {}                             # player -> verified phone number
 bank_sms, bank_by_h = [], set()         # SMS forwarded from YOUR phone (newest first)
@@ -287,6 +288,8 @@ async def load_state():
                 game_counter[0] = r["v"]
             elif r["k"].startswith("snd:") and r["v"] == 1:
                 sound_on.add(int(r["k"][4:]))
+            elif r["k"].startswith("refphone:"):
+                ref_phones.add(r["k"][9:])
         # players who had paid for a cartela when the bot stopped: give it back
         stuck = await c.fetch("SELECT uid, bet, used, bonus_used FROM room_players")
     for r in stuck:
@@ -667,7 +670,10 @@ async def approve_deposit(bot, uid, amount, tokens=()):
     for t in tokens:
         mark_token(t)
     inv = referrer.get(uid)
-    if REF_BONUS_PERCENT and inv and uid not in ref_paid:
+    pk = phones.get(uid, "")[-9:]
+    if REF_BONUS_PERCENT and inv and pk and pk not in ref_phones and uid not in ref_paid:
+        ref_phones.add(pk)
+        _save_counter("refphone:" + pk, 1)
         ref_paid.add(uid)                              # first deposit only
         save_user(uid)
         bonus_amt = amount * REF_BONUS_PERCENT // 100
@@ -731,7 +737,7 @@ async def api_sms_hook(req):
     The secret must be sent in the header  X-Key  (it is never put in the URL,
     so it can not appear in server logs)."""
     given = req.headers.get("X-Key", "")
-    if not SMS_SECRET or not hmac.compare_digest(given, SMS_SECRET):
+    if not SMS_SECRET or not hmac.compare_digest(given.encode(), SMS_SECRET.encode()):
         return web.json_response({"ok": False}, status=403)
     data = {}
     try:
@@ -957,6 +963,17 @@ async def run_round(g):
         await asyncio.sleep(CALL_EVERY)
 
     g["phase"] = "finished"
+    if not g["winners"]:                   # nobody won: give bets back, except cheaters
+        for uid in list(g["players"]):
+            if uid in g["dq"]:             # banned for false bingo: no refund
+                continue
+            refund_stake(uid, g["bet"], f"Room {g['bet']} refund (no winner)")
+            try:
+                await BOT.send_message(
+                    uid, f"↩️ በዚህ ዙር ማንም አላሸነፈም። {g['bet']} ብር ተመልሶልዎታል።\n"
+                         f"No winner this round. Your {g['bet']} birr was returned.")
+            except Exception:
+                pass
     save_room_clear(g["bet"])              # round is over: stakes are settled
     for uid in list(g["players"]):
         stake_used.pop(uid, None)          # this round's stake is final, no refund possible
@@ -1220,7 +1237,9 @@ async def api_leave(req):
     body = await req.json()
     user = verify(body.get("initData", ""))
     if user:
-        remove_player(user["id"])
+        g = room_of(user["id"])
+        if g and g["phase"] == "lobby":
+            remove_player(user["id"])
     return web.json_response({"ok": True})
 
 
@@ -1634,7 +1653,10 @@ def find_by_phone(text):
 
 @dp.message(Command("transfer"))
 async def cmd_transfer(m: Message, command: CommandObject):
-    """Only cash can be transferred. Bonus money never leaves the account."""
+    """Only cash can be transferred. Bonus money never leaves the account.
+    Turned off for players: only the admin can use it."""
+    if not is_admin(m):
+        return
     uid = ensure(m.from_user)
     if await need_phone(m):
         return
