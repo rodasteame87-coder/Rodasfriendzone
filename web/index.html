@@ -199,8 +199,10 @@
   .wboard.mine{border-color:#22c55e}
   .wboard .grid{gap:2px}
   .wboard .cell{cursor:default;background:#fff;color:#111;border-radius:2px;height:34px;font-size:15px;font-weight:700;text-shadow:none}
-  .wboard .cell.m{background:#22c55e;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.35)}
-  .wboard .cell.w{background:#15803d;color:#fff;box-shadow:inset 0 0 0 2px #fff}
+  .wboard .cell.m{background:#facc15;color:#111;text-shadow:none}
+  .wboard .cell.freecell.m{background:#22c55e;color:#fff}
+  .wboard .cell.w{background:#22c55e;color:#fff;box-shadow:inset 0 0 0 2px #fff}
+  .wnote{color:#d1d5db;font-size:13px;margin-top:8px}
   .wprize{color:#fbbf24;font-weight:700;margin-top:14px;font-size:16px}
   .wcount{color:#9ca3af;margin-top:12px;font-size:15px}
 </style>
@@ -561,7 +563,8 @@ function drawWin(){
     return `<div class="wblock">`+
       `<div class="wwho"><span>Card #${w.board} - ${esc(w.name)}</span>`+
       `<span class="wpill">${esc(w.pat||"Bingo")} Win</span></div>`+
-      `<div class="wboard${w.me?" mine":""}"><div class="grid">${h}</div></div></div>`;
+      `<div class="wboard${w.me?" mine":""}"><div class="grid">${h}</div></div>`+
+      `<div class="wnote">${w.me ? "Your cartela (#"+w.board+") has won the game!" : esc(w.name)+" (#"+w.board+") has won the game!"}</div></div>`;
   }).join("");
   $("wPrize").textContent = many
       ? "Prize: " + S.share + " birr each (" + W.length + " winners)"
