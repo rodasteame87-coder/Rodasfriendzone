@@ -57,6 +57,7 @@ IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (re
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
 MIN_WITHDRAW = 100
+MAX_PENDING_DEPOSITS = 3   # most deposit requests one player can have waiting for the admin
 WIN_SCREEN_SECONDS = 10    # how long the winner / loser card stays
 AUTH_MAX_AGE = 86400       # Telegram initData older than this (seconds) is rejected
 
@@ -174,6 +175,13 @@ def save_game(r):
 
 def save_sms(key):
     _enqueue("INSERT INTO used_sms(h) VALUES($1) ON CONFLICT DO NOTHING", key)
+
+
+def free_sms(key):
+    """Make an SMS usable again (used when the admin rejects a deposit,
+    so the player can send the same SMS again)."""
+    used_sms.discard(key)
+    _enqueue("DELETE FROM used_sms WHERE h = $1", key)
 
 
 def save_bank(rec):
@@ -719,10 +727,10 @@ async def on_bank_sms(rec):
 
 
 async def api_sms_hook(req):
-    """Your phone's SMS-forwarder app sends every SMS here.
-    The secret can be sent in the header  X-Key  (recommended, not saved in logs)
-    or in the URL as ?key=...  (works, but URLs may appear in server logs)."""
-    given = req.headers.get("X-Key", "") or req.query.get("key", "")
+    """Your phone's SMS-forwarder app sends every SMS here (POST only).
+    The secret must be sent in the header  X-Key  (it is never put in the URL,
+    so it can not appear in server logs)."""
+    given = req.headers.get("X-Key", "")
     if not SMS_SECRET or not hmac.compare_digest(given, SMS_SECRET):
         return web.json_response({"ok": False}, status=403)
     data = {}
@@ -1029,6 +1037,10 @@ async def api_state(req):
         "left": finish_left(g),
         "isWinner": uid in g.get("winners", []),
         "dq": uid in g["dq"],
+        # provably fair: the hash is published as soon as the round starts
+        # (before the first number is called); the secret is revealed after it ends
+        "hash": g["hash"] if g["phase"] != "lobby" else "",
+        "secret": g["secret"] if g["phase"] == "finished" else "",
         "room": g["bet"], "inRoom": mine["bet"] if mine else None,
         "rooms": [{"bet": r["bet"], "phase": r["phase"],
                    "players": len(r["players"]),
@@ -1241,6 +1253,12 @@ def to_amount(text):
         return None
 
 
+def pending_deposits(uid):
+    """How many deposit requests of this player are waiting for the admin."""
+    return sum(1 for r in pending.values()
+               if r["type"] == "deposit" and r["uid"] == uid)
+
+
 # ---------- deposit menu (CBE / Telebirr / CBE Birr) ----------
 def deposit_menu_text(uid):
     return ("እባክዎ የሚፈልጉትን የመክፈያ አማራጭ ይምረጡ 👇\n\n"
@@ -1445,6 +1463,10 @@ async def cmd_deposit(m: Message, command: CommandObject):
         return
     if amount < MIN_DEPOSIT:
         await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
+        return
+    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+        await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
+                       f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
         return
     if not ADMIN_ID:
         await m.answer(f"Deposits are handled by support: {SUPPORT}")
@@ -2217,12 +2239,16 @@ async def sms_deposit(m: Message):
     if not ADMIN_ID:
         await m.answer(f"Deposits are handled by support: {SUPPORT}")
         return
+    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+        await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
+                       f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
+        return
     used_sms.add(key)
     save_sms(key)
     req_counter[0] += 1
     rid = req_counter[0]
     pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
-                    "tokens": sorted(tokens)}
+                    "tokens": sorted(tokens), "key": key}
     save_pending(rid)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
@@ -2255,6 +2281,8 @@ async def admin_buttons(cb: CallbackQuery):
         if approved:
             await approve_deposit(cb.bot, uid, amount, req.get("tokens", []))
         else:
+            if req.get("key"):
+                free_sms(req["key"])           # the player may send the same SMS again
             note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
     else:
         if approved:
@@ -2294,7 +2322,8 @@ async def main():
     bot = Bot(TOKEN)
     BOT = bot
 
-    app = web.Application(middlewares=[wait_ready])
+    # POST only for the SMS hook, and bodies are limited to 64 KB
+    app = web.Application(middlewares=[wait_ready], client_max_size=64 * 1024)
     app.add_routes([
         web.get("/", index),
         web.get("/api/state", api_state),
@@ -2307,7 +2336,6 @@ async def main():
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
         web.post("/api/sms-hook", api_sms_hook),
-        web.get("/api/sms-hook", api_sms_hook),
     ])
     runner = web.AppRunner(app)
     await runner.setup()
