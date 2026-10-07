@@ -1877,6 +1877,7 @@ async def cmd_admin(m: Message):
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
+        "/bonusmany <amount> all  or  <amount> <phone> <phone>...\nGive PLAY-ONLY bonus to many players (you confirm first)\n\n"
         "/resetfree\nRemove free balance from players who never deposited\n\n"
         "/ban <phone>\nBlock a player\n\n"
         "/unban <phone>\nUnblock a player\n\n"
@@ -2293,6 +2294,105 @@ async def sms_deposit(m: Message):
                    f"Your payment #{rid} is being checked. You will get a message soon.")
 
 
+# ---------- /bonusmany: give play-only bonus to many players at once ----------
+# CHANGE THE WORDS HERE.
+# {amount} = bonus given, {balance} = the player's balance after the bonus
+BONUS_TEXT = (
+    "💖 ውድ ደንበኞቻችን፣\n\n"
+    "🌼 Rodas Friend Zone Bingo {amount} ብር ቦነስ ሰጥቶዎታል (ለመጫወት ብቻ)።\n\n"
+    "🍀 መልካም ዕድል እንመኝልዎታለን! 🌼\n\n"
+    "💖 Dear valued customer,\n\n"
+    "🌼 Rodas Friend Zone Bingo has gifted you a {amount} birr bonus (play only).\n\n"
+    "🍀 We wish you the best of luck! 🌼\n\n"
+    "💰 Your wallet balance is now: {balance:.2f}")
+
+bn_pending = {}                 # admin's bonus list waiting for confirmation
+
+
+@dp.message(Command("bonusmany"))
+async def cmd_bonusmany(m: Message, command: CommandObject):
+    """/bonusmany 20 all            -> everybody
+       /bonusmany 20 0912.. 0911..  -> only these phone numbers"""
+    if not is_admin(m):
+        return
+    args = (command.args or "").split()
+    if len(args) < 2 or not args[0].isdigit() or int(args[0]) <= 0:
+        await m.answer("Send:\n/bonusmany <amount> all\n"
+                       "or\n/bonusmany <amount> <phone> <phone> ...\n\n"
+                       "Examples:\n/bonusmany 20 all\n"
+                       "/bonusmany 20 0912345678 0911111111")
+        return
+    amount = int(args[0])
+    uids, missing = [], []
+    if args[1].lower() == "all":
+        uids = [u for u in wallets if u not in banned and u in phones]
+    else:
+        for a in args[1:]:
+            u = find_by_phone(a)
+            if not u:
+                missing.append(a)
+            elif u not in uids:
+                uids.append(u)
+    if not uids:
+        await m.answer("No players found.")
+        return
+    bn_pending[m.from_user.id] = (amount, uids)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Give to {len(uids)} players", callback_data="bn:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="bn:cancel")]])
+    miss = ("\n\n⚠️ Not found: " + ", ".join(missing)) if missing else ""
+    await m.answer(f"🎁 Bonus: {amount} birr each\n"
+                   f"Players: {len(uids)}\n"
+                   f"Total: {amount * len(uids):,} birr{miss}\n\n"
+                   "Press the green button to send.", reply_markup=kb)
+
+
+async def run_bonus_notify(bot, uids, amount, admin_id):
+    ok = fail = 0
+    for u in uids:
+        try:
+            await bot.send_message(
+                u, BONUS_TEXT.format(amount=amount, balance=play_balance(u)))
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.06)              # stay under Telegram's speed limit
+    try:
+        await bot.send_message(admin_id, f"🎁 Bonus messages finished.\n✅ Sent: {ok}\n❌ Failed: {fail}")
+    except Exception:
+        pass
+
+
+@dp.callback_query(F.data.startswith("bn:"))
+async def bonusmany_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    data = bn_pending.pop(cb.from_user.id, None)
+    if action != "go" or not data:
+        try:
+            await cb.message.edit_text("❌ Cancelled." if action != "go"
+                                       else "Nothing to send.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    amount, uids = data
+    for u in uids:                             # money first, then the messages
+        bonus[u] = bonus.get(u, 0) + amount
+        log(u, "bonus", amount, "Bonus from admin")
+    try:
+        await cb.message.edit_text(f"✅ Gave {amount} birr bonus to {len(uids)} players.\n"
+                                   "📤 Sending messages…")
+    except Exception:
+        pass
+    await cb.answer()
+    t = asyncio.create_task(run_bonus_notify(cb.bot, uids, amount, cb.from_user.id))
+    bg_tasks.add(t)
+    t.add_done_callback(bg_tasks.discard)
+
+
 @dp.callback_query()
 async def admin_buttons(cb: CallbackQuery):
     if cb.from_user.id != ADMIN_ID:
@@ -2382,8 +2482,8 @@ async def main():
     asyncio.create_task(db_writer())
     await load_state()
     ready = True
-
-    asyncio.create_task(game_loop())
+  
+  asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
 
@@ -2419,6 +2519,7 @@ async def main():
                     BotCommand(command="players", description="👥 All player balances"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
+                    BotCommand(command="bonusmany", description="🎁 Bonus for many players"),
                     BotCommand(command="resetfree", description="🧹 Remove free balances"),
                     BotCommand(command="ban", description="🚫 Block a player"),
                     BotCommand(command="unban", description="✅ Unblock a player"),
