@@ -662,6 +662,13 @@ function render(){
       : "🏆 "+S.winner+" won "+S.prize+" birr");
   }
 
+  // round ended with no winner: tell the player what happened to their bet
+  if(S.phase==="finished" && S.myCard && !(S.winners && S.winners.length) && shownRound!==key){
+    shownRound=key;
+    toast(S.dq ? "No winner. Your cartela was banned, so your bet is not returned."
+               : "No winner this round. Your bet was returned ↩️");
+  }
+
   // banned cartela: show the banner and lock the BINGO button
   const dq = !!S.dq && S.phase === "playing";
   $("dqBanner").hidden = !dq;
