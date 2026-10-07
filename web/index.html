@@ -178,7 +178,7 @@
   /* footer at the bottom of the lobby */
   .brandfoot{text-align:center;color:#6b5a7c;font-size:12px;font-weight:600;margin:18px 0 6px;opacity:.85}
 
-  /* banned cartela (false bingo) */
+  /* banned cartela (false / late bingo) */
   #dqBanner{background:#e8212f;color:#fff;text-align:center;font-weight:700;padding:10px;border-radius:10px;margin-bottom:8px;font-size:14px;line-height:1.4}
   .winb:disabled{background:#9ca3af;opacity:.7;cursor:not-allowed}
 
@@ -323,7 +323,8 @@
     <div style="font-size:13px;line-height:1.7;margin-top:6px">
       • Horizontal line<br>• Vertical line<br>• Diagonal<br>• Anti-diagonal<br>• Four corners<br>
       • Center four<br>• T corners<br>• Center T<br>
-      <b>Complete any pattern to win the round prize!</b>
+      <b>Complete any pattern to win the round prize!</b><br>
+      <span style="color:#b91c1c;font-weight:600">A pattern only wins on the call that completes it. Press BINGO before the next number is called, or your cartela is banned. With Auto ON the system claims for you.</span>
     </div>
   </details>
   <div class="main">
@@ -395,7 +396,6 @@ const COLS = ["B","I","N","G","O"];
 const st = { card:null, cardNo:0, called:[], marked:new Set() };
 let R = 0;                                   // room (bet) the player is looking at
 let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
-let claimedKey = "";                         // round already auto-claimed
 let P = null, pfTab = "ov";                  // profile data + selected profile tab
 const H = { scope:"recent", bet:10, q:"" };  // history filters
 
@@ -436,45 +436,14 @@ function paintCalls(){
   return last;
 }
 
-/* winning patterns (same 8 as the picture): lines, diagonal, anti-diagonal,
-   four corners, center four, T corners, center T */
-const PATTERNS = (()=>{
-  const P=[];
-  for(let i=0;i<5;i++){ P.push([0,1,2,3,4].map(c=>[i,c])); P.push([0,1,2,3,4].map(r=>[r,i])); }
-  P.push([0,1,2,3,4].map(i=>[i,i])); P.push([0,1,2,3,4].map(i=>[i,4-i]));
-  P.push([[0,0],[0,4],[4,0],[4,4]]);
-  P.push([[1,1],[1,3],[3,1],[3,3]]);
-  P.push([[0,2],[2,0],[2,4],[4,2]]);
-  P.push([[1,2],[2,1],[2,3],[3,2]]);
-  return P;
-})();
-function hasBingo(){
-  if(!st.card) return false;
-  const m=(r,c)=>st.card[r][c]===0||st.marked.has(st.card[r][c]);
-  return PATTERNS.some(p=>p.every(([r,c])=>m(r,c)));
-}
+/* Auto ON: the numbers are marked for the player here, and the SERVER claims
+   BINGO for him the moment a pattern is completed (the Auto setting is sent
+   to the server with every sync), so an Auto player can never be late. */
 function autoMark(){
   if(st.card && $("auto").checked){
     const mine = new Set(st.card.flat());
     st.called.forEach(n=>{ if(mine.has(n)) st.marked.add(n); });
   }
-}
-
-/* Auto ON: press BINGO WIN for the player as soon as a pattern is complete */
-async function autoClaim(){
-  if(!S || S.error || !$("auto").checked) return;
-  if(S.dq) return;                           // banned this round: never claim
-  if(S.phase!=="playing" || !st.card) return;
-  const key = S.room+":"+S.round;
-  if(claimedKey===key || !hasBingo()) return;
-  claimedKey = key;                          // only one try at a time
-  try{
-    const r = await post("/bingo",{});
-    if(r.ok) toast("Bingo claimed automatically! 🎉");
-    else if(r.disq) toast("🚫 False bingo — your cartela is banned this round");
-    else claimedKey = "";                    // not accepted, may try again
-  }catch(e){ claimedKey = ""; }
-  sync();
 }
 
 /* ---------- profile ---------- */
@@ -675,10 +644,13 @@ function render(){
   $("winBtn").disabled = dq;
 
   drawWin();
-  autoClaim();
 }
 async function sync(){
-  try{ S=await get("/state?room="+R); errShown=false; render(); }
+  try{
+    // the Auto setting travels with every sync so the server can claim BINGO for Auto players
+    S=await get("/state?room="+R+"&auto="+($("auto").checked?1:0));
+    errShown=false; render();
+  }
   catch(e){ console.error(e); }
 }
 
@@ -751,12 +723,17 @@ $("cardGrid").onclick=e=>{
 $("auto").onchange=()=>{
   autoMark();
   if(st.card) $("cardGrid").innerHTML=cardHTML(st.card,st.marked);
-  autoClaim();
+  sync();                                    // tell the server right away that Auto changed
+  toast($("auto").checked ? "Auto ON: bingo is claimed for you" : "Auto OFF: press BINGO yourself");
 };
 $("winBtn").onclick=async()=>{
   if(S && S.dq) return toast("Your cartela is banned this round");
   const r=await post("/bingo",{});
-  if(r.disq) toast("🚫 False bingo — your cartela is banned this round");
+  if(r.disq){
+    toast(r.reason==="late"
+      ? "🚫 Too late: that number already passed. Cartela banned this round"
+      : "🚫 False bingo: your cartela is banned this round");
+  }
   else toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
   sync();
 };
@@ -796,7 +773,7 @@ function playNew(){
 
 /* ---------- start ---------- */
 buildCalls();
-sync(); setInterval(sync, 2000);
+sync(); setInterval(sync, 1000);     // 1 second, so manual players see each call quickly
 setInterval(()=>{ if(screen==="lobby" && !$("tab-profile").hidden) loadProfile(); }, 5000);
 </script>
 </body>
