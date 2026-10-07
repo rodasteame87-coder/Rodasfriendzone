@@ -1822,6 +1822,7 @@ async def cmd_admin(m: Message):
     await m.answer(
         "🛠 Admin commands\n\n"
         "/stats\nPlayers, money, waiting requests, last 24h\n\n"
+        "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
         "/resetfree\nRemove free balance from players who never deposited\n\n"
@@ -1857,6 +1858,72 @@ async def cmd_stats(m: Message):
         f"Paid to winners: {paid:,} ETB\n"
         f"House earned (approx): {stake - paid:,} ETB",
         parse_mode="HTML")
+
+
+# ---------- /players: see all players and their balances (admin only) ----------
+PLAYERS_PER_PAGE = 20
+
+
+def players_page(page):
+    uids = sorted(wallets, key=lambda u: wallets.get(u, 0) + bonus.get(u, 0),
+                  reverse=True)                      # richest first
+    pages = max(1, math.ceil(len(uids) / PLAYERS_PER_PAGE))
+    page = max(0, min(page, pages - 1))
+    start = page * PLAYERS_PER_PAGE
+    lines = []
+    for i, u in enumerate(uids[start:start + PLAYERS_PER_PAGE], start + 1):
+        lines.append(f"{i}. {html.escape(names.get(u, 'Player'))} · {phones.get(u, '-')}\n"
+                     f"     💵 {wallets.get(u, 0)} · 🎁 {bonus.get(u, 0)}")
+    text = (f"👥 <b>Players</b> ({len(uids)}) · page {page + 1}/{pages}\n"
+            f"Cash total: {sum(wallets.values()):,} · "
+            f"Bonus total: {sum(bonus.values()):,}\n\n" + "\n".join(lines))
+    row = []
+    if page > 0:
+        row.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"pl:{page - 1}"))
+    if page < pages - 1:
+        row.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"pl:{page + 1}"))
+    return text, InlineKeyboardMarkup(inline_keyboard=[row] if row else [])
+
+
+@dp.message(Command("players"))
+async def cmd_players(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    arg = (command.args or "").strip()
+    if arg:                                           # /players 0912345678 = one player
+        uid = find_by_phone(arg)
+        if not uid:
+            await m.answer("No player found with that phone number.")
+            return
+        t = turnover_info(uid)
+        await m.answer(
+            f"👤 {names.get(uid, 'Player')} ({phones.get(uid, '-')})\n"
+            f"Cash: {wallets.get(uid, 0)} birr\n"
+            f"Bonus: {bonus.get(uid, 0)} birr\n"
+            f"Withdrawable: {withdrawable_amount(uid)} birr\n"
+            f"Played: {t['played']} / {t['required']} birr\n"
+            f"Deposited: {deposited.get(uid, 0)} · Won: {won.get(uid, 0)}"
+            + ("\n🚫 Blocked" if uid in banned else ""))
+        return
+    text, kb = players_page(0)
+    await m.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.callback_query(F.data.startswith("pl:"))
+async def players_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    try:
+        page = int((cb.data or "").split(":", 1)[1])
+    except ValueError:
+        page = 0
+    text, kb = players_page(page)
+    try:
+        await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        pass
+    await cb.answer()
 
 
 @dp.message(Command("addbalance"))
@@ -2291,6 +2358,7 @@ async def main():
                 public_commands + [
                     BotCommand(command="admin", description="🛠 Admin commands"),
                     BotCommand(command="stats", description="📊 Stats"),
+                    BotCommand(command="players", description="👥 All player balances"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
                     BotCommand(command="resetfree", description="🧹 Remove free balances"),
