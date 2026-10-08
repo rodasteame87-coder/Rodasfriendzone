@@ -589,7 +589,6 @@ function render(){
     const enough = r.players >= S.minPlayers;
     const lbl = r.phase!=="lobby" ? "playing"
               : enough ? r.time+"s"
-              : r.players ? r.players+"/"+S.minPlayers
               : "waiting";
     const hot = enough && r.phase==="lobby" ? " t" : "";
     const dim = r.phase!=="lobby" ? " dim" : "";
@@ -605,7 +604,7 @@ function render(){
   const ready5 = S.players >= S.minPlayers;
   $("pkTime").textContent = ready5 ? S.time : "–";
   $("pickTitle").textContent = S.myCard
-    ? "✅ Cartela #"+S.myCard+" chosen · " + (ready5 ? "Starting in "+S.time+"s" : "Waiting for players "+S.players+"/"+S.minPlayers)
+    ? "✅ Cartela #"+S.myCard+" chosen · " + (ready5 ? "Starting in "+S.time+"s" : "Waiting for more players...")
     : "Choose Your Cartela";
   $("pkLeave").hidden = !S.myCard || S.phase!=="lobby";
   $("backBtn").hidden = !!S.myCard;
