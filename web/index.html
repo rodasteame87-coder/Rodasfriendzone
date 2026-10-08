@@ -767,7 +767,7 @@ $("snd").checked = sndOn;
 
 function speak(n){
   try {
-    const a = new Audio("/audio/" + n + ".mp3");
+    const a = new Audio("/audio/" + n + ".mp3?v=2");
     a.play().catch(() => {});
   } catch (e) {}
 }
