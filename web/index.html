@@ -304,9 +304,10 @@
     <div class="stat"><small>Players</small><b id="pkPlayers">0</b></div>
     <div class="stat"><small>Wallet</small><b id="pkWallet">0</b></div>
     <div class="stat"><small>Bet</small><b id="pkBet">10</b></div>
-    <div class="stat"><small>Time</small><b id="pkTime">30</b></div>
+    <div class="stat"><small>Time</small><b id="pkTime">–</b></div>
   </div>
-  <div class="pickTitle">Choose Your Cartela</div>
+  <div class="pickTitle" id="pickTitle">Choose Your Cartela</div>
+  <button class="leave" id="pkLeave" hidden style="margin-bottom:10px">LEAVE · get my money back</button>
   <div class="pgrid" id="pickGrid"></div>
 </div>
 
@@ -581,11 +582,16 @@ function render(){
   if(key!==lastRound){ st.marked=new Set(); lastRound=key; }
   if(S.inRoom) R = S.inRoom;
 
-  // lobby
+  // lobby: a room only shows a countdown once enough players have joined,
+  // before that it shows how many players it still needs (e.g. 2/5)
   $("bal").textContent=S.wallet.toFixed(2);
   $("roomList").innerHTML = S.rooms.map(r=>{
-    const lbl = r.phase!=="lobby" ? "playing" : r.players ? r.time+"s" : "waiting";
-    const hot = r.players && r.phase==="lobby" ? " t" : "";
+    const enough = r.players >= S.minPlayers;
+    const lbl = r.phase!=="lobby" ? "playing"
+              : enough ? r.time+"s"
+              : r.players ? r.players+"/"+S.minPlayers
+              : "waiting";
+    const hot = enough && r.phase==="lobby" ? " t" : "";
     const dim = r.phase!=="lobby" ? " dim" : "";
     return `<div class="room"><div class="b">${r.bet} <small>BIRR</small></div>`+
            `<div class="w">${r.win} win</div>`+
@@ -593,10 +599,16 @@ function render(){
            `<button class="j${dim}" data-r="${r.bet}">Join</button></div>`;
   }).join("");
 
-  // picker
+  // picker (players stay here until the round really starts)
   $("pkPlayers").textContent=S.players;
   $("pkWallet").textContent=S.wallet; $("pkBet").textContent=S.bet;
-  $("pkTime").textContent=S.time;
+  const ready5 = S.players >= S.minPlayers;
+  $("pkTime").textContent = ready5 ? S.time : "–";
+  $("pickTitle").textContent = S.myCard
+    ? "✅ Cartela #"+S.myCard+" chosen · " + (ready5 ? "Starting in "+S.time+"s" : "Waiting for players "+S.players+"/"+S.minPlayers)
+    : "Choose Your Cartela";
+  $("pkLeave").hidden = !S.myCard || S.phase!=="lobby";
+  $("backBtn").hidden = !!S.myCard;
   let g="";
   for(let n=1;n<=S.count;n++){
     const c=S.myCard===n?" mine":S.taken.includes(n)?" taken":"";
@@ -623,8 +635,12 @@ function render(){
   $("ballTitle").textContent = S.phase==="lobby" ? "Starting in" : "Current Call";
   $("ball").textContent = S.phase==="lobby" ? S.time : (last ? label(last) : "–");
 
-  // routing
-  if(S.myCard && screen!=="game") show("game");
+  // routing:
+  //  - chose a cartela but the round has not started: stay on the cartela screen
+  //  - round started (playing / finished): go to the game screen
+  //  - no cartela: never stay on the game screen
+  if(S.myCard && S.phase!=="lobby" && screen!=="game") show("game");
+  if(S.myCard && S.phase==="lobby" && screen!=="pick") show("pick");
   if(!S.myCard && screen==="game") show("pick");
 
   if(S.phase==="finished" && S.winners && S.winners.length && shownRound!==key){
@@ -694,9 +710,11 @@ $("roomList").onclick=e=>{
   R=+b.dataset.r; show("pick"); sync();
 };
 $("backBtn").onclick=()=>show("lobby");
+$("pkLeave").onclick=async()=>{ await post("/leave",{}); await sync(); show("lobby"); };
 
 $("pickGrid").onclick=async e=>{
   const el=e.target.closest(".num"); if(!el) return;
+  if(S && S.myCard) return toast("You already chose cartela #"+S.myCard+". Wait for the game to start.");
   pv=+el.dataset.n;
   try{
     const r=await fetch(API+"/card?card="+pv).then(r=>r.json());
