@@ -891,16 +891,7 @@ async def run_round(g):
                     and (u in away or auto_pref.get(u))
                     and fresh_pattern(make_card(no), g["called"])]
         if claimers:
-            winners = award_winners(g)
-            for u in winners:
-                if u in away:
-                    try:
-                        await BOT.send_message(
-                            u, f"🏆 ካርታዎ አሸንፏል! {g['share']} ብር ወደ ሂሳብዎ ገብቷል።\n"
-                               f"Your card won while you were away! "
-                               f"{g['share']} birr was added to your balance.")
-                    except Exception:
-                        pass
+            award_winners(g)
             break
         await asyncio.sleep(CALL_EVERY)
 
