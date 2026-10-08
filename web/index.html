@@ -609,9 +609,7 @@ function render(){
     return `<div class="room"><div class="b">${r.bet} <small>BIRR</small></div>`+
            `<div class="w">${r.win} win</div>`+
            `<div class="s${hot}">${lbl}</div>`+
-           (S.inRoom===r.bet && r.phase!=="lobby"
-             ? `<button class="j" data-r="${r.bet}" data-resume="1">Back</button></div>`
-             : `<button class="j${dim}" data-r="${r.bet}">Join</button></div>`);
+           `<button class="j${dim}" data-r="${r.bet}">Join</button></div>`;
   }).join("");
 
   // picker (players stay here until the round really starts)
@@ -739,7 +737,6 @@ $("roomList").onclick=e=>{
   const b=e.target.closest(".j"); if(!b) return;
   if(!S) return toast(lastErr==="auth" ? "Please open this from the bot in Telegram"
                                        : "Can't reach server yet — wait a few seconds and tap again");
-  if(b.dataset.resume){ leftKey=""; R=+b.dataset.r; show("game"); post("/resume",{}).then(sync); return; }
   if(b.classList.contains("dim")) return toast("A round is in progress. Join the next one.");
   R=+b.dataset.r; show("pick"); sync();
 };
@@ -792,13 +789,24 @@ $("winBtn").onclick=async()=>{
   else toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
   sync();
 };
+function askConfirm(msg){
+  return new Promise(res=>{
+    try{
+      if(tg && tg.showConfirm){ tg.showConfirm(msg, ok=>res(!!ok)); return; }
+    }catch(e){}
+    res(window.confirm(msg));
+  });
+}
 $("leaveBtn").onclick=async()=>{
   if(S && S.phase==="lobby"){ await post("/leave",{}); await sync(); show("lobby"); return; }
-  // round already running: just walk out. The bet stays in the game, the game
-  // continues, and a win is added to the balance automatically.
+  if(S && S.phase==="playing"){
+    // leaving a running round is final: the player is OUT, the bet stays in the game
+    const ok = await askConfirm("Leave this round? You will be OUT: your bet stays in the game, you cannot win and you cannot come back.");
+    if(!ok) return;
+    toast("You left the round. Your bet stays in the game.");
+  }
   leftKey = S ? S.room+":"+S.round : "";
   show("lobby");
-  toast("You left. Your bet stays in the game; a win is added to your balance automatically.");
   post("/leave",{}).then(sync);
 };
 $("refreshBtn").onclick=sync;
