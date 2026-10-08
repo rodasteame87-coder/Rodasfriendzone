@@ -398,6 +398,7 @@ const $ = id => document.getElementById(id);
 const COLS = ["B","I","N","G","O"];
 const st = { card:null, cardNo:0, called:[], marked:new Set() };
 let R = 0;                                   // room (bet) the player is looking at
+let leftKey = "";                            // round the player walked out of (stays out of the game screen)
 let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
 let P = null, pfTab = "ov";                  // profile data + selected profile tab
 const H = { scope:"recent", bet:10, q:"" };  // history filters
@@ -595,7 +596,9 @@ function render(){
     return `<div class="room"><div class="b">${r.bet} <small>BIRR</small></div>`+
            `<div class="w">${r.win} win</div>`+
            `<div class="s${hot}">${lbl}</div>`+
-           `<button class="j${dim}" data-r="${r.bet}">Join</button></div>`;
+           (S.inRoom===r.bet && r.phase!=="lobby"
+             ? `<button class="j" data-r="${r.bet}" data-resume="1">Back</button></div>`
+             : `<button class="j${dim}" data-r="${r.bet}">Join</button></div>`);
   }).join("");
 
   // picker (players stay here until the round really starts)
@@ -638,7 +641,7 @@ function render(){
   //  - chose a cartela but the round has not started: stay on the cartela screen
   //  - round started (playing / finished): go to the game screen
   //  - no cartela: never stay on the game screen
-  if(S.myCard && S.phase!=="lobby" && screen!=="game") show("game");
+  if(S.myCard && S.phase!=="lobby" && screen!=="game" && leftKey!==key) show("game");
   if(S.myCard && S.phase==="lobby" && screen!=="pick") show("pick");
   if(!S.myCard && screen==="game") show("pick");
 
@@ -705,6 +708,7 @@ $("roomList").onclick=e=>{
   const b=e.target.closest(".j"); if(!b) return;
   if(!S) return toast("Can't reach server yet — wait a few seconds and tap again");
   if(S.error) return toast("Please open this from the bot in Telegram");
+  if(b.dataset.resume){ leftKey=""; R=+b.dataset.r; show("game"); sync(); return; }
   if(b.classList.contains("dim")) return toast("A round is in progress. Join the next one.");
   R=+b.dataset.r; show("pick"); sync();
 };
@@ -757,7 +761,15 @@ $("winBtn").onclick=async()=>{
   else toast(r.ok?"Bingo confirmed! 🎉":"Bingo rejected");
   sync();
 };
-$("leaveBtn").onclick=async()=>{ await post("/leave",{}); await sync(); show("lobby"); };
+$("leaveBtn").onclick=async()=>{
+  if(S && S.phase==="lobby"){ await post("/leave",{}); await sync(); show("lobby"); return; }
+  // round already running: just walk out. The bet stays in the game, the game
+  // continues, and a win is added to the balance automatically.
+  leftKey = S ? S.room+":"+S.round : "";
+  show("lobby");
+  toast("You left. Your bet stays in the game; a win is added to your balance automatically.");
+  post("/leave",{}).then(sync);
+};
 $("refreshBtn").onclick=sync;
 
 /* ---------- Amharic call sound ---------- */
