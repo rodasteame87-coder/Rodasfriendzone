@@ -288,8 +288,6 @@ async def load_state():
                 req_counter[0] = r["v"]
             elif r["k"] == "game_counter":
                 game_counter[0] = r["v"]
-            elif r["k"].startswith("snd:") and r["v"] == 1:
-                sound_on.add(int(r["k"][4:]))
             elif r["k"].startswith("refphone:"):
                 ref_phones.add(r["k"][9:])
         # players who had paid for a cartela when the bot stopped: give it back
@@ -779,9 +777,7 @@ async def api_sms_hook(req):
     return web.json_response({"ok": True})
 
 
-# ---------- AMHARIC NUMBER SOUND (each player chooses, button in the start menu) ----------
-sound_on = set()          # players who turned sound ON (saved in the database)
-audio_ids = {}            # number -> Telegram file_id (fast resend)
+# ---------- AMHARIC NUMBER SOUND (played inside the web app only, never sent to the chat) ----------
 AUDIO_DIR = Path(__file__).parent / "audio"
 VOICE = "am-ET-AmehaNeural"
 ONES = ["", "አንድ", "ሁለት", "ሦስት", "አራት", "አምስት", "ስድስት", "ሰባት", "ስምንት", "ዘጠኝ"]
@@ -837,24 +833,6 @@ async def pregen_audio():
             await asyncio.sleep(5)
 
 
-async def send_call_audio(n, uids):
-    targets = [u for u in uids if u in sound_on]
-    if not targets:
-        return
-    try:
-        src = audio_ids.get(n) or FSInputFile(await make_audio(n))
-    except Exception as e:
-        print("audio failed:", repr(e))
-        return
-    for uid in targets:
-        try:
-            msg = await BOT.send_voice(uid, src, caption=f"{call_letter(n)}{n}")
-            audio_ids[n] = msg.voice.file_id
-            src = audio_ids[n]
-        except Exception:
-            pass
-
-
 # ---------- background jobs ----------
 async def reaper():
     """Remove players who closed the app without pressing LEAVE.
@@ -901,10 +879,6 @@ async def run_round(g):
                 or all(u in g["dq"] for u in g["players"])):
             break
         g["called"].append(n)
-        if sound_on:                       # Amharic voice for players who turned sound ON
-            t = asyncio.create_task(send_call_audio(n, list(g["players"])))
-            bg_tasks.add(t)
-            t.add_done_callback(bg_tasks.discard)
 
         # The server claims BINGO right on the call for two kinds of players:
         #   - players with Auto ON in the web app (they never miss a call)
