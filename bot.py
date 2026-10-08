@@ -213,22 +213,69 @@ def save_room_clear(bet):
     _enqueue("DELETE FROM room_players WHERE bet = $1", bet)
 
 
+# connection problems are retried; any other error must NOT block the queue forever
+_RETRY = tuple(e for e in (
+    OSError, asyncio.TimeoutError,
+    getattr(asyncpg, "PostgresConnectionError", None),
+    getattr(asyncpg, "InterfaceError", None),
+    getattr(asyncpg.exceptions, "OperatorInterventionError", None)) if e)
+_last_db_alert = [0]
+
+
+async def _db_alert(msg):
+    print(msg)
+    if BOT and ADMIN_ID and time.time() - _last_db_alert[0] > 600:
+        _last_db_alert[0] = time.time()
+        try:
+            await BOT.send_message(ADMIN_ID, "⚠️ " + msg[:300])
+        except Exception:
+            pass
+
+
+async def _write_batch(batch):
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for sql, args in batch:
+                await conn.execute(sql, *args)
+
+
 async def db_writer():
     while True:
         batch = [await _q.get()]
         while not _q.empty():
             batch.append(_q.get_nowait())
-        while True:                                   # never drop a write
+        while True:
             try:
-                async with pool.acquire() as conn:
-                    async with conn.transaction():
-                        for sql, args in batch:
-                            await conn.execute(sql, *args)
+                await _write_batch(batch)
                 break
-            except Exception as e:
-                print("db write failed, retrying:", repr(e))
+            except _RETRY as e:                       # database unreachable: wait and retry
+                print("db connection problem, retrying:", repr(e))
                 await asyncio.sleep(3)
+            except Exception as e:                    # bad data / bad SQL: retrying is useless
+                await _db_alert(f"DB write FAILED (not a connection problem): {e!r}. "
+                                "Saving the other changes one by one.")
+                for item in batch:
+                    while True:
+                        try:
+                            await _write_batch([item])
+                            break
+                        except _RETRY:
+                            await asyncio.sleep(3)
+                        except Exception as e2:
+                            print("SKIPPED bad write:", item[0][:80], repr(e2))
+                            break
+                break
+        for _ in batch:
+            _q.task_done()
 
+
+async def flush_db(timeout=20):
+    """On shutdown: wait until everything in the queue is saved."""
+    try:
+        await asyncio.wait_for(_q.join(), timeout)
+        print("database flushed")
+    except Exception as e:
+        print("could not flush the database in time:", repr(e))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(uid BIGINT PRIMARY KEY, data JSONB NOT NULL);
@@ -364,6 +411,20 @@ def verify(init_data: str):
         return json.loads(data["user"])
     except ValueError:
         return None
+
+
+def init_of(req):
+    """Telegram initData comes in a header, never in the URL (URLs end up in logs)."""
+    return req.headers.get("X-Init-Data", "")
+
+
+async def body_of(req):
+    """JSON body as a dict (empty dict if it is missing or broken)."""
+    try:
+        b = await req.json()
+    except Exception:
+        return {}
+    return b if isinstance(b, dict) else {}
 
 
 def log(uid, kind, amount, note=""):
@@ -603,7 +664,19 @@ CREDIT_WORDS = ("credited", "received", "ተቀብለዋል")
 DEBIT_WORDS = ("debited", "transferred", "you have sent", "sent to", "paid to")
 
 
+# the amount right after "credited with" / "received" is the real payment
+# (a plain "first amount in the text" can be the balance or a service fee)
+CREDIT_AMOUNT_RE = re.compile(
+    r"(?:credited\s+with|received)\s*(?:ETB|Birr|BIRR|birr|ብር)?\s*([\d,]+(?:\.\d+)?)", re.I)
+
+
 def parse_amount(text):
+    mt = CREDIT_AMOUNT_RE.search(text)
+    if mt:
+        try:
+            return int(float(mt.group(1).replace(",", "")))
+        except ValueError:
+            pass
     mt = AMOUNT_RE.search(text)
     if not mt:
         return None
@@ -626,9 +699,45 @@ def sms_tokens(text):
 def is_credit(text):
     """True only for 'money came IN' messages (never for money you sent out)."""
     low = text.lower()
-    if any(w in low for w in DEBIT_WORDS):
+    c = [low.find(w) for w in CREDIT_WORDS if w in low]
+    if not c:
         return False
-    return any(w in low for w in CREDIT_WORDS)
+    d = [low.find(w) for w in DEBIT_WORDS if w in low]
+    return not d or min(c) < min(d)        # the credit wording must come first
+
+
+# ---- payer check: the phone number inside the SMS must be the player's own ----
+# (digits can be hidden like 2519****1234; hidden positions are ignored)
+PHONE_RE = re.compile(r"(?<![\w*•])(?:\+?251|0)?(9[\d*xX•]{8})(?![\w*•])")
+
+
+def _own_numbers():
+    out = set()
+    for p in (TELEBIRR_PHONE, CBEBIRR_PHONE):
+        d = "".join(ch for ch in p if ch.isdigit())[-9:]
+        if len(d) == 9:
+            out.add(d)
+    return out
+
+
+def _fits(masked, number9):
+    return all(ch == number9[i] for i, ch in enumerate(masked) if ch.isdigit())
+
+
+def payer_match(sms_text, uid):
+    """True  = a phone number in the SMS is the player's own number.
+       False = the SMS shows other phone numbers only (someone else paid).
+       None  = no usable phone number in the SMS (cannot tell)."""
+    mine = phones.get(uid, "")[-9:]
+    if len(mine) < 9:
+        return None
+    own = _own_numbers()
+    found = [c for c in PHONE_RE.findall(sms_text)
+             if sum(ch.isdigit() for ch in c) >= 4
+             and not any(_fits(c, o) for o in own)]      # skip YOUR receiving number
+    if not found:
+        return None
+    return any(_fits(c, mine) for c in found)
 
 
 def mark_token(t):
@@ -715,6 +824,8 @@ async def on_bank_sms(rec):
             continue
         if not set(req.get("tokens", [])) & set(rec["tokens"]):
             continue
+        if payer_match(rec["text"], req["uid"]) is False:
+            continue                  # paid from a different phone: leave it to the admin
         pending.pop(rid, None)
         save_pending(rid)
         claim_bank(rec)
@@ -768,7 +879,7 @@ async def api_sms_hook(req):
     rec = {"h": h, "t": int(time.time()), "amount": amount,
            "tokens": sorted(sms_tokens(text)),
            "credit": bool(amount) and is_credit(text), "claimed": False,
-           "text": text[:300], "from": sender[:30]}
+           "text": text[:500], "from": sender[:30]}
     bank_sms.insert(0, rec)
     bank_by_h.add(h)
     del bank_sms[500:]
@@ -953,7 +1064,7 @@ def play_balance(uid):
 
 
 async def api_state(req):
-    user = verify(req.query.get("initData", ""))
+    user = verify(init_of(req))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -973,6 +1084,7 @@ async def api_state(req):
         "bet": g["bet"], "derash": int(n * g["bet"] * 0.8),
         "wallet": play_balance(uid), "bonus": bonus.get(uid, 0),
         "cash": wallets[uid], "name": names[uid],
+        "withdrawable": withdrawable_amount(uid),
         "turnover": turnover_info(uid),
         "count": CARD_COUNT, "taken": list(g["players"].values()),
         "myCard": my, "card": make_card(my) if my else None,
@@ -1004,7 +1116,7 @@ async def api_state(req):
 
 
 async def api_profile(req):
-    user = verify(req.query.get("initData", ""))
+    user = verify(init_of(req))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -1021,7 +1133,7 @@ async def api_profile(req):
 
 
 async def api_history(req):
-    user = verify(req.query.get("initData", ""))
+    user = verify(init_of(req))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -1046,7 +1158,7 @@ async def api_history(req):
 
 
 async def api_game(req):
-    user = verify(req.query.get("initData", ""))
+    user = verify(init_of(req))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -1072,7 +1184,7 @@ async def api_card(req):
 
 
 async def api_join(req):
-    body = await req.json()
+    body = await body_of(req)
     user = verify(body.get("initData", ""))
     if not user:
         return web.json_response({"ok": False, "error": "Open from Telegram"})
@@ -1145,7 +1257,7 @@ async def notify_false_bingo(uid, card_no, bet, late=False):
 
 
 async def api_bingo(req):
-    body = await req.json()
+    body = await body_of(req)
     user = verify(body.get("initData", ""))
     if not user:
         return web.json_response({"ok": False})
@@ -1183,7 +1295,7 @@ async def api_bingo(req):
 
 
 async def api_leave(req):
-    body = await req.json()
+    body = await body_of(req)
     user = verify(body.get("initData", ""))
     if user:
         g = room_of(user["id"])
@@ -1192,6 +1304,18 @@ async def api_leave(req):
         elif g and g["phase"] == "playing":
             g["left"].add(user["id"])              # round running: bet stays in the game,
                                                    # the server claims a win for this player
+    return web.json_response({"ok": True})
+
+
+async def api_resume(req):
+    """Player came back to a running round: he plays himself again
+    (the server stops claiming for him)."""
+    body = await body_of(req)
+    user = verify(body.get("initData", ""))
+    if user:
+        g = room_of(user["id"])
+        if g:
+            g["left"].discard(user["id"])
     return web.json_response({"ok": True})
 
 
@@ -1749,6 +1873,9 @@ async def cmd_transactions(m: Message):
 async def menu_buttons(cb: CallbackQuery):
     action = (cb.data or "").split(":", 1)[1]
 
+    if not isinstance(cb.message, Message):     # message too old / not available
+        await cb.answer("Please send /start again.", show_alert=True)
+        return
     await cb.answer()
     # same message, but "from" is the player who pressed the button,
     # so the normal command handlers work unchanged
@@ -2146,24 +2273,51 @@ async def sms_deposit(m: Message):
         await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
         return
     tokens = sms_tokens(text)
+    key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
+
+    # ===== NO "await" between the checks and the claim below =====
+    # (an await lets a second copy of the same SMS slip through the checks)
     if any(("tok:" + t) in used_sms for t in tokens):
         await m.answer("ይህ ክፍያ ቀደም ብሎ ተመዝግቧል። / This payment was already credited.")
         return
-    key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
     if key in used_sms:
         await m.answer("ይህ መልዕክት ቀደም ብሎ ተልኳል። / This message was already sent.")
         return
+    if any(r["type"] == "deposit"
+           and (r.get("key") == key or set(r.get("tokens", [])) & tokens)
+           for r in pending.values()):
+        await m.answer("ይህ ክፍያ እየተረጋገጠ ነው። / This payment is already being checked.")
+        return
 
-    # tell the player right away that the request was received
+    rec = find_bank_sms(amount, tokens)          # same SMS already came from YOUR phone?
+    pm = payer_match(rec["text"], uid) if rec else None
+    auto = bool(rec) and pm is not False         # a different payer phone = manual check
+    if not auto:
+        if not ADMIN_ID:
+            await m.answer(f"Deposits are handled by support: {SUPPORT}")
+            return
+        if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+            await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
+                           f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
+            return
+
+    used_sms.add(key)                            # CLAIMED: a second copy is refused from now on
+    save_sms(key)
+    rid = None
+    if auto:
+        claim_bank(rec)
+    else:
+        req_counter[0] += 1
+        rid = req_counter[0]
+        pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
+                        "tokens": sorted(tokens), "key": key}
+        save_pending(rid)
+    # ===== end of the no-await part =====
+
     await m.answer("Deposit request received. Your top-up will be done in a minute.\n"
                    "ጥያቄዎ ደርሶናል። በአንድ ደቂቃ ውስጥ ገንዘቡ ይገባል።")
 
-    # 1) Automatic: the same payment SMS already arrived from YOUR phone
-    rec = find_bank_sms(amount, tokens)
-    if rec:
-        used_sms.add(key)
-        save_sms(key)
-        claim_bank(rec)
+    if auto:                                     # 1) automatic
         await approve_deposit(m.bot, uid, rec["amount"])
         if ADMIN_ID:
             try:
@@ -2174,31 +2328,23 @@ async def sms_deposit(m: Message):
                 pass
         return
 
-    # 2) Not found (yet): send to the admin. If your phone's SMS arrives
-    #    later, it is approved automatically.
-    if not ADMIN_ID:
-        await m.answer(f"Deposits are handled by support: {SUPPORT}")
-        return
-    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
-        await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
-                       f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
-        return
-    used_sms.add(key)
-    save_sms(key)
-    req_counter[0] += 1
-    rid = req_counter[0]
-    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
-                    "tokens": sorted(tokens), "key": key}
-    save_pending(rid)
+    # 2) manual: the admin decides. If your phone's SMS arrives later
+    #    (and the payer phone fits), it is approved automatically.
+    if rec:
+        warn = ("⚠️ A matching SMS is on your phone, BUT the payer phone number in it "
+                "is NOT this player's number. Check carefully before approving.")
+    else:
+        warn = "⚠️ Not found in your phone's SMS yet. Check your account before approving."
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
         InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
-    await m.bot.send_message(
-        ADMIN_ID,
-        f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
-        f"Amount: {amount} birr\n"
-        f"⚠️ Not found in your phone's SMS yet. Check your account before approving.\n\n"
-        f"SMS:\n{text[:800]}", reply_markup=kb)
+    try:
+        await m.bot.send_message(
+            ADMIN_ID,
+            f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
+            f"Amount: {amount} birr\n{warn}\n\nSMS:\n{text[:800]}", reply_markup=kb)
+    except Exception as e:
+        print("could not message admin:", repr(e))
     await m.answer(f"🔎 ጥያቄዎ #{rid} እየተረጋገጠ ነው። ሲጸድቅ መልዕክት ይደርስዎታል።\n"
                    f"Your payment #{rid} is being checked. You will get a message soon.")
 
@@ -2392,6 +2538,7 @@ async def main():
         web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
+        web.post("/api/resume", api_resume),
         web.post("/api/sms-hook", api_sms_hook),
     ])
     runner = web.AppRunner(app)
@@ -2413,7 +2560,7 @@ async def main():
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
 
-    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.delete_webhook(drop_pending_updates=False)
 
     # branding on the bot's profile page
     try:
@@ -2478,7 +2625,11 @@ async def main():
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
             print("could not set admin menu:", repr(e))
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)               # returns on SIGTERM / Ctrl+C
+    finally:
+        ready = False                             # stop taking new API calls
+        await flush_db()                          # save everything that is still queued
 
 
 asyncio.run(main())
