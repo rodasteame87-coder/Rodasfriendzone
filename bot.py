@@ -29,6 +29,7 @@ TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "")
 CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
+SIGNUP_BONUS = int(os.getenv("SIGNUP_BONUS", "10"))   # play-only welcome bonus for NEW players (0 = off)
 REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
 
 BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
@@ -87,6 +88,7 @@ pending, req_counter = {}, [0]          # deposit / withdraw requests
 used_sms = set()                        # SMS already sent + used payment numbers ("tok:...")
 referrer, invited = {}, {}              # player -> who invited him / invite count
 ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
+signup_given, signup_phones = set(), set()   # welcome bonus already given (accounts / phone numbers)
 ref_phones = set()                      # phone numbers (last 9 digits) that already gave an invite bonus
 wd_state = {}                           # players in the middle of a withdraw
 phones = {}                             # player -> verified phone number
@@ -143,7 +145,7 @@ def save_user(uid):
             "hist": history.get(uid, []), "winlog": winlog.get(uid, []),
             "phone": phones.get(uid), "ref": referrer.get(uid),
             "inv": invited.get(uid, 0), "earn": ref_earn.get(uid, 0),
-            "paid": uid in ref_paid, "ban": uid in banned,
+            "paid": uid in ref_paid, "ban": uid in banned, "sb": uid in signup_given,
             "dep": deposited.get(uid, 0), "wag": wagered.get(uid, 0),
             "req": required.get(uid, 0), "dc": dep_count.get(uid, 0)}
     _enqueue("INSERT INTO users(uid, data) VALUES($1, $2::jsonb) "
@@ -318,6 +320,8 @@ async def load_state():
             ref_earn[uid] = d.get("earn", 0)
             if d.get("paid"):
                 ref_paid.add(uid)
+            if d.get("sb"):
+                signup_given.add(uid)
             if d.get("ban"):
                 banned.add(uid)
         for r in await c.fetch("SELECT rid, data FROM pending"):
@@ -337,6 +341,8 @@ async def load_state():
                 game_counter[0] = r["v"]
             elif r["k"].startswith("refphone:"):
                 ref_phones.add(r["k"][9:])
+            elif r["k"].startswith("signup:"):
+                signup_phones.add(r["k"][7:])
         # players who had paid for a cartela when the bot stopped: give it back
         stuck = await c.fetch("SELECT uid, bet, used, bonus_used FROM room_players")
     for r in stuck:
@@ -1477,10 +1483,26 @@ async def got_contact(m: Message):
                        "Please use the button to share your own number.",
                        reply_markup=phone_kb())
         return
+    first_time = uid not in phones              # only a NEW registration gets the welcome bonus
     phones[uid] = "".join(ch for ch in c.phone_number if ch.isdigit())
-    save_user(uid)
-    await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
-                   reply_markup=ReplyKeyboardRemove())
+    pk = phones[uid][-9:]
+    gift = 0
+    if (SIGNUP_BONUS > 0 and first_time and len(pk) == 9
+            and uid not in signup_given and pk not in signup_phones):
+        signup_given.add(uid)                   # once per account AND once per phone number
+        signup_phones.add(pk)
+        _save_counter("signup:" + pk, 1)
+        bonus[uid] = bonus.get(uid, 0) + SIGNUP_BONUS
+        log(uid, "bonus", SIGNUP_BONUS, "Welcome bonus")      # also saves the user
+        gift = SIGNUP_BONUS
+    else:
+        save_user(uid)
+    msg = "✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!"
+    if gift:
+        msg += (f"\n\n🎁 {gift} ብር የእንኳን ደህና መጡ ቦነስ አግኝተዋል! (ለመጫወት ብቻ)\n"
+                f"You got a {gift} birr welcome bonus (play only). "
+                "Anything you win with it is withdrawable.")
+    await m.answer(msg, reply_markup=ReplyKeyboardRemove())
     await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
 
 
