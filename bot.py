@@ -71,7 +71,7 @@ rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None,
              "seq": [], "secret": "", "hash": "",
              "wcells": [], "wname": "", "finish_at": 0,
-             "winners": [], "wlist": [], "share": 0, "dq": set()}
+             "winners": [], "wlist": [], "share": 0, "dq": set(), "left": set()}
          for b in BETS}
 wallets, names, seen = {}, {}, {}                  # wallets = real, withdrawable-type money
 bonus = {}                                         # PLAY-ONLY bonus money (never withdrawn / transferred)
@@ -855,7 +855,7 @@ async def run_round(g):
              round=g["round"] + 1, deadline=None,
              seq=[], secret="", hash="",
              wcells=[], wname="", finish_at=0,
-             winners=[], wlist=[], share=0, dq=set())
+             winners=[], wlist=[], share=0, dq=set(), left=set())
 
     # wait until MIN_PLAYERS have chosen a cartela (that starts the countdown),
     # then count down. If players leave and fewer than MIN_PLAYERS remain,
@@ -885,7 +885,8 @@ async def run_round(g):
         #   - players who are AWAY (app closed)
         # Manual players must press BINGO themselves before the next number is called.
         now = time.time()
-        away = {u for u in g["players"] if now - seen.get(u, 0) > IDLE_KICK}
+        away = {u for u in g["players"]
+                if now - seen.get(u, 0) > IDLE_KICK or u in g["left"]}
         claimers = [u for u, no in g["players"].items()
                     if u not in g["dq"]
                     and (u in away or auto_pref.get(u))
@@ -1187,7 +1188,10 @@ async def api_leave(req):
     if user:
         g = room_of(user["id"])
         if g and g["phase"] == "lobby":
-            remove_player(user["id"])
+            remove_player(user["id"])              # lobby: stake is refunded
+        elif g and g["phase"] == "playing":
+            g["left"].add(user["id"])              # round running: bet stays in the game,
+                                                   # the server claims a win for this player
     return web.json_response({"ok": True})
 
 
