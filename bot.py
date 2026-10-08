@@ -1699,7 +1699,6 @@ async def cmd_support(m: Message):
 # ---------- start screen: button menu ----------
 def menu_kb(uid=None):
     b = InlineKeyboardButton
-    snd = "🔊 ድምጽ: ON" if uid in sound_on else "🔇 ድምጽ: OFF"
     return InlineKeyboardMarkup(inline_keyboard=[
         [b(text="🎮 ጨዋታ ተጫወት", web_app=WebAppInfo(url=WEBAPP_URL)),
          b(text="🏆 የማሸነፊያ ስርዓቶች", callback_data="menu:patterns")],
@@ -1710,7 +1709,6 @@ def menu_kb(uid=None):
         [b(text="📜 የእኔ ግብይቶች", callback_data="menu:tx"),
          b(text="👥 ጓደኞችን ጋብዝ", callback_data="menu:invite")],
         [b(text="📞 ድጋፍ ያግኙ", callback_data="menu:support")],
-        [b(text=snd, callback_data="menu:sound")],
     ])
 
 
@@ -1781,21 +1779,6 @@ async def cmd_transactions(m: Message):
 @dp.callback_query(F.data.startswith("menu:"))
 async def menu_buttons(cb: CallbackQuery):
     action = (cb.data or "").split(":", 1)[1]
-
-    # Sound ON/OFF button: flips the setting and redraws the menu button
-    if action == "sound":
-        uid = ensure(cb.from_user)
-        if uid in sound_on:
-            sound_on.discard(uid)
-        else:
-            sound_on.add(uid)
-        _save_counter(f"snd:{uid}", 1 if uid in sound_on else 0)
-        try:
-            await cb.message.edit_reply_markup(reply_markup=menu_kb(uid))
-        except Exception:
-            pass
-        await cb.answer("Sound ON 🔊" if uid in sound_on else "Sound OFF 🔇")
-        return
 
     await cb.answer()
     # same message, but "from" is the player who pressed the button,
