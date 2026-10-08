@@ -20,7 +20,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (Message, BotCommand, BotCommandScopeChat)
-
+print([k for k in os.environ if "TOKEN" in k.upper() or "BOT" in k.upper()])
 TOKEN = os.environ["SUPPORT_BOT_TOKEN"]
 _raw_admins = os.getenv("SUPPORT_ADMIN_IDS") or os.getenv("ADMIN_ID") or ""
 ADMIN_IDS = {int(x) for x in re.split(r"[,\s]+", _raw_admins.strip()) if x.isdigit()}
