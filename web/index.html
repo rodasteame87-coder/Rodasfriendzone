@@ -215,7 +215,7 @@
   <div id="tab-game">
     <div class="top">
       <div class="live"><span class="dot"></span>Live</div>
-      <div class="bal">💳 Balance: <b id="bal">0.00</b></div>
+      <div class="bal" style="text-align:right">💳 Balance: <b id="bal">0.00</b><br><small id="wdl" style="font-weight:600;color:#6b5a7c">Withdrawable: 0.00</small></div>
     </div>
     <div class="gt">🎯 BINGO GAMES</div>
     <div class="colhead"><span>BET</span><span>POSSIBLE WIN · STATUS</span></div>
@@ -399,14 +399,23 @@ const COLS = ["B","I","N","G","O"];
 const st = { card:null, cardNo:0, called:[], marked:new Set() };
 let R = 0;                                   // room (bet) the player is looking at
 let leftKey = "";                            // round the player walked out of (stays out of the game screen)
-let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false;
+let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false, lastErr = "";
 let P = null, pfTab = "ov";                  // profile data + selected profile tab
 const H = { scope:"recent", bet:10, q:"" };  // history filters
 
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
-async function get(p){ const r=await fetch(API+p+(p.includes("?")?"&":"?")+"initData="+encodeURIComponent(initData())); return r.json(); }
-async function post(p,b){ const r=await fetch(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})}); return r.json(); }
+async function get(p){
+  // initData goes in a header (never in the URL, so it can not leak into logs)
+  const r = await fetch(API+p, {headers:{"X-Init-Data": initData()}});
+  let j; try{ j = await r.json(); }catch(e){ j = {error:"http "+r.status}; }
+  if(!r.ok && !j.error) j.error = "http "+r.status;
+  return j;
+}
+async function post(p,b){
+  const r = await fetch(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})});
+  try{ return await r.json(); }catch(e){ return {ok:false, error:"Server error"}; }
+}
 function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
 const letter = n => COLS[Math.floor((n-1)/15)];
 const label = n => letter(n)+"-"+n;      // e.g. B-1, O-71
@@ -467,6 +476,10 @@ function drawProfile(){
   let h = "";
   if(pfTab==="ov"){
     h = prow("Current Balance", P.balance.toFixed(2)+" birr")
+      + prow("Cash", P.cash.toFixed(2)+" birr")
+      + prow("Play-only bonus", P.bonus.toFixed(2)+" birr")
+      + prow("Withdrawable now", P.withdrawable.toFixed(2)+" birr")
+      + (P.turnover && P.turnover.left>0 ? prow("Still to play before withdrawing", P.turnover.left+" birr") : "")
       + prow("Username", P.username ? "@"+esc(P.username) : esc(P.name))
       + prow("Member Since", fmtDate(P.joined));
   } else if(pfTab==="tx"){
@@ -577,7 +590,6 @@ function drawWin(){
 /* ---------- render from server state ---------- */
 function render(){
   if(!S) return;
-  if(S.error){ if(!errShown){ errShown=true; toast("Please open this from the bot in Telegram"); } return; }
 
   const key = S.room+":"+S.round;
   if(key!==lastRound){ st.marked=new Set(); lastRound=key; }
@@ -586,6 +598,7 @@ function render(){
   // lobby: a room only shows a countdown once enough players have joined,
   // before that it shows how many players it still needs (e.g. 2/5)
   $("bal").textContent=S.wallet.toFixed(2);
+  $("wdl").textContent="Withdrawable: "+Number(S.withdrawable||0).toFixed(2)+(S.bonus ? " · Play-only bonus: "+Number(S.bonus).toFixed(2) : "");
   $("roomList").innerHTML = S.rooms.map(r=>{
     const enough = r.players >= S.minPlayers;
     const lbl = r.phase!=="lobby" ? "playing"
@@ -666,13 +679,31 @@ function render(){
 
   drawWin();
 }
-async function sync(){
+function syncError(code){
+  lastErr = code;
+  if(errShown) return;                       // tell the player once, not every second
+  errShown = true;
+  toast(code==="starting" ? "Server is starting, please wait…"
+      : code==="auth" ? "Please close the app and open it again from the bot in Telegram"
+      : "Connection problem, retrying…");
+}
+let seq = 0, busy = false;
+async function doSync(){
+  const my = ++seq;
+  let d;
   try{
     // the Auto setting travels with every sync so the server can claim BINGO for Auto players
-    S=await get("/state?room="+R+"&auto="+($("auto").checked?1:0));
-    errShown=false; render();
-  }
-  catch(e){ console.error(e); }
+    d = await get("/state?room="+R+"&auto="+($("auto").checked?1:0));
+  }catch(e){ console.error(e); if(my===seq) syncError("net"); return; }
+  if(my!==seq) return;                       // a newer request already started: drop this older answer
+  if(d.error){ syncError(d.error); return; } // keep showing the last good state
+  S = d; errShown = false; lastErr = ""; render();
+}
+const sync = doSync;                         // used after player actions (always fetches fresh)
+function tick(){                             // the 1-second timer never piles up requests
+  if(busy) return;
+  busy = true;
+  doSync().finally(()=>{ busy = false; });
 }
 
 /* ---------- events ---------- */
@@ -706,9 +737,9 @@ $("openFree").onclick=()=>toast("Practice mode is coming soon");
 
 $("roomList").onclick=e=>{
   const b=e.target.closest(".j"); if(!b) return;
-  if(!S) return toast("Can't reach server yet — wait a few seconds and tap again");
-  if(S.error) return toast("Please open this from the bot in Telegram");
-  if(b.dataset.resume){ leftKey=""; R=+b.dataset.r; show("game"); sync(); return; }
+  if(!S) return toast(lastErr==="auth" ? "Please open this from the bot in Telegram"
+                                       : "Can't reach server yet — wait a few seconds and tap again");
+  if(b.dataset.resume){ leftKey=""; R=+b.dataset.r; show("game"); post("/resume",{}).then(sync); return; }
   if(b.classList.contains("dim")) return toast("A round is in progress. Join the next one.");
   R=+b.dataset.r; show("pick"); sync();
 };
@@ -805,7 +836,7 @@ function playNew(){
 
 /* ---------- start ---------- */
 buildCalls();
-sync(); setInterval(sync, 1000);     // 1 second, so manual players see each call quickly
+sync(); setInterval(tick, 1000);     // 1 second, so manual players see each call quickly
 setInterval(()=>{ if(screen==="lobby" && !$("tab-profile").hidden) loadProfile(); }, 5000);
 </script>
 </body>
