@@ -7,6 +7,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F, BaseMiddleware
 from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeChat,
+                           BotCommandScopeDefault, BotCommandScopeAllPrivateChats,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
                            ReplyKeyboardRemove, WebAppInfo, FSInputFile)
@@ -19,6 +20,7 @@ SMS_SECRET = os.getenv("SMS_SECRET", "")              # secret key for the SMS f
 PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
+RESET_USER_MENUS = os.getenv("RESET_USER_MENUS", "") == "1"   # set to 1 for ONE deploy to clear old per-player menus
 
 # ---------- PAYMENT DETAILS (set these ONLY in environment variables, never in code) ----------
 CBE_ACCOUNT = os.getenv("CBE_ACCOUNT", "")
@@ -1638,46 +1640,7 @@ def find_by_phone(text):
     return None
 
 
-@dp.message(Command("transfer"))
-async def cmd_transfer(m: Message, command: CommandObject):
-    """Only cash can be transferred. Bonus money never leaves the account.
-    Turned off for players: only the admin can use it."""
-    if not is_admin(m):
-        return
-    uid = ensure(m.from_user)
-    if await need_phone(m):
-        return
-    args = (command.args or "").split()
-    if len(args) != 2 or not to_amount(args[1]):
-        await m.answer(
-            "🔁 Transfer\n\n"
-            "Send:\n/transfer <phone number> <amount>\n\n"
-            "Example:\n/transfer 0912345678 50")
-        return
-    to, amount = find_by_phone(args[0]), int(args[1])
-    if not to:
-        await m.answer("No player found with that phone number.\n"
-                       "They must start the bot and share their number first.")
-    elif to == uid:
-        await m.answer("You can't transfer to yourself.")
-    elif wallets[uid] < amount:
-        await m.answer("Not enough balance. (Bonus money cannot be transferred.)")
-    else:
-        wallets[uid] -= amount
-        wallets[to] += amount
-        # the receiver must play transferred money 1x before withdrawing it
-        # (stops "deposit -> transfer to 2nd account -> withdraw" tricks)
-        deposited[to] = deposited.get(to, 0) + amount
-        required[to] = required.get(to, 0) + amount
-        log(uid, "transfer", -amount, f"Transfer to {names.get(to, to)}")
-        log(to, "transfer", amount, f"Transfer from {names[uid]}")
-        await m.answer(f"✅ Sent {amount} birr to {names.get(to, to)}.\n"
-                       f"New balance: {wallets[uid]:.2f}")
-        try:
-            await m.bot.send_message(
-                to, f"💸 You received {amount} birr from {names[uid]}.")
-        except Exception:
-            pass
+# (The /transfer command has been removed completely.)
 
 
 # /instruction and /instructions both work (the menu uses /instructions)
@@ -2446,6 +2409,22 @@ async def admin_buttons(cb: CallbackQuery):
     await cb.answer("Done")
 
 
+# ---------- menu cleanup helpers ----------
+async def reset_user_menus(bot):
+    """One-time cleanup (RESET_USER_MENUS=1): delete old per-player command lists."""
+    n = 0
+    for uid in list(wallets):
+        if uid == ADMIN_ID:
+            continue
+        try:
+            await bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=uid))
+            n += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)
+    print(f"cleared old command lists for {n} players")
+
+
 # ---------- main ----------
 async def main():
     global pool, lock_conn, ready, _q, BOT
@@ -2504,11 +2483,27 @@ async def main():
         BotCommand(command="balance", description="💰 Check Balance"),
         BotCommand(command="deposit", description="💵 Deposit"),
         BotCommand(command="withdraw", description="💸 Withdraw"),
-        BotCommand(command="transactions", description="📜 My Transactions"),
-        BotCommand(command="invite", description="👥 Invite Friends"),
-        BotCommand(command="support", description="📞 Support"),
-    ]
-    await bot.set_my_commands(public_commands)
+      ]
+
+    # Telegram keeps SEPARATE command lists per scope and per language, and a more
+    # specific old list wins over the default. Clear all of them, then set the new one.
+    for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):
+        for lang in (None, "en", "am", "om", "ti"):
+            try:
+                await bot.delete_my_commands(scope=scope, language_code=lang)
+            except Exception:
+                pass
+    try:
+        await bot.set_my_commands(public_commands, scope=BotCommandScopeDefault())
+        await bot.set_my_commands(public_commands, scope=BotCommandScopeAllPrivateChats())
+    except Exception as e:
+        print("could not set player menu:", repr(e))
+
+    if RESET_USER_MENUS:                          # one-time: clear old per-player lists
+        t = asyncio.create_task(reset_user_menus(bot))
+        bg_tasks.add(t)
+        t.add_done_callback(bg_tasks.discard)
+
     if ADMIN_ID:                                  # extra menu only you can see
         try:
             await bot.set_my_commands(
@@ -2532,3 +2527,5 @@ async def main():
 
 
 asyncio.run(main())
+
+ 
