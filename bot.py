@@ -53,7 +53,7 @@ CALL_EVERY = 4             # seconds between calls
 LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
-MIN_PLAYERS = 1            # a round needs at least 1 player (testing)
+MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise stakes are refunded
 IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
@@ -506,8 +506,8 @@ def remove_player(uid):
         stake_bonus.pop(uid, None)
     g["players"].pop(uid, None)
     save_room_leave(uid)
-    if g["phase"] == "lobby" and not g["players"]:
-        g["deadline"] = None                              # stop countdown
+    if g["phase"] == "lobby" and len(g["players"]) < MIN_PLAYERS:
+        g["deadline"] = None                              # not enough players: stop countdown
 
 
 def lobby_time(g):
@@ -879,20 +879,14 @@ async def run_round(g):
              wcells=[], wname="", finish_at=0,
              winners=[], wlist=[], share=0, dq=set())
 
-    # wait for the first player, then count down
-    while g["deadline"] is None or time.time() < g["deadline"]:
+    # wait until MIN_PLAYERS have chosen a cartela (that starts the countdown),
+    # then count down. If players leave and fewer than MIN_PLAYERS remain,
+    # the countdown stops and starts again when enough players are back.
+    while True:
+        if (g["deadline"] is not None and time.time() >= g["deadline"]
+                and len(g["players"]) >= MIN_PLAYERS):
+            break
         await asyncio.sleep(1)
-
-    if len(g["players"]) < MIN_PLAYERS:
-        g["deadline"] = time.time() + LOBBY_SECONDS
-        while g["deadline"] is not None and time.time() < g["deadline"]:
-            await asyncio.sleep(1)
-        if len(g["players"]) < MIN_PLAYERS:
-            for uid in list(g["players"]):
-                refund_stake(uid, g["bet"], f"Room {g['bet']} refund (not enough players)")
-            g["players"].clear()
-            save_room_clear(g["bet"])
-            return
 
     # provably fair: pick all numbers + secret first, publish the hash
     g["seq"] = rng.sample(range(1, 76), 75)
@@ -1009,7 +1003,8 @@ async def api_state(req):
     n = len(g["players"])
     return web.json_response({
         "phase": g["phase"], "time": lobby_time(g), "round": g["round"],
-        "players": n, "bet": g["bet"], "derash": int(n * g["bet"] * 0.8),
+        "players": n, "minPlayers": MIN_PLAYERS,
+        "bet": g["bet"], "derash": int(n * g["bet"] * 0.8),
         "wallet": play_balance(uid), "bonus": bonus.get(uid, 0),
         "cash": wallets[uid], "name": names[uid],
         "turnover": turnover_info(uid),
@@ -1160,8 +1155,8 @@ async def api_join(req):
         + (f" (bonus {bonus_used})" if bonus_used else ""))
     g["players"][uid] = card
     save_room_join(g["bet"], uid, card, used, bonus_used)
-    if g["deadline"] is None:                  # first player starts the clock
-        g["deadline"] = time.time() + LOBBY_SECONDS
+    if g["deadline"] is None and len(g["players"]) >= MIN_PLAYERS:
+        g["deadline"] = time.time() + LOBBY_SECONDS     # clock starts when enough players joined
     return web.json_response({"ok": True})
 
 
