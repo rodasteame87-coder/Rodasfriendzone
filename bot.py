@@ -1349,6 +1349,62 @@ START_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
               "እንኳን በደህና መጡ! ለመጀመር «Start» ቁልፍን ይንኩ።\n\n"
               "Welcome! Tap Start to begin.")
 PHONE_TEXT = ("📱 ለመቀጠል ስልክ ቁጥርዎን ያጋሩ\n\n"
+              "ከታች ያለውን «ስልክ ቁጥር ያጋሩ» ቁልፍ ይንኩ።\n\n"
+              "To continue, tap the button below to share your phone number.")
+WELCOME_TEXT = ("👋 እንኳን በደህና መጡ! ቢንጎ ለመጫወት ዝግጁ ነዎት?\n\n"
+                "Welcome! Ready to play Bingo?\n\n"
+                f"{BRAND}")
+
+
+def start_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="▶️ Start", callback_data="start:go")]])
+
+
+def phone_kb():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 ስልክ ቁጥር ያጋሩ / Share phone number",
+                                  request_contact=True)]],
+        resize_keyboard=True, one_time_keyboard=True)
+
+
+async def need_phone(m: Message):
+    """True (and shows the Start button) if the player has not shared a phone yet."""
+    if m.from_user.id in phones:
+        return False
+    await m.answer(START_TEXT, reply_markup=start_kb())
+    return True
+
+
+@dp.callback_query(F.data == "start:go")
+async def start_go(cb: CallbackQuery):
+    if cb.from_user.id in phones:
+        await cb.message.answer(WELCOME_TEXT, reply_markup=menu_kb(cb.from_user.id))
+    else:
+        await cb.message.answer(PHONE_TEXT, reply_markup=phone_kb())
+    await cb.answer()
+
+
+@dp.message(F.contact)
+async def got_contact(m: Message):
+    uid = ensure(m.from_user)
+    c = m.contact
+    if c.user_id != uid:                        # must be the player's OWN number
+        await m.answer("እባክዎ የራስዎን ስልክ ቁጥር ለማጋራት ከታች ያለውን ቁልፍ ይጠቀሙ።\n"
+                       "Please use the button to share your own number.",
+                       reply_markup=phone_kb())
+        return
+    phones[uid] = "".join(ch for ch in c.phone_number if ch.isdigit())
+    save_user(uid)
+    await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
+                   reply_markup=ReplyKeyboardRemove())
+    await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
+
+
+@dp.message(CommandStart())
+async def cmd_start(m: Message, command: CommandObject):
+    is_new = m.from_user.id not in wallets
+    uid = ensure(m.from_user)
     arg = command.args or ""
     if is_new and arg.startswith("ref_") and arg[4:].isdigit():
         inviter = int(arg[4:])
@@ -1385,6 +1441,90 @@ async def cmd_balance(m: Message):
     bon = bonus.get(uid, 0)
     w = withdrawable_amount(uid)          # cash minus the deposit still to be played
     locked = (cash - w) + bon             # cash still waiting for turnover + play-only bonus
+    total = cash + bon
+    prog = progress_text(uid)
+    extra = ("\n\n" + prog) if prog else ""
+    await m.answer(
+        "Your wallet's detail currently is:\n\n"
+        "<blockquote>"
+        f"Name:  {html.escape(names[uid])}\n"
+        f"Phone Number:  {phones.get(uid, '-')}\n"
+        f"Withdrawable Balance:  {w:.2f} ETB\n"
+        f"Non-withdrawable Bal:  {locked:.2f} ETB\n"
+        "----------------------------------------\n"
+        f"<b>Total Balance: {total:.2f} ETB</b>\n"
+        "----------------------------------------"
+        "</blockquote>" + html.escape(extra + "\n\n" + BRAND),
+        parse_mode="HTML")
+
+
+@dp.message(Command("deposit"))
+async def cmd_deposit(m: Message, command: CommandObject):
+    uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
+    args = (command.args or "").split(maxsplit=1)
+    amount = to_amount(args[0]) if args else None
+    if not amount:
+        await m.answer(deposit_menu_text(uid), reply_markup=deposit_kb())
+        return
+    if amount < MIN_DEPOSIT:
+        await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
+        return
+    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+        await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
+                       f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
+        return
+    if not ADMIN_ID:
+        await m.answer(f"Deposits are handled by support: {SUPPORT}")
+        return
+    ref = args[1] if len(args) > 1 else "(none)"
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    save_pending(rid)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
+        InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
+    await m.bot.send_message(
+        ADMIN_ID,
+        f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
+        f"Amount: {amount} birr\nReference: {ref}", reply_markup=kb)
+    await m.answer(f"✅ Request #{rid} sent. You will get a message when it is approved.")
+
+
+# ---------- withdraw (CBE / Telebirr / CBE Birr) ----------
+# Only CASH can be withdrawn: wallet minus the deposit that still has to be played.
+# Bonus money is play-only and is never counted.
+WD_NAMES = {"cbe": "CBE", "telebirr": "Telebirr", "cbebirr": "CBE Birr"}
+WD_MENU_TEXT = ("💸 ገንዘብ ማውጣት\n\n"
+                "እባክዎ ገንዘብዎን ለመቀበል የሚፈልጉትን አማራጭ ይምረጡ 👇\n\n"
+                "Select how you want to receive your money:")
+
+
+def wd_menu_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="CBE", callback_data="wd:cbe")],
+        [InlineKeyboardButton(text="Telebirr", callback_data="wd:telebirr"),
+         InlineKeyboardButton(text="CBE Birr", callback_data="wd:cbebirr")],
+    ])
+
+
+def wd_cancel_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="❌ ሰርዝ / Cancel", callback_data="wd:cancel")]])
+
+
+def wd_account_prompt(kind):
+    if kind == "cbe":
+        return ("የ CBE አካውንት ቁጥርዎንና ሙሉ ስምዎን ይላኩ።\n\n"
+                "ምሳሌ:\n1000123456789 Abebe Kebede")
+    if kind == "telebirr":
+        return "የቴሌብር ስልክ ቁጥርዎን ይላኩ።\n\nምሳሌ:\n0912345678"
+    return "የ CBE Birr ስልክ ቁጥርዎን ይላኩ።\n\nምሳሌ:\n0912345678"
+
+
+async def submit_withdraw(m: Message, uid, amount, account, method):
     if amount < MIN_WITHDRAW:
         await m.answer(f"ዝቅተኛው የማውጫ መጠን {MIN_WITHDRAW} ብር ነው።\n"
                        f"Minimum withdraw is {MIN_WITHDRAW} birr.")
@@ -1420,6 +1560,12 @@ async def cmd_balance(m: Message):
 async def cmd_withdraw(m: Message, command: CommandObject):
     uid = ensure(m.from_user)
     if await need_phone(m):
+        return
+    wd_state.pop(uid, None)
+    if withdrawable_amount(uid) < MIN_WITHDRAW:
+        await m.answer(turnover_msg(uid))
+        return
+    args = (command.args or "").split(maxsplit=1)
     amount = to_amount(args[0]) if args else None
     if not amount or len(args) < 2:
         await m.answer(WD_MENU_TEXT, reply_markup=wd_menu_kb())
@@ -1457,6 +1603,261 @@ def wd_active(m: Message):
     return bool(s) and time.time() - s["t"] < 600
 
 
+@dp.message(F.text & ~F.text.startswith("/"), wd_active)
+async def withdraw_steps(m: Message):
+    uid = ensure(m.from_user)
+    s = wd_state[uid]
+    text = m.text.strip()
+    if s["step"] == "amount":
+        amount = to_amount(text)
+        if not amount:
+            await m.answer("እባክዎ የገንዘቡን መጠን በቁጥር ብቻ ይላኩ። (ምሳሌ: 100)")
+            return
+        if amount < MIN_WITHDRAW:
+            await m.answer(f"ዝቅተኛው የማውጫ መጠን {MIN_WITHDRAW} ብር ነው። እባክዎ እንደገና ይላኩ።")
+            return
+        if amount > withdrawable_amount(uid):
+            await m.answer(f"ማውጣት የሚችሉት {withdrawable_amount(uid)} ብር ብቻ ነው።\n"
+                           "ያነሰ መጠን ይላኩ።")
+            return
+        s.update(step="account", amount=amount, t=time.time())
+        await m.answer(wd_account_prompt(s["m"]), reply_markup=wd_cancel_kb())
+    else:
+        wd_state.pop(uid, None)
+        await submit_withdraw(m, uid, s["amount"], text[:100], WD_NAMES[s["m"]])
+
+
+def find_by_phone(text):
+    """Find a player by phone number. 0912345678 and +251912345678 both work."""
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if len(digits) < 9:
+        return None
+    last9 = digits[-9:]
+    for uid, ph in phones.items():
+        if ph.endswith(last9):
+            return uid
+    return None
+
+
+# (The /transfer command has been removed completely.)
+
+
+# /instruction and /instructions both work (the menu uses /instructions)
+@dp.message(Command("instruction", "instructions"))
+async def cmd_instruction(m: Message):
+    await m.answer(
+        "📖 How to play\n\n"
+        "1) Tap /play and choose a room (10, 20, 50 or 100 birr).\n"
+        "2) Choose a cartela number. It costs the room price.\n"
+        "3) When the countdown ends, numbers are called one by one.\n"
+        "4) Keep Auto on to mark numbers automatically and claim BINGO for you.\n"
+        "5) With Auto off, mark numbers yourself and press BINGO WIN.\n\n"
+        "🏆 Winning Patterns:\n"
+        "• Horizontal line\n• Vertical line\n• Diagonal\n• Anti-diagonal\n• Four corners\n"
+        "• Center four\n• T corners\n• Center T\n\n"
+        "Complete any pattern to win the round prize!\n\n"
+        "⚠️ A pattern wins only on the call that completes it. If you press BINGO "
+        "after the next number was already called, or without a real pattern, "
+        "your cartela is banned for that round. Players who complete a pattern on "
+        "the same call share the prize.\n\n"
+        "ℹ️ If a round cannot start, your stake is refunded.\n"
+        "ℹ️ If you close the app during a round, your cartela stays in the game and "
+        "a win is added to your balance automatically.\n\n"
+        "💸 Withdrawing: your first deposit must be played "
+        f"{fmt_x(FIRST_DEPOSIT_TURNOVER)} before you can withdraw it. Later deposits only need "
+        f"{fmt_x(NEXT_DEPOSIT_TURNOVER)}. Every bet counts, win or lose, and your winnings "
+        "are yours to withdraw. Use /balance to see your progress.\n"
+        "የመጀመሪያ ገንዘብዎን አንድ ጊዜ፣ ቀጣይ ገንዘብዎን ግማሽ ጊዜ ይጫወቱ። ያሸነፉት ገንዘብ የእርስዎ ነው።\n\n"
+        "🎁 Bonus money is for playing only and cannot be withdrawn. "
+        "Anything you win with it is yours to withdraw.\n"
+        "ቦነስ ለመጫወት ብቻ ነው፤ ማውጣት አይቻልም። በቦነስ ያሸነፉት ግን የእርስዎ ነው።\n\n"
+        + BRAND)
+
+
+@dp.message(Command("invite"))
+async def cmd_invite(m: Message):
+    uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
+    me = await m.bot.get_me()
+    link = f"https://t.me/{me.username}?start=ref_{uid}"
+    text = ("👥 ጓደኞችዎን ይጋብዙ!\n\n"
+            "ይህን ሊንክ ለጓደኞችዎና ለቤተሰብዎ ያጋሩ።\n")
+    if REF_BONUS_PERCENT:
+        text += (f"💵 የጋበዙት ሰው ለመጀመሪያ ጊዜ ገንዘብ ሲያስገባ "
+                 f"ከተቀማጩ ገንዘብ {REF_BONUS_PERCENT}% ቦነስ ያገኛሉ! (ለመጫወት ብቻ)\n")
+    text += (f"\n🔗 የእርስዎ ሊንክ:\n{link}\n\n"
+             f"👤 የጋበዟቸው ሰዎች: {invited.get(uid, 0)}\n"
+             f"💰 ያገኙት ቦነስ: {ref_earn.get(uid, 0)} ብር")
+    share = ("https://t.me/share/url?url=" + quote(link) +
+             "&text=" + quote("🎯 Rodas Friend Zone Bingo ተጫወቱ!"))
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📤 Share / አጋራ", url=share)]])
+    await m.answer(text, reply_markup=kb)
+
+
+@dp.message(Command("support"))
+async def cmd_support(m: Message):
+    await m.answer(f"🛟 Need help? Contact {SUPPORT}")
+
+
+# ---------- start screen: button menu ----------
+def menu_kb(uid=None):
+    b = InlineKeyboardButton
+    snd = "🔊 ድምጽ: ON" if uid in sound_on else "🔇 ድምጽ: OFF"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [b(text="🎮 ጨዋታ ተጫወት", web_app=WebAppInfo(url=WEBAPP_URL)),
+         b(text="🏆 የማሸነፊያ ስርዓቶች", callback_data="menu:patterns")],
+        [b(text="📝 የጨዋታ መመሪያ", callback_data="menu:instr"),
+         b(text="💰 የእኔ ቀሪ ሂሳብ", callback_data="menu:balance")],
+        [b(text="💵 ገንዘብ አስገባ", callback_data="menu:deposit"),
+         b(text="💸 ገንዘብ አውጣ", callback_data="menu:withdraw")],
+        [b(text="📜 የእኔ ግብይቶች", callback_data="menu:tx"),
+         b(text="👥 ጓደኞችን ጋብዝ", callback_data="menu:invite")],
+        [b(text="📞 ድጋፍ ያግኙ", callback_data="menu:support")],
+        [b(text=snd, callback_data="menu:sound")],
+    ])
+
+
+WIN_PATTERNS_TEXT = (
+    "🏆 የማሸነፊያ ስርዓቶች / Winning Patterns\n\n"
+    "• አግድም መስመር (Horizontal line)\n"
+    "• ቁም መስመር (Vertical line)\n"
+    "• ዲያጎናል / ሰያፍ (Diagonal)\n"
+    "• ተቃራኒ ዲያጎናል (Anti-diagonal)\n"
+    "• አራቱም ማዕዘኖች (Four corners)\n"
+    "• የመካከል አራት (Center four)\n"
+    "• የT ማዕዘኖች (T corners)\n"
+    "• የመካከል T (Center T)\n\n"
+    "ማንኛውንም አንዱን ሲያሟሉ ያሸንፋሉ!\n"
+    "Complete any pattern to win the round prize!")
+
+_patterns_file_id = [None]       # Telegram remembers the picture after the first send
+
+
+async def send_patterns(m: Message):
+    """Send the winning patterns picture (text only if the picture file is missing)."""
+    try:
+        if _patterns_file_id[0]:
+            await m.answer_photo(_patterns_file_id[0], caption=WIN_PATTERNS_TEXT)
+            return
+        if PATTERNS_IMG.exists():
+            sent = await m.answer_photo(FSInputFile(PATTERNS_IMG),
+                                        caption=WIN_PATTERNS_TEXT)
+            _patterns_file_id[0] = sent.photo[-1].file_id
+            return
+    except Exception as e:
+        print("patterns picture failed:", repr(e))
+    await m.answer(WIN_PATTERNS_TEXT)
+
+
+# the /winning_patterns command (shows in the menu list)
+@dp.message(Command("winning_patterns"))
+async def cmd_winning_patterns(m: Message):
+    ensure(m.from_user)
+    await send_patterns(m)
+
+
+TX_ICONS = {"deposit": "💵", "withdraw": "💸", "bet": "🎯", "win": "🏆",
+            "refund": "↩️", "bonus": "🎁", "transfer": "🔁"}
+
+
+@dp.message(Command("transactions"))
+async def cmd_transactions(m: Message):
+    uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
+    # only deposits and withdrawals are shown here
+    rows = [t for t in history.get(uid, [])
+            if t.get("k") in ("deposit", "withdraw")][:10]
+    if not rows:
+        await m.answer("📜 ምንም ግብይት የለም።\nNo deposits or withdrawals yet.")
+        return
+    lines = []
+    for t in rows:
+        when = time.strftime("%d %b %H:%M", time.gmtime(t["t"] + 3 * 3600))
+        sign = "+" if t["a"] > 0 else ""
+        lines.append(f"{TX_ICONS.get(t['k'], '•')} {sign}{t['a']} ETB · "
+                     f"{html.escape(t.get('n') or t['k'])}\n🕒 {when}")
+    await m.answer("📜 <b>My Transactions</b> · Deposits & Withdrawals (last 10)\n\n" + "\n\n".join(lines),
+                   parse_mode="HTML")
+
+
+@dp.callback_query(F.data.startswith("menu:"))
+async def menu_buttons(cb: CallbackQuery):
+    action = (cb.data or "").split(":", 1)[1]
+
+    # Sound ON/OFF button: flips the setting and redraws the menu button
+    if action == "sound":
+        uid = ensure(cb.from_user)
+        if uid in sound_on:
+            sound_on.discard(uid)
+        else:
+            sound_on.add(uid)
+        _save_counter(f"snd:{uid}", 1 if uid in sound_on else 0)
+        try:
+            await cb.message.edit_reply_markup(reply_markup=menu_kb(uid))
+        except Exception:
+            pass
+        await cb.answer("Sound ON 🔊" if uid in sound_on else "Sound OFF 🔇")
+        return
+
+    await cb.answer()
+    # same message, but "from" is the player who pressed the button,
+    # so the normal command handlers work unchanged
+    m = cb.message.model_copy(update={"from_user": cb.from_user})
+    if action == "patterns":
+        await send_patterns(m)
+    elif action == "instr":
+        await cmd_instruction(m)
+    elif action == "balance":
+        await cmd_balance(m)
+    elif action == "deposit":
+        await cmd_deposit(m, CommandObject(command="deposit", args=None))
+    elif action == "withdraw":
+        await cmd_withdraw(m, CommandObject(command="withdraw", args=None))
+    elif action == "tx":
+        await cmd_transactions(m)
+    elif action == "invite":
+        await cmd_invite(m)
+    elif action == "support":
+        await cmd_support(m)
+
+
+# ---------- ADMIN COMMANDS (only your ADMIN_ID account can use these) ----------
+def is_admin(m: Message):
+    return bool(ADMIN_ID) and m.from_user.id == ADMIN_ID
+
+
+@dp.message(Command("admin"))
+async def cmd_admin(m: Message):
+    if not is_admin(m):
+        return
+    await m.answer(
+        "🛠 Admin commands\n\n"
+        "/stats\nPlayers, money, waiting requests, last 24h\n\n"
+        "/players\nAll players and balances (or /players <phone> for one player)\n\n"
+        "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
+        "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
+        "/bonusmany <amount> all  or  <amount> <phone> <phone>...\nGive PLAY-ONLY bonus to many players (you confirm first)\n\n"
+        "/resetfree\nRemove free balance from players who never deposited\n\n"
+        "/ban <phone>\nBlock a player\n\n"
+        "/unban <phone>\nUnblock a player\n\n"
+        "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
+        "/lastsms\nLast SMS forwarded from your phone")
+
+
+@dp.message(Command("stats"))
+async def cmd_stats(m: Message):
+    if not is_admin(m):
+        return
+    now = time.time()
+    in_rooms = sum(len(g["players"]) for g in rooms.values())
+    deps = [r for r in pending.values() if r["type"] == "deposit"]
+    wds = [r for r in pending.values() if r["type"] == "withdraw"]
+    recent = [r for r in games if r["t"] >= now - 86400]
+    stake = sum(r["bet"] * len(r["pl"]) for r in recent)
+    paid = sum(r["prize"] * len(r["wids"]) for r in recent)
     await m.answer(
         "📊 <b>Stats</b>\n\n"
         f"Players: {len(wallets)} ({len(phones)} with phone)\n"
@@ -1493,6 +1894,613 @@ def players_page(page):
             f"Bonus total: {sum(bonus.values()):,}\n\n" + "\n".join(lines))
     row = []
     if page > 0:
+        row.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"pl:{page - 1}"))
+    if page < pages - 1:
+        row.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"pl:{page + 1}"))
+    return text, InlineKeyboardMarkup(inline_keyboard=[row] if row else [])
+
+
+@dp.message(Command("players"))
+async def cmd_players(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    arg = (command.args or "").strip()
+    if arg:                                           # /players 0912345678 = one player
+        uid = find_by_phone(arg)
+        if not uid:
+            await m.answer("No player found with that phone number.")
+            return
+        t = turnover_info(uid)
+        await m.answer(
+            f"👤 {names.get(uid, 'Player')} ({phones.get(uid, '-')})\n"
+            f"Cash: {wallets.get(uid, 0)} birr\n"
+            f"Bonus: {bonus.get(uid, 0)} birr\n"
+            f"Withdrawable: {withdrawable_amount(uid)} birr\n"
+            f"Played: {t['played']} / {t['required']} birr\n"
+            f"Deposited: {deposited.get(uid, 0)} · Won: {won.get(uid, 0)}"
+            + ("\n🚫 Blocked" if uid in banned else ""))
+        return
+    text, kb = players_page(0)
+    await m.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.callback_query(F.data.startswith("pl:"))
+async def players_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    try:
+        page = int((cb.data or "").split(":", 1)[1])
+    except ValueError:
+        page = 0
+    text, kb = players_page(page)
+    try:
+        await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@dp.message(Command("addbalance"))
+async def cmd_addbalance(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    args = (command.args or "").split()
+    if len(args) != 2 or not re.fullmatch(r"-?\d+", args[1]) or int(args[1]) == 0:
+        await m.answer("Send:\n/addbalance <phone> <amount>\n\n"
+                       "Add 100 birr:\n/addbalance 0912345678 100\n"
+                       "Remove 50 birr:\n/addbalance 0912345678 -50")
+        return
+    uid, amount = find_by_phone(args[0]), int(args[1])
+    if not uid:
+        await m.answer("No player found with that phone number.")
+        return
+    if wallets.get(uid, 0) + amount < 0:
+        await m.answer(f"{names.get(uid, 'Player')} only has {wallets.get(uid, 0)} birr.")
+        return
+    wallets[uid] = wallets.get(uid, 0) + amount
+    if amount > 0:
+        deposited[uid] = deposited.get(uid, 0) + amount
+        required[uid] = required.get(uid, 0) + amount       # admin-added money must be played 1x too
+        log(uid, "deposit", amount, "Added by admin")
+        note = f"💰 {amount} birr was added to your balance."
+    else:
+        log(uid, "withdraw", amount, "Removed by admin")
+        note = f"💸 {-amount} birr was removed from your balance."
+    try:
+        await m.bot.send_message(uid, note)
+    except Exception:
+        pass
+    await m.answer(f"✅ Done.\nPlayer: {names.get(uid, 'Player')} ({phones.get(uid)})\n"
+                   f"Change: {amount:+d} birr\nNew balance: {wallets[uid]} birr")
+
+
+@dp.message(Command("addbonus"))
+async def cmd_addbonus(m: Message, command: CommandObject):
+    """Admin: give (or remove) PLAY-ONLY bonus. It can be bet but never withdrawn."""
+    if not is_admin(m):
+        return
+    args = (command.args or "").split()
+    if len(args) != 2 or not re.fullmatch(r"-?\d+", args[1]) or int(args[1]) == 0:
+        await m.answer("Send:\n/addbonus <phone> <amount>\n\n"
+                       "Give 20 birr bonus:\n/addbonus 0912345678 20\n"
+                       "Remove 10 birr bonus:\n/addbonus 0912345678 -10")
+        return
+    uid, amount = find_by_phone(args[0]), int(args[1])
+    if not uid:
+        await m.answer("No player found with that phone number.")
+        return
+    if bonus.get(uid, 0) + amount < 0:
+        await m.answer(f"{names.get(uid, 'Player')} only has {bonus.get(uid, 0)} birr bonus.")
+        return
+    bonus[uid] = bonus.get(uid, 0) + amount
+    if amount > 0:
+        log(uid, "bonus", amount, "Bonus added by admin")
+        note = (f"🎁 {amount} ብር ቦነስ ተጨምሯል (ለመጫወት ብቻ)።\n"
+                f"{amount} birr bonus was added (play only). "
+                "Anything you win with it is withdrawable.")
+    else:
+        log(uid, "bonus", amount, "Bonus removed by admin")
+        note = f"🎁 {-amount} birr bonus was removed from your account."
+    try:
+        await m.bot.send_message(uid, note)
+    except Exception:
+        pass
+    await m.answer(f"✅ Done.\nPlayer: {names.get(uid, 'Player')} ({phones.get(uid)})\n"
+                   f"Change: {amount:+d} birr bonus\nBonus now: {bonus[uid]} birr")
+
+
+@dp.message(Command("ban"))
+async def cmd_ban(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    uid = find_by_phone((command.args or "").strip())
+    if not uid:
+        await m.answer("Send:\n/ban <phone>\n\nExample:\n/ban 0912345678\n\n"
+                       "No player found with that phone number.")
+        return
+    if uid == ADMIN_ID:
+        await m.answer("You can't block yourself.")
+        return
+    banned.add(uid)
+    save_user(uid)
+    await m.answer(f"🚫 {names.get(uid, 'Player')} ({phones.get(uid)}) is blocked.\n"
+                   "They can no longer use the bot or join games.")
+
+
+@dp.message(Command("unban"))
+async def cmd_unban(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    uid = find_by_phone((command.args or "").strip())
+    if not uid:
+        await m.answer("Send:\n/unban <phone>\n\nNo player found with that phone number.")
+        return
+    banned.discard(uid)
+    save_user(uid)
+    await m.answer(f"✅ {names.get(uid, 'Player')} ({phones.get(uid)}) is unblocked.")
+
+
+@dp.message(Command("broadcast"))
+async def cmd_broadcast(m: Message, command: CommandObject):
+    if not is_admin(m):
+        return
+    text = (command.args or "").strip()
+    if not text:
+        await m.answer("Send:\n/broadcast <your message>")
+        return
+    bc_pending[m.from_user.id] = text
+    n = len([u for u in wallets if u not in banned])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Send to {n} players", callback_data="bc:send"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="bc:cancel")]])
+    await m.answer(f"📢 This is what players will see:\n\n{text}", reply_markup=kb)
+
+
+async def run_broadcast(bot, text, admin_id):
+    ok = fail = 0
+    for uid in list(wallets):
+        if uid in banned:
+            continue
+        try:
+            await bot.send_message(uid, text)
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.06)              # stay under Telegram's speed limit
+    try:
+        await bot.send_message(admin_id, f"📢 Broadcast finished.\n✅ Sent: {ok}\n❌ Failed: {fail}")
+    except Exception:
+        pass
+
+
+@dp.callback_query(F.data.startswith("bc:"))
+async def broadcast_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    text = bc_pending.pop(cb.from_user.id, None)
+    if action != "send" or not text:
+        try:
+            await cb.message.edit_text("❌ Cancelled." if action != "send"
+                                       else "Nothing to send.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    try:
+        await cb.message.edit_text("📤 Sending…")
+    except Exception:
+        pass
+    await cb.answer()
+    task = asyncio.create_task(run_broadcast(cb.bot, text, cb.from_user.id))
+    bg_tasks.add(task)
+    task.add_done_callback(bg_tasks.discard)
+
+
+# ---------- /resetfree: remove free test money from players who never deposited ----------
+def free_money_players():
+    """Players who have a balance but never made a real deposit (free test money)."""
+    out = []
+    for uid, bal in wallets.items():
+        if uid == ADMIN_ID or bal <= 0:
+            continue
+        if deposited.get(uid, 0) > 0:
+            continue                      # deposited after the update: keep
+        if any(t.get("k") == "deposit" for t in history.get(uid, [])):
+            continue                      # has a deposit in history: keep
+        out.append(uid)
+    return out
+
+
+@dp.message(Command("resetfree"))
+async def cmd_resetfree(m: Message):
+    if not is_admin(m):
+        return
+    uids = free_money_players()
+    if not uids:
+        await m.answer("No players with free balance found.")
+        return
+    rf_pending[m.from_user.id] = uids
+    total = sum(wallets[u] for u in uids)
+    lines = [f"{names.get(u, 'Player')} ({phones.get(u, '-')}): {wallets[u]}"
+             for u in uids[:25]]
+    more = f"\n…and {len(uids) - 25} more" if len(uids) > 25 else ""
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Reset {len(uids)} players", callback_data="rf:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="rf:cancel")]])
+    await m.answer(f"⚠️ These players have balance but NO deposit in their history.\n"
+                   f"Total: {total} birr\n\n" + "\n".join(lines) + more +
+                   "\n\nCheck the list, then confirm.", reply_markup=kb)
+
+
+@dp.callback_query(F.data.startswith("rf:"))
+async def resetfree_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    uids = rf_pending.pop(cb.from_user.id, None)
+    if action != "go" or not uids:
+        try:
+            await cb.message.edit_text("❌ Cancelled.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    n = total = 0
+    for u in uids:
+        amt = wallets.get(u, 0)
+        if amt <= 0:
+            continue
+        wallets[u] = 0
+        log(u, "withdraw", -amt, "Free test balance removed")
+        n += 1
+        total += amt
+    try:
+        await cb.message.edit_text(f"✅ Done. Reset {n} players ({total} birr removed).")
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@dp.message(Command("lastsms"))
+async def cmd_lastsms(m: Message):
+    """Admin only: shows the last SMS your phone forwarded, and how the bot read them."""
+    if not is_admin(m):
+        return
+    if not bank_sms:
+        await m.answer("No SMS received from your phone yet.")
+        return
+    parts = []
+    for r in bank_sms[:5]:
+        kind = "✅ money IN" if r["credit"] else "➖ not a deposit"
+        used = "used" if r["claimed"] else "not used"
+        parts.append(f"{kind} · {r['amount']} birr · {used}\n"
+                     f"{html.escape(r['text'][:150])}\n"
+                     f"Numbers found: {html.escape(', '.join(r['tokens']) or '-')}")
+    await m.answer("\n\n".join(parts), parse_mode="HTML")
+
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def sms_deposit(m: Message):
+    """Player pastes the payment SMS (CBE / Telebirr / CBE Birr)."""
+    uid = ensure(m.from_user)
+    if await need_phone(m):
+        return
+    text = m.text.strip()
+    amount = parse_amount(text)
+    if not amount:
+        await m.answer("የገንዘቡን መጠን ማግኘት አልቻልንም። እባክዎ የደረሰዎትን SMS ሙሉ ይላኩ ወይም ይህንን ይጠቀሙ:\n"
+                       "/deposit <amount> <transaction number>")
+        return
+    if amount < MIN_DEPOSIT:
+        await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
+        return
+    tokens = sms_tokens(text)
+    if any(("tok:" + t) in used_sms for t in tokens):
+        await m.answer("ይህ ክፍያ ቀደም ብሎ ተመዝግቧል። / This payment was already credited.")
+        return
+    key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
+    if key in used_sms:
+        await m.answer("ይህ መልዕክት ቀደም ብሎ ተልኳል። / This message was already sent.")
+        return
+
+    # tell the player right away that the request was received
+    await m.answer("Deposit request received. Your top-up will be done in a minute.\n"
+                   "ጥያቄዎ ደርሶናል። በአንድ ደቂቃ ውስጥ ገንዘቡ ይገባል።")
+
+    # 1) Automatic: the same payment SMS already arrived from YOUR phone
+    rec = find_bank_sms(amount, tokens)
+    if rec:
+        used_sms.add(key)
+        save_sms(key)
+        claim_bank(rec)
+        await approve_deposit(m.bot, uid, rec["amount"])
+        if ADMIN_ID:
+            try:
+                await m.bot.send_message(
+                    ADMIN_ID, f"✅ Deposit checked automatically.\n"
+                              f"User: {names[uid]} ({uid})\nAmount: {rec['amount']} birr")
+            except Exception:
+                pass
+        return
+
+    # 2) Not found (yet): send to the admin. If your phone's SMS arrives
+    #    later, it is approved automatically.
+    if not ADMIN_ID:
+        await m.answer(f"Deposits are handled by support: {SUPPORT}")
+        return
+    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+        await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
+                       f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
+        return
+    used_sms.add(key)
+    save_sms(key)
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
+                    "tokens": sorted(tokens), "key": key}
+    save_pending(rid)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
+        InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
+    await m.bot.send_message(
+        ADMIN_ID,
+        f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
+        f"Amount: {amount} birr\n"
+        f"⚠️ Not found in your phone's SMS yet. Check your account before approving.\n\n"
+        f"SMS:\n{text[:800]}", reply_markup=kb)
+    await m.answer(f"🔎 ጥያቄዎ #{rid} እየተረጋገጠ ነው። ሲጸድቅ መልዕክት ይደርስዎታል።\n"
+                   f"Your payment #{rid} is being checked. You will get a message soon.")
+
+
+# ---------- /bonusmany: give play-only bonus to many players at once ----------
+# CHANGE THE WORDS HERE.
+# {amount} = bonus given, {balance} = the player's balance after the bonus
+BONUS_TEXT = (
+    "💖 ውድ ደንበኞቻችን፣\n\n"
+    "🌼 Rodas Friend Zone Bingo {amount} ብር ቦነስ ሰጥቶዎታል (ለመጫወት ብቻ)።\n\n"
+    "🍀 መልካም ዕድል እንመኝልዎታለን! 🌼\n\n"
+    "💖 Dear valued customer,\n\n"
+    "🌼 Rodas Friend Zone Bingo has gifted you a {amount} birr bonus (play only).\n\n"
+    "🍀 We wish you the best of luck! 🌼\n\n"
+    "💰 Your wallet balance is now: {balance:.2f}")
+
+bn_pending = {}                 # admin's bonus list waiting for confirmation
+
+
+@dp.message(Command("bonusmany"))
+async def cmd_bonusmany(m: Message, command: CommandObject):
+    """/bonusmany 20 all            -> everybody
+       /bonusmany 20 0912.. 0911..  -> only these phone numbers"""
+    if not is_admin(m):
+        return
+    args = (command.args or "").split()
+    if len(args) < 2 or not args[0].isdigit() or int(args[0]) <= 0:
+        await m.answer("Send:\n/bonusmany <amount> all\n"
+                       "or\n/bonusmany <amount> <phone> <phone> ...\n\n"
+                       "Examples:\n/bonusmany 20 all\n"
+                       "/bonusmany 20 0912345678 0911111111")
+        return
+    amount = int(args[0])
+    uids, missing = [], []
+    if args[1].lower() == "all":
+        uids = [u for u in wallets if u not in banned and u in phones]
+    else:
+        for a in args[1:]:
+            u = find_by_phone(a)
+            if not u:
+                missing.append(a)
+            elif u not in uids:
+                uids.append(u)
+    if not uids:
+        await m.answer("No players found.")
+        return
+    bn_pending[m.from_user.id] = (amount, uids)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Give to {len(uids)} players", callback_data="bn:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="bn:cancel")]])
+    miss = ("\n\n⚠️ Not found: " + ", ".join(missing)) if missing else ""
+    await m.answer(f"🎁 Bonus: {amount} birr each\n"
+                   f"Players: {len(uids)}\n"
+                   f"Total: {amount * len(uids):,} birr{miss}\n\n"
+                   "Press the green button to send.", reply_markup=kb)
+
+
+async def run_bonus_notify(bot, uids, amount, admin_id):
+    ok = fail = 0
+    for u in uids:
+        try:
+            await bot.send_message(
+                u, BONUS_TEXT.format(amount=amount, balance=play_balance(u)))
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.06)              # stay under Telegram's speed limit
+    try:
+        await bot.send_message(admin_id, f"🎁 Bonus messages finished.\n✅ Sent: {ok}\n❌ Failed: {fail}")
+    except Exception:
+        pass
+
+
+@dp.callback_query(F.data.startswith("bn:"))
+async def bonusmany_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    data = bn_pending.pop(cb.from_user.id, None)
+    if action != "go" or not data:
+        try:
+            await cb.message.edit_text("❌ Cancelled." if action != "go"
+                                       else "Nothing to send.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    amount, uids = data
+    for u in uids:                             # money first, then the messages
+        bonus[u] = bonus.get(u, 0) + amount
+        log(u, "bonus", amount, "Bonus from admin")
+    try:
+        await cb.message.edit_text(f"✅ Gave {amount} birr bonus to {len(uids)} players.\n"
+                                   "📤 Sending messages…")
+    except Exception:
+        pass
+    await cb.answer()
+    t = asyncio.create_task(run_bonus_notify(cb.bot, uids, amount, cb.from_user.id))
+    bg_tasks.add(t)
+    t.add_done_callback(bg_tasks.discard)
+
+
+@dp.callback_query()
+async def admin_buttons(cb: CallbackQuery):
+    if cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action, _, rid = (cb.data or "").partition(":")
+    req = pending.pop(int(rid), None) if rid.isdigit() else None
+    if not req:
+        await cb.answer("Already handled")
+        return
+    save_pending(int(rid))                     # request is finished: delete it
+    uid, amount = req["uid"], req["amount"]
+    approved = action == "ok"
+    note = None
+    if req["type"] == "deposit":
+        if approved:
+            await approve_deposit(cb.bot, uid, amount, req.get("tokens", []))
+        else:
+            if req.get("key"):
+                free_sms(req["key"])           # the player may send the same SMS again
+            note = f"❌ Your deposit of {amount} birr was rejected. Contact {SUPPORT}."
+    else:
+        if approved:
+            method = req.get("method") or "—"
+            acct = str(req.get("account") or "—")
+            ben = names.get(uid, "Player")
+            if method == "CBE":                    # CBE: "number Full Name"
+                parts = acct.split(maxsplit=1)
+                acct = parts[0]
+                if len(parts) > 1:
+                    ben = parts[1]
+            note = ("✅ Withdrawal Approved\n"
+                    f"Request ID: #{rid}\n\n"
+                    f"Amount: {amount:.2f}\n"
+                    f"Provider: {method.upper()}\n"
+                    f"Account: {acct}\n"
+                    f"Beneficiary: {ben}\n"
+                    "Status: Approved\n\n"
+                    "ገንዘቡ ተልኳል። / Your money has been sent.")
+        else:
+            wallets[uid] = wallets.get(uid, 0) + amount        # give it back
+            log(uid, "refund", amount, "Withdraw rejected")
+            note = f"❌ Your withdrawal was rejected. {amount} birr returned to your balance."
+    if note:
+        try:
+            await cb.bot.send_message(uid, note)
+        except Exception:
+            pass
+    await cb.message.edit_text(
+        cb.message.text + ("\n\n✅ DONE" if approved else "\n\n❌ REJECTED"))
+    await cb.answer("Done")
+
+
+# ---------- menu cleanup helpers ----------
+async def set_player_menus(bot, commands):
+    """Set the full player menu directly on every known player's chat.
+    A chat-level list beats every older default / language list, so players
+    always see the current menu. Runs in the background on every start."""
+    ok = fail = 0
+    for uid in list(wallets):
+        if uid == ADMIN_ID:
+            continue
+        try:
+            await bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=uid))
+            ok += 1
+        except Exception:
+            fail += 1                      # e.g. player never opened the chat / blocked the bot
+        await asyncio.sleep(0.05)
+    print(f"player menus set: {ok} ok, {fail} failed")
+
+
+# ---------- main ----------
+async def main():
+    global pool, lock_conn, ready, _q, BOT
+    bot = Bot(TOKEN)
+    BOT = bot
+
+    # POST only for the SMS hook, and bodies are limited to 64 KB
+    app = web.Application(middlewares=[wait_ready], client_max_size=64 * 1024)
+    app.add_routes([
+        web.get("/", index),
+        web.get("/api/state", api_state),
+        web.get("/api/profile", api_profile),
+        web.get("/api/history", api_history),
+        web.get("/api/game", api_game),
+        web.get("/api/card", api_card),
+        web.get("/audio/{n}.mp3", api_audio),
+        web.post("/api/join", api_join),
+        web.post("/api/bingo", api_bingo),
+        web.post("/api/leave", api_leave),
+        web.post("/api/sms-hook", api_sms_hook),
+    ])
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()   # port open: Render sees us as live
+
+    # database: wait until an older copy of the bot (during a redeploy) has stopped,
+    # so two copies never write to the database at the same time
+    lock_conn = await asyncpg.connect(DATABASE_URL)
+    await lock_conn.execute("SELECT pg_advisory_lock(727001)")
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=3)
+    async with pool.acquire() as c:
+        await c.execute(SCHEMA)
+    _q = asyncio.Queue()
+    asyncio.create_task(db_writer())
+    await load_state()
+    ready = True
+    asyncio.create_task(game_loop())
+    asyncio.create_task(reaper())
+    asyncio.create_task(pregen_audio())
+
+    await bot.delete_webhook(drop_pending_updates=True)
+
+    # branding on the bot's profile page
+    try:
+        await bot.set_my_description(BOT_DESCRIPTION)
+        await bot.set_my_short_description(BOT_SHORT)
+    except Exception as e:
+        print("could not set bot description:", repr(e))
+
+    # note: /sound is no longer a command; the Sound ON/OFF button is in the start menu
+    public_commands = [
+        BotCommand(command="start", description="Start the bot"),
+        BotCommand(command="play", description="🎮 Play Bingo"),
+        BotCommand(command="winning_patterns", description="🏆 Winning Patterns"),
+        BotCommand(command="instructions", description="📝 Game Instructions"),
+        BotCommand(command="balance", description="💰 Check Balance"),
+        BotCommand(command="deposit", description="💵 Deposit"),
+        BotCommand(command="withdraw", description="💸 Withdraw"),
+        BotCommand(command="transactions", description="📜 My Transactions"),
+        BotCommand(command="invite", description="👥 Invite Friends"),
+        BotCommand(command="support", description="📞 Support"),
+    ]
+
+    # Telegram keeps SEPARATE command lists per scope and per language, and a more
+    # specific old list wins over the default. Clear all of them, then set the new one.
+    for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):
+        for lang in (None, "en", "am", "om", "ti"):
+            try:
+                await bot.delete_my_commands(scope=scope, language_code=lang)
+            except Exception:
+                pass
+    try:
+        await bot.set_my_commands(public_commands, scope=BotCommandScopeDefault())
+        await bot.set_my_commands(public_commands, scope=BotCommandScopeAllPrivateChats())
+    except Exception as e:
         print("could not set player menu:", repr(e))
 
     t = asyncio.create_task(set_player_menus(bot, public_commands))
