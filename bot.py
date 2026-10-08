@@ -623,7 +623,7 @@ def award_winners(g):
     Prizes always go to the cash wallet (withdrawable), even if the stake was bonus."""
     hits = {}
     for u, no in g["players"].items():
-        if u in g["dq"]:
+        if u in g["dq"] or u in g["left"]:       # banned or left the round: cannot win
             continue
         fp = fresh_pattern(make_card(no), g["called"])
         if fp:
@@ -987,7 +987,7 @@ async def run_round(g):
     g["prize"] = int(len(g["players"]) * g["bet"] * 0.8)
     for n in g["seq"]:
         if (g["phase"] != "playing" or not g["players"]
-                or all(u in g["dq"] for u in g["players"])):
+                or all(u in g["dq"] or u in g["left"] for u in g["players"])):
             break
         g["called"].append(n)
 
@@ -996,10 +996,10 @@ async def run_round(g):
         #   - players who are AWAY (app closed)
         # Manual players must press BINGO themselves before the next number is called.
         now = time.time()
-        away = {u for u in g["players"]
-                if now - seen.get(u, 0) > IDLE_KICK or u in g["left"]}
+        away = {u for u in g["players"]                 # app closed (NOT the same as LEAVE)
+                if now - seen.get(u, 0) > IDLE_KICK}
         claimers = [u for u, no in g["players"].items()
-                    if u not in g["dq"]
+                    if u not in g["dq"] and u not in g["left"]
                     and (u in away or auto_pref.get(u))
                     and fresh_pattern(make_card(no), g["called"])]
         if claimers:
@@ -1010,7 +1010,7 @@ async def run_round(g):
     g["phase"] = "finished"
     if not g["winners"]:                   # nobody won: give bets back, except cheaters
         for uid in list(g["players"]):
-            if uid in g["dq"]:             # banned for false / late bingo: no refund
+            if uid in g["dq"] or uid in g["left"]:   # banned or pressed LEAVE: no refund
                 continue
             refund_stake(uid, g["bet"], f"Room {g['bet']} refund (no winner)")
             try:
@@ -1071,12 +1071,14 @@ async def api_state(req):
     if "auto" in req.query:                      # the web app tells us if Auto is ON
         auto_pref[uid] = req.query.get("auto") == "1"
     mine = room_of(uid)
+    if mine and uid in mine["left"]:
+        mine = None                  # left a running round: out of the game, no "Back" button
     try:
         asked = rooms.get(int(req.query.get("room", 0)))
     except (TypeError, ValueError):
         asked = None
     g = mine or asked or rooms[BETS[0]]
-    my = g["players"].get(uid)
+    my = None if uid in g["left"] else g["players"].get(uid)
     n = len(g["players"])
     return web.json_response({
         "phase": g["phase"], "time": lobby_time(g), "round": g["round"],
@@ -1203,9 +1205,11 @@ async def api_join(req):
         return web.json_response({"ok": False, "error": "Bad room"})
     if g["phase"] != "lobby":
         return web.json_response({"ok": False, "error": "Round already started"})
-    if room_of(uid):
-        return web.json_response({"ok": False,
-                                  "error": "You already have a cartela this game"})
+    g0 = room_of(uid)
+    if g0:
+        msg = ("You left a running game. Wait until it finishes to join again."
+               if uid in g0["left"] else "You already have a cartela this game")
+        return web.json_response({"ok": False, "error": msg})
     try:
         card = int(body.get("card", 0))
     except (TypeError, ValueError):
@@ -1274,6 +1278,8 @@ async def api_bingo(req):
         return web.json_response({"ok": False})
     if uid in g["dq"]:                         # already banned in this round
         return web.json_response({"ok": False, "disq": True})
+    if uid in g["left"]:                       # pressed LEAVE: out of this round
+        return web.json_response({"ok": False, "left": True})
     card = make_card(g["players"][uid])
     # VALID press: a pattern completed by the latest called number.
     # Everybody else whose card completed on this same call shares the prize.
@@ -1302,20 +1308,9 @@ async def api_leave(req):
         if g and g["phase"] == "lobby":
             remove_player(user["id"])              # lobby: stake is refunded
         elif g and g["phase"] == "playing":
-            g["left"].add(user["id"])              # round running: bet stays in the game,
-                                                   # the server claims a win for this player
-    return web.json_response({"ok": True})
-
-
-async def api_resume(req):
-    """Player came back to a running round: he plays himself again
-    (the server stops claiming for him)."""
-    body = await body_of(req)
-    user = verify(body.get("initData", ""))
-    if user:
-        g = room_of(user["id"])
-        if g:
-            g["left"].discard(user["id"])
+            g["left"].add(user["id"])              # round running: the player is OUT.
+                                                   # The bet stays in the prize pool, he can
+                                                   # not win and can not come back.
     return web.json_response({"ok": True})
 
 
@@ -1750,7 +1745,10 @@ async def cmd_instruction(m: Message):
         "the same call share the prize.\n\n"
         "ℹ️ If a round cannot start, your stake is refunded.\n"
         "ℹ️ If you close the app during a round, your cartela stays in the game and "
-        "a win is added to your balance automatically.\n\n"
+        "a win is added to your balance automatically.\n"
+        "🚪 If you press LEAVE during a round, you are OUT: your bet stays in the prize pool, "
+        "you cannot win this round and you cannot come back.\n"
+        "በጨዋታ ወቅት LEAVE ከነኩ ከጨዋታው ይወጣሉ፤ ብሩ በጨዋታው ውስጥ ይቀራል፣ ማሸነፍም አይችሉም።\n\n"
         "💸 Withdrawing: your first deposit must be played "
         f"{fmt_x(FIRST_DEPOSIT_TURNOVER)} before you can withdraw it. Later deposits only need "
         f"{fmt_x(NEXT_DEPOSIT_TURNOVER)}. Every bet counts, win or lose, and your winnings "
@@ -2538,7 +2536,6 @@ async def main():
         web.post("/api/join", api_join),
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
-        web.post("/api/resume", api_resume),
         web.post("/api/sms-hook", api_sms_hook),
     ])
     runner = web.AppRunner(app)
