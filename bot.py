@@ -50,6 +50,7 @@ NEXT_DEPOSIT_TURNOVER = 0.5    # every deposit after the first must be played 0.
 
 BETS = [10, 20, 50, 100]   # room prices (birr per cartela)
 CALL_EVERY = 4             # seconds between calls
+CLAIM_GRACE = 2.0           # after the first claim, other manual players have this many seconds to press BINGO too
 LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
@@ -71,7 +72,7 @@ rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "winner": None, "prize": 0, "round": 0, "deadline": None,
              "seq": [], "secret": "", "hash": "",
              "wcells": [], "wname": "", "finish_at": 0,
-             "winners": [], "wlist": [], "share": 0, "dq": set(), "left": set()}
+             "winners": [], "wlist": [], "share": 0, "dq": set(), "left": set(), "claims": set(), "claim_t": 0}
          for b in BETS}
 wallets, names, seen = {}, {}, {}                  # wallets = real, withdrawable-type money
 bonus = {}                                         # PLAY-ONLY bonus money (never withdrawn / transferred)
@@ -553,16 +554,19 @@ def summ(r, uid):
             "won": uid in r["wids"], "mine": uid in r["pl"]}
 
 
-def award_winners(g):
+def award_winners(g, claimants=None):
     """Finish the round and pay the winner(s).
     Rule: only a pattern completed by the LATEST called number can win.
-    Every (not banned) player whose card completed a pattern on this same
-    call shares the prize equally. A pattern completed on an earlier call
-    has 'passed' and can no longer win.
+    Only players who CLAIMED it share the prize equally: manual players who
+    pressed BINGO in time, Auto players, and players who are away / left.
+    A manual player who did not press gets nothing. A pattern completed on an
+    earlier call has 'passed' and can no longer win.
     Prizes always go to the cash wallet (withdrawable), even if the stake was bonus."""
     hits = {}
     for u, no in g["players"].items():
         if u in g["dq"]:
+            continue
+        if claimants is not None and u not in claimants:
             continue
         fp = fresh_pattern(make_card(no), g["called"])
         if fp:
@@ -855,7 +859,8 @@ async def run_round(g):
              round=g["round"] + 1, deadline=None,
              seq=[], secret="", hash="",
              wcells=[], wname="", finish_at=0,
-             winners=[], wlist=[], share=0, dq=set(), left=set())
+             winners=[], wlist=[], share=0, dq=set(), left=set(),
+             claims=set(), claim_t=0)
 
     # wait until MIN_PLAYERS have chosen a cartela (that starts the countdown),
     # then count down. If players leave and fewer than MIN_PLAYERS remain,
@@ -879,6 +884,9 @@ async def run_round(g):
                 or all(u in g["dq"] for u in g["players"])):
             break
         g["called"].append(n)
+        g["claims"] = set()                # manual players who press BINGO for THIS call
+        g["claim_t"] = 0
+        call_t = time.time()
 
         # The server claims BINGO right on the call for two kinds of players:
         #   - players with Auto ON in the web app (they never miss a call)
@@ -891,10 +899,23 @@ async def run_round(g):
                     if u not in g["dq"]
                     and (u in away or auto_pref.get(u))
                     and fresh_pattern(make_card(no), g["called"])]
-        if claimers:
-            award_winners(g)
-            break
-        await asyncio.sleep(CALL_EVERY)
+        # Wait for this call's claims. The first claim (an Auto / away player right
+        # now, or the first manual press) starts a short grace time so other manual
+        # players can still press BINGO. Then everybody who claimed shares the prize.
+        first = call_t if claimers else 0
+        while True:
+            now2 = time.time()
+            if not first and g["claim_t"]:
+                first = g["claim_t"]
+            if first and now2 >= first + CLAIM_GRACE:
+                break
+            if not first and now2 >= call_t + CALL_EVERY:
+                break
+            await asyncio.sleep(0.2)
+        if first:
+            award_winners(g, set(claimers) | set(g["claims"]))
+            if g["winners"]:
+                break
 
     g["phase"] = "finished"
     if not g["winners"]:                   # nobody won: give bets back, except cheaters
@@ -1167,7 +1188,9 @@ async def api_bingo(req):
     # VALID press: a pattern completed by the latest called number.
     # Everybody else whose card completed on this same call shares the prize.
     if fresh_pattern(card, g["called"]):
-        award_winners(g)
+        g["claims"].add(uid)                   # counted when the claim time ends (see run_round)
+        if not g["claim_t"]:
+            g["claim_t"] = time.time()
         return web.json_response({"ok": True})
     # INVALID press = ban for the rest of this round:
     #   late  = the card had a real pattern, but it was completed by an earlier call
