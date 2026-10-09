@@ -57,6 +57,9 @@ LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
 MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise the countdown waits (stakes are refunded if they leave)
+LOBBY_IDLE_KICK = int(os.getenv("LOBBY_IDLE_KICK", "3600"))   # seconds a player with the app CLOSED may wait
+                           # in the LOBBY before he is removed + refunded (3600 = 1 hour).
+                           # While the app is open he waits as long as needed. 0 = never remove.
 IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
@@ -954,18 +957,21 @@ async def pregen_audio():
 
 # ---------- background jobs ----------
 async def reaper():
-    """Remove players who closed the app without pressing LEAVE.
-    Only in the LOBBY (they get their stake back). Once a round has started the
-    player stays in the game: their stake is already in the prize pool, and if
-    their card wins while they are away, the win is claimed for them."""
+    """Optional clean-up of the LOBBY: remove players who closed the app without pressing LEAVE.
+    A player who chose a cartela waits in the lobby until enough players arrive and the round
+    starts, or until he presses LEAVE (refund). If his app stays CLOSED for LOBBY_IDLE_KICK
+    seconds (default 1 hour) he is removed and refunded. If the round starts while his app is
+    closed, the win is claimed for him automatically."""
     while True:
         await asyncio.sleep(5)
+        if LOBBY_IDLE_KICK <= 0:
+            continue
         now = time.time()
         for g in rooms.values():
             if g["phase"] != "lobby":
                 continue
             for uid in list(g["players"]):
-                if now - seen.get(uid, 0) > IDLE_KICK:
+                if now - seen.get(uid, 0) > LOBBY_IDLE_KICK:
                     remove_player(uid)
 
 
@@ -1767,7 +1773,8 @@ async def cmd_instruction(m: Message):
         "after the next number was already called, or without a real pattern, "
         "your cartela is banned for that round. Players who complete a pattern on "
         "the same call share the prize.\n\n"
-        "ℹ️ If a round cannot start, your stake is refunded.\n"
+        "ℹ️ After you choose a cartela you wait in the lobby until enough players join. You stay there until the round starts; press LEAVE to get your bet back. "
+        "If you keep the app closed for more than 1 hour, you are removed and refunded.\n"
         "ℹ️ If you close the app during a round, your cartela stays in the game and "
         "a win is added to your balance automatically.\n"
         "🚪 If you press LEAVE during a round, you are OUT: your bet stays in the prize pool, "
@@ -1933,6 +1940,7 @@ async def cmd_admin(m: Message):
     await m.answer(
         "🛠 Admin commands\n\n"
         "/stats\nPlayers, money, waiting requests, last 24h\n\n"
+        "/online\nWho has the game open right now\n\n"
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
@@ -1996,6 +2004,46 @@ def players_page(page):
     if page < pages - 1:
         row.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"pl:{page + 1}"))
     return text, InlineKeyboardMarkup(inline_keyboard=[row] if row else [])
+
+
+@dp.message(Command("online"))
+async def cmd_online(m: Message):
+    """Who has the game app open right now (the app contacts the server every second)."""
+    if not is_admin(m):
+        return
+    now = time.time()
+    on = [u for u, t in seen.items() if now - t <= 30 and u in wallets]
+    recent = [u for u, t in seen.items() if now - t <= 300 and u in wallets]
+    day = [u for u, t in seen.items() if now - t <= 86400 and u in wallets]
+
+    def status(u):
+        g = room_of(u)
+        if not g:
+            return "📱 in the app (no cartela)"
+        if u in g["left"]:
+            return f"🚪 left the {g['bet']} birr round"
+        if g["phase"] == "playing":
+            return f"🎮 playing {g['bet']} birr"
+        if g["phase"] == "finished":
+            return f"🏁 {g['bet']} birr round just ended"
+        return f"⏳ waiting in {g['bet']} birr lobby"
+
+    lines = [f"🟢 Online now (last 30 sec): {len(on)}",
+             f"🕐 Active in the last 5 min: {len(recent)}",
+             f"📅 Active since the last restart (24h): {len(day)}",
+             f"👥 All players: {len(wallets)}", ""]
+    for bet, g in sorted(rooms.items()):
+        n_on = sum(1 for u in g["players"] if u in on)
+        lines.append(f"Room {bet} birr: {len(g['players'])} in round ({n_on} online) · {g['phase']}")
+    if on:
+        lines.append("")
+        for u in sorted(on, key=lambda x: names.get(x, ""))[:60]:
+            un = usernames.get(u, "")
+            lines.append(f"• {names.get(u, '?')}" + (f" @{un}" if un else "") + f" — {status(u)}")
+        if len(on) > 60:
+            lines.append(f"…and {len(on) - 60} more")
+    lines.append("\n(Only players with the game app open are counted. The list is cleared when the bot restarts.)")
+    await m.answer("\n".join(lines))
 
 
 @dp.message(Command("players"))
@@ -2769,6 +2817,7 @@ async def main():
                     BotCommand(command="broadcast", description="📢 Message all players"),
                     BotCommand(command="lastsms", description="📩 Last forwarded SMS"),
                     BotCommand(command="backup", description="💾 Download a backup"),
+                    BotCommand(command="online", description="🟢 Who is online now"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
