@@ -1,4 +1,4 @@
-import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
+import asyncio, gzip, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
 from pathlib import Path
 from urllib.parse import parse_qsl, quote
 import asyncpg
@@ -10,7 +10,8 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            BotCommandScopeDefault, BotCommandScopeAllPrivateChats,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
-                           ReplyKeyboardRemove, WebAppInfo, FSInputFile)
+                           ReplyKeyboardRemove, WebAppInfo, FSInputFile,
+                           BufferedInputFile)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
@@ -20,6 +21,7 @@ SMS_SECRET = os.getenv("SMS_SECRET", "")              # secret key for the SMS f
 PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
+BACKUP_EVERY_HOURS = int(os.getenv("BACKUP_EVERY_HOURS", "24"))   # automatic backup to the admin (0 = off)
 
 # ---------- PAYMENT DETAILS (set these ONLY in environment variables, never in code) ----------
 CBE_ACCOUNT = os.getenv("CBE_ACCOUNT", "")
@@ -1938,6 +1940,7 @@ async def cmd_admin(m: Message):
         "/ban <phone>\nBlock a player\n\n"
         "/unban <phone>\nUnblock a player\n\n"
         "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
+        "/backup\nSend a full backup file of all data (also sent automatically every day)\n\n"
         "/lastsms\nLast SMS forwarded from your phone")
 
 
@@ -2151,19 +2154,52 @@ async def cmd_broadcast(m: Message, command: CommandObject):
     await m.answer(f"📢 This is what players will see:\n\n{text}", reply_markup=kb)
 
 
+def _why_failed(e):
+    s = str(e).lower()
+    if "blocked by the user" in s:
+        return "blocked the bot"
+    if "deactivated" in s:
+        return "Telegram account deleted"
+    if "chat not found" in s:
+        return "chat not found (deleted the chat)"
+    if "forbidden" in s:
+        return "bot not allowed to write to him"
+    return (str(e) or e.__class__.__name__)[:80]
+
+
 async def run_broadcast(bot, text, admin_id):
-    ok = fail = 0
+    ok = 0
+    failed = []                                  # (uid, reason)
     for uid in list(wallets):
         if uid in banned:
             continue
-        try:
-            await bot.send_message(uid, text)
-            ok += 1
-        except Exception:
-            fail += 1
+        for attempt in (1, 2):
+            try:
+                await bot.send_message(uid, text)
+                ok += 1
+                break
+            except Exception as e:
+                if e.__class__.__name__ == "TelegramRetryAfter" and attempt == 1:
+                    await asyncio.sleep(getattr(e, "retry_after", 5) + 1)   # Telegram said "slow down"
+                    continue
+                failed.append((uid, _why_failed(e)))
+                break
         await asyncio.sleep(0.06)              # stay under Telegram's speed limit
     try:
-        await bot.send_message(admin_id, f"📢 Broadcast finished.\n✅ Sent: {ok}\n❌ Failed: {fail}")
+        await bot.send_message(admin_id, f"📢 Broadcast finished.\n✅ Sent: {ok}\n❌ Failed: {len(failed)}")
+        if failed:
+            lines = []
+            for uid, why in failed:
+                ph = phones.get(uid, "")
+                lines.append(f"• {names.get(uid, '?')} | id {uid}" + (f" | +{ph}" if ph else "") + f"\n   → {why}")
+            chunk = "Failed players:\n"
+            for ln in lines:
+                if len(chunk) + len(ln) > 3500:
+                    await bot.send_message(admin_id, chunk)
+                    chunk = ""
+                chunk += ln + "\n"
+            if chunk:
+                await bot.send_message(admin_id, chunk)
     except Exception:
         pass
 
@@ -2275,6 +2311,64 @@ async def cmd_lastsms(m: Message):
                      f"{html.escape(r['text'][:150])}\n"
                      f"Numbers found: {html.escape(', '.join(r['tokens']) or '-')}")
     await m.answer("\n\n".join(parts), parse_mode="HTML")
+
+
+# ---------- /backup: one file with all the data, sent to the admin in Telegram ----------
+async def make_backup():
+    """Read every table from the database and pack it into one gzip-ed JSON file."""
+    await flush_db(15)                           # first save everything still waiting in the queue
+    out = {"format": 1, "made": int(time.time())}
+    async with pool.acquire() as c:
+        out["users"] = [[r["uid"], json.loads(r["data"])]
+                        for r in await c.fetch("SELECT uid, data FROM users")]
+        out["pending"] = [[r["rid"], json.loads(r["data"])]
+                          for r in await c.fetch("SELECT rid, data FROM pending")]
+        out["games"] = [[r["id"], json.loads(r["data"])]
+                        for r in await c.fetch("SELECT id, data FROM games")]
+        out["kv"] = [[r["k"], r["v"]] for r in await c.fetch("SELECT k, v FROM kv")]
+        out["used_sms"] = [r["h"] for r in await c.fetch("SELECT h FROM used_sms")]
+        out["room_players"] = [[r["uid"], r["bet"], r["card"], r["used"], r["bonus_used"]]
+                               for r in await c.fetch("SELECT * FROM room_players")]
+        out["bank_sms"] = [[r["h"], r["t"], json.loads(r["data"])]
+                           for r in await c.fetch("SELECT h, t, data FROM bank_sms")]
+    raw = gzip.compress(json.dumps(out, ensure_ascii=False).encode("utf-8"))
+    info = {k: len(v) for k, v in out.items() if isinstance(v, list)}
+    return raw, info
+
+
+async def send_backup(bot, chat_id, auto=False):
+    raw, info = await make_backup()
+    if len(raw) > 45 * 1024 * 1024:              # Telegram bots can send up to 50 MB
+        await bot.send_message(chat_id, f"⚠️ The backup is {len(raw) // 1048576} MB, too big "
+                                        "for Telegram. Use pg_dump from your computer.")
+        return
+    name = time.strftime("backup-%Y%m%d-%H%M.json.gz", time.gmtime())
+    cap = (("💾 Automatic backup" if auto else "💾 Backup") +
+           f"\nPlayers: {info['users']} · Games: {info['games']} · Waiting requests: {info['pending']}\n"
+           "Keep this file private (phone numbers + balances inside).")
+    await bot.send_document(chat_id, BufferedInputFile(raw, filename=name), caption=cap)
+
+
+@dp.message(Command("backup"))
+async def cmd_backup(m: Message):
+    if not is_admin(m):
+        return
+    await m.answer("⏳ Making the backup…")
+    try:
+        await send_backup(m.bot, m.from_user.id)
+    except Exception as e:
+        await m.answer(f"❌ Backup failed: {e!r}")
+
+
+async def auto_backup():
+    """Every BACKUP_EVERY_HOURS the admin gets a backup file in Telegram."""
+    await asyncio.sleep(600)                     # not right at start-up
+    while True:
+        try:
+            await send_backup(BOT, ADMIN_ID, auto=True)
+        except Exception as e:
+            print("auto backup failed:", repr(e))
+        await asyncio.sleep(BACKUP_EVERY_HOURS * 3600)
 
 
 @dp.message(F.text & ~F.text.startswith("/"))
@@ -2578,6 +2672,9 @@ async def main():
     asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
+    if ADMIN_ID and BACKUP_EVERY_HOURS > 0:
+        t0 = asyncio.create_task(auto_backup())
+        bg_tasks.add(t0)
 
     await bot.delete_webhook(drop_pending_updates=False)
 
@@ -2640,6 +2737,7 @@ async def main():
                     BotCommand(command="unban", description="✅ Unblock a player"),
                     BotCommand(command="broadcast", description="📢 Message all players"),
                     BotCommand(command="lastsms", description="📩 Last forwarded SMS"),
+                    BotCommand(command="backup", description="💾 Download a backup"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
