@@ -973,6 +973,7 @@ async def api_state(req):
         "bet": g["bet"], "derash": int(n * g["bet"] * 0.8),
         "wallet": play_balance(uid), "bonus": bonus.get(uid, 0),
         "cash": wallets[uid], "name": names[uid],
+        "withdrawable": withdrawable_amount(uid),
         "turnover": turnover_info(uid),
         "count": CARD_COUNT, "taken": list(g["players"].values()),
         "myCard": my, "card": make_card(my) if my else None,
