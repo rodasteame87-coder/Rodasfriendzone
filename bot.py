@@ -1,4 +1,4 @@
-import asyncio, gzip, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
+import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
 from pathlib import Path
 from urllib.parse import parse_qsl, quote
 import asyncpg
@@ -10,8 +10,7 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            BotCommandScopeDefault, BotCommandScopeAllPrivateChats,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
-                           ReplyKeyboardRemove, WebAppInfo, FSInputFile,
-                           BufferedInputFile)
+                           ReplyKeyboardRemove, WebAppInfo, FSInputFile)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
@@ -21,7 +20,6 @@ SMS_SECRET = os.getenv("SMS_SECRET", "")              # secret key for the SMS f
 PAY_INFO = os.getenv("PAY_INFO", "Ask support for payment details")
 SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
-BACKUP_EVERY_HOURS = int(os.getenv("BACKUP_EVERY_HOURS", "24"))   # automatic backup to the admin (0 = off)
 
 # ---------- PAYMENT DETAILS (set these ONLY in environment variables, never in code) ----------
 CBE_ACCOUNT = os.getenv("CBE_ACCOUNT", "")
@@ -31,8 +29,7 @@ TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "")
 CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
-SIGNUP_BONUS = int(os.getenv("SIGNUP_BONUS", "10"))   # play-only welcome bonus for NEW players (0 = off)
-REF_BONUS_PERCENT = int(os.getenv("REF_BONUS_PERCENT", "10"))     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
+REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
 
 BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
 
@@ -56,10 +53,7 @@ CALL_EVERY = 4             # seconds between calls
 LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
-MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise the countdown waits (stakes are refunded if they leave)
-LOBBY_IDLE_KICK = int(os.getenv("LOBBY_IDLE_KICK", "3600"))   # seconds a player with the app CLOSED may wait
-                           # in the LOBBY before he is removed + refunded (3600 = 1 hour).
-                           # While the app is open he waits as long as needed. 0 = never remove.
+MIN_PLAYERS = 2            # a round needs at least 2 players (testing), otherwise stakes are refunded
 IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
@@ -93,7 +87,6 @@ pending, req_counter = {}, [0]          # deposit / withdraw requests
 used_sms = set()                        # SMS already sent + used payment numbers ("tok:...")
 referrer, invited = {}, {}              # player -> who invited him / invite count
 ref_paid, ref_earn = set(), {}          # first-deposit bonus already paid / total earned
-signup_given, signup_phones = set(), set()   # welcome bonus already given (accounts / phone numbers)
 ref_phones = set()                      # phone numbers (last 9 digits) that already gave an invite bonus
 wd_state = {}                           # players in the middle of a withdraw
 phones = {}                             # player -> verified phone number
@@ -150,7 +143,7 @@ def save_user(uid):
             "hist": history.get(uid, []), "winlog": winlog.get(uid, []),
             "phone": phones.get(uid), "ref": referrer.get(uid),
             "inv": invited.get(uid, 0), "earn": ref_earn.get(uid, 0),
-            "paid": uid in ref_paid, "ban": uid in banned, "sb": uid in signup_given,
+            "paid": uid in ref_paid, "ban": uid in banned,
             "dep": deposited.get(uid, 0), "wag": wagered.get(uid, 0),
             "req": required.get(uid, 0), "dc": dep_count.get(uid, 0)}
     _enqueue("INSERT INTO users(uid, data) VALUES($1, $2::jsonb) "
@@ -220,69 +213,22 @@ def save_room_clear(bet):
     _enqueue("DELETE FROM room_players WHERE bet = $1", bet)
 
 
-# connection problems are retried; any other error must NOT block the queue forever
-_RETRY = tuple(e for e in (
-    OSError, asyncio.TimeoutError,
-    getattr(asyncpg, "PostgresConnectionError", None),
-    getattr(asyncpg, "InterfaceError", None),
-    getattr(asyncpg.exceptions, "OperatorInterventionError", None)) if e)
-_last_db_alert = [0]
-
-
-async def _db_alert(msg):
-    print(msg)
-    if BOT and ADMIN_ID and time.time() - _last_db_alert[0] > 600:
-        _last_db_alert[0] = time.time()
-        try:
-            await BOT.send_message(ADMIN_ID, "⚠️ " + msg[:300])
-        except Exception:
-            pass
-
-
-async def _write_batch(batch):
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for sql, args in batch:
-                await conn.execute(sql, *args)
-
-
 async def db_writer():
     while True:
         batch = [await _q.get()]
         while not _q.empty():
             batch.append(_q.get_nowait())
-        while True:
+        while True:                                   # never drop a write
             try:
-                await _write_batch(batch)
+                async with pool.acquire() as conn:
+                    async with conn.transaction():
+                        for sql, args in batch:
+                            await conn.execute(sql, *args)
                 break
-            except _RETRY as e:                       # database unreachable: wait and retry
-                print("db connection problem, retrying:", repr(e))
+            except Exception as e:
+                print("db write failed, retrying:", repr(e))
                 await asyncio.sleep(3)
-            except Exception as e:                    # bad data / bad SQL: retrying is useless
-                await _db_alert(f"DB write FAILED (not a connection problem): {e!r}. "
-                                "Saving the other changes one by one.")
-                for item in batch:
-                    while True:
-                        try:
-                            await _write_batch([item])
-                            break
-                        except _RETRY:
-                            await asyncio.sleep(3)
-                        except Exception as e2:
-                            print("SKIPPED bad write:", item[0][:80], repr(e2))
-                            break
-                break
-        for _ in batch:
-            _q.task_done()
 
-
-async def flush_db(timeout=20):
-    """On shutdown: wait until everything in the queue is saved."""
-    try:
-        await asyncio.wait_for(_q.join(), timeout)
-        print("database flushed")
-    except Exception as e:
-        print("could not flush the database in time:", repr(e))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(uid BIGINT PRIMARY KEY, data JSONB NOT NULL);
@@ -325,8 +271,6 @@ async def load_state():
             ref_earn[uid] = d.get("earn", 0)
             if d.get("paid"):
                 ref_paid.add(uid)
-            if d.get("sb"):
-                signup_given.add(uid)
             if d.get("ban"):
                 banned.add(uid)
         for r in await c.fetch("SELECT rid, data FROM pending"):
@@ -346,8 +290,6 @@ async def load_state():
                 game_counter[0] = r["v"]
             elif r["k"].startswith("refphone:"):
                 ref_phones.add(r["k"][9:])
-            elif r["k"].startswith("signup:"):
-                signup_phones.add(r["k"][7:])
         # players who had paid for a cartela when the bot stopped: give it back
         stuck = await c.fetch("SELECT uid, bet, used, bonus_used FROM room_players")
     for r in stuck:
@@ -422,20 +364,6 @@ def verify(init_data: str):
         return json.loads(data["user"])
     except ValueError:
         return None
-
-
-def init_of(req):
-    """Telegram initData comes in a header, never in the URL (URLs end up in logs)."""
-    return req.headers.get("X-Init-Data", "")
-
-
-async def body_of(req):
-    """JSON body as a dict (empty dict if it is missing or broken)."""
-    try:
-        b = await req.json()
-    except Exception:
-        return {}
-    return b if isinstance(b, dict) else {}
 
 
 def log(uid, kind, amount, note=""):
@@ -634,7 +562,7 @@ def award_winners(g):
     Prizes always go to the cash wallet (withdrawable), even if the stake was bonus."""
     hits = {}
     for u, no in g["players"].items():
-        if u in g["dq"] or u in g["left"]:       # banned or left the round: cannot win
+        if u in g["dq"]:
             continue
         fp = fresh_pattern(make_card(no), g["called"])
         if fp:
@@ -675,19 +603,7 @@ CREDIT_WORDS = ("credited", "received", "ተቀብለዋል")
 DEBIT_WORDS = ("debited", "transferred", "you have sent", "sent to", "paid to")
 
 
-# the amount right after "credited with" / "received" is the real payment
-# (a plain "first amount in the text" can be the balance or a service fee)
-CREDIT_AMOUNT_RE = re.compile(
-    r"(?:credited\s+with|received)\s*(?:ETB|Birr|BIRR|birr|ብር)?\s*([\d,]+(?:\.\d+)?)", re.I)
-
-
 def parse_amount(text):
-    mt = CREDIT_AMOUNT_RE.search(text)
-    if mt:
-        try:
-            return int(float(mt.group(1).replace(",", "")))
-        except ValueError:
-            pass
     mt = AMOUNT_RE.search(text)
     if not mt:
         return None
@@ -710,45 +626,9 @@ def sms_tokens(text):
 def is_credit(text):
     """True only for 'money came IN' messages (never for money you sent out)."""
     low = text.lower()
-    c = [low.find(w) for w in CREDIT_WORDS if w in low]
-    if not c:
+    if any(w in low for w in DEBIT_WORDS):
         return False
-    d = [low.find(w) for w in DEBIT_WORDS if w in low]
-    return not d or min(c) < min(d)        # the credit wording must come first
-
-
-# ---- payer check: the phone number inside the SMS must be the player's own ----
-# (digits can be hidden like 2519****1234; hidden positions are ignored)
-PHONE_RE = re.compile(r"(?<![\w*•])(?:\+?251|0)?(9[\d*xX•]{8})(?![\w*•])")
-
-
-def _own_numbers():
-    out = set()
-    for p in (TELEBIRR_PHONE, CBEBIRR_PHONE):
-        d = "".join(ch for ch in p if ch.isdigit())[-9:]
-        if len(d) == 9:
-            out.add(d)
-    return out
-
-
-def _fits(masked, number9):
-    return all(ch == number9[i] for i, ch in enumerate(masked) if ch.isdigit())
-
-
-def payer_match(sms_text, uid):
-    """True  = a phone number in the SMS is the player's own number.
-       False = the SMS shows other phone numbers only (someone else paid).
-       None  = no usable phone number in the SMS (cannot tell)."""
-    mine = phones.get(uid, "")[-9:]
-    if len(mine) < 9:
-        return None
-    own = _own_numbers()
-    found = [c for c in PHONE_RE.findall(sms_text)
-             if sum(ch.isdigit() for ch in c) >= 4
-             and not any(_fits(c, o) for o in own)]      # skip YOUR receiving number
-    if not found:
-        return None
-    return any(_fits(c, mine) for c in found)
+    return any(w in low for w in CREDIT_WORDS)
 
 
 def mark_token(t):
@@ -835,8 +715,6 @@ async def on_bank_sms(rec):
             continue
         if not set(req.get("tokens", [])) & set(rec["tokens"]):
             continue
-        if payer_match(rec["text"], req["uid"]) is False:
-            continue                  # paid from a different phone: leave it to the admin
         pending.pop(rid, None)
         save_pending(rid)
         claim_bank(rec)
@@ -890,7 +768,7 @@ async def api_sms_hook(req):
     rec = {"h": h, "t": int(time.time()), "amount": amount,
            "tokens": sorted(sms_tokens(text)),
            "credit": bool(amount) and is_credit(text), "claimed": False,
-           "text": text[:500], "from": sender[:30]}
+           "text": text[:300], "from": sender[:30]}
     bank_sms.insert(0, rec)
     bank_by_h.add(h)
     del bank_sms[500:]
@@ -957,21 +835,18 @@ async def pregen_audio():
 
 # ---------- background jobs ----------
 async def reaper():
-    """Optional clean-up of the LOBBY: remove players who closed the app without pressing LEAVE.
-    A player who chose a cartela waits in the lobby until enough players arrive and the round
-    starts, or until he presses LEAVE (refund). If his app stays CLOSED for LOBBY_IDLE_KICK
-    seconds (default 1 hour) he is removed and refunded. If the round starts while his app is
-    closed, the win is claimed for him automatically."""
+    """Remove players who closed the app without pressing LEAVE.
+    Only in the LOBBY (they get their stake back). Once a round has started the
+    player stays in the game: their stake is already in the prize pool, and if
+    their card wins while they are away, the win is claimed for them."""
     while True:
         await asyncio.sleep(5)
-        if LOBBY_IDLE_KICK <= 0:
-            continue
         now = time.time()
         for g in rooms.values():
             if g["phase"] != "lobby":
                 continue
             for uid in list(g["players"]):
-                if now - seen.get(uid, 0) > LOBBY_IDLE_KICK:
+                if now - seen.get(uid, 0) > IDLE_KICK:
                     remove_player(uid)
 
 
@@ -1001,7 +876,7 @@ async def run_round(g):
     g["prize"] = int(len(g["players"]) * g["bet"] * 0.8)
     for n in g["seq"]:
         if (g["phase"] != "playing" or not g["players"]
-                or all(u in g["dq"] or u in g["left"] for u in g["players"])):
+                or all(u in g["dq"] for u in g["players"])):
             break
         g["called"].append(n)
 
@@ -1010,10 +885,10 @@ async def run_round(g):
         #   - players who are AWAY (app closed)
         # Manual players must press BINGO themselves before the next number is called.
         now = time.time()
-        away = {u for u in g["players"]                 # app closed (NOT the same as LEAVE)
-                if now - seen.get(u, 0) > IDLE_KICK}
+        away = {u for u in g["players"]
+                if now - seen.get(u, 0) > IDLE_KICK or u in g["left"]}
         claimers = [u for u, no in g["players"].items()
-                    if u not in g["dq"] and u not in g["left"]
+                    if u not in g["dq"]
                     and (u in away or auto_pref.get(u))
                     and fresh_pattern(make_card(no), g["called"])]
         if claimers:
@@ -1024,7 +899,7 @@ async def run_round(g):
     g["phase"] = "finished"
     if not g["winners"]:                   # nobody won: give bets back, except cheaters
         for uid in list(g["players"]):
-            if uid in g["dq"] or uid in g["left"]:   # banned or pressed LEAVE: no refund
+            if uid in g["dq"]:             # banned for false / late bingo: no refund
                 continue
             refund_stake(uid, g["bet"], f"Room {g['bet']} refund (no winner)")
             try:
@@ -1078,21 +953,19 @@ def play_balance(uid):
 
 
 async def api_state(req):
-    user = verify(init_of(req))
+    user = verify(req.query.get("initData", ""))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
     if "auto" in req.query:                      # the web app tells us if Auto is ON
         auto_pref[uid] = req.query.get("auto") == "1"
     mine = room_of(uid)
-    if mine and uid in mine["left"]:
-        mine = None                  # left a running round: out of the game, no "Back" button
     try:
         asked = rooms.get(int(req.query.get("room", 0)))
     except (TypeError, ValueError):
         asked = None
     g = mine or asked or rooms[BETS[0]]
-    my = None if uid in g["left"] else g["players"].get(uid)
+    my = g["players"].get(uid)
     n = len(g["players"])
     return web.json_response({
         "phase": g["phase"], "time": lobby_time(g), "round": g["round"],
@@ -1100,7 +973,6 @@ async def api_state(req):
         "bet": g["bet"], "derash": int(n * g["bet"] * 0.8),
         "wallet": play_balance(uid), "bonus": bonus.get(uid, 0),
         "cash": wallets[uid], "name": names[uid],
-        "withdrawable": withdrawable_amount(uid),
         "turnover": turnover_info(uid),
         "count": CARD_COUNT, "taken": list(g["players"].values()),
         "myCard": my, "card": make_card(my) if my else None,
@@ -1132,7 +1004,7 @@ async def api_state(req):
 
 
 async def api_profile(req):
-    user = verify(init_of(req))
+    user = verify(req.query.get("initData", ""))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -1149,7 +1021,7 @@ async def api_profile(req):
 
 
 async def api_history(req):
-    user = verify(init_of(req))
+    user = verify(req.query.get("initData", ""))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -1174,7 +1046,7 @@ async def api_history(req):
 
 
 async def api_game(req):
-    user = verify(init_of(req))
+    user = verify(req.query.get("initData", ""))
     if not user:
         return web.json_response({"error": "auth"})
     uid = touch(user)
@@ -1200,7 +1072,7 @@ async def api_card(req):
 
 
 async def api_join(req):
-    body = await body_of(req)
+    body = await req.json()
     user = verify(body.get("initData", ""))
     if not user:
         return web.json_response({"ok": False, "error": "Open from Telegram"})
@@ -1219,11 +1091,9 @@ async def api_join(req):
         return web.json_response({"ok": False, "error": "Bad room"})
     if g["phase"] != "lobby":
         return web.json_response({"ok": False, "error": "Round already started"})
-    g0 = room_of(uid)
-    if g0:
-        msg = ("You left a running game. Wait until it finishes to join again."
-               if uid in g0["left"] else "You already have a cartela this game")
-        return web.json_response({"ok": False, "error": msg})
+    if room_of(uid):
+        return web.json_response({"ok": False,
+                                  "error": "You already have a cartela this game"})
     try:
         card = int(body.get("card", 0))
     except (TypeError, ValueError):
@@ -1275,7 +1145,7 @@ async def notify_false_bingo(uid, card_no, bet, late=False):
 
 
 async def api_bingo(req):
-    body = await body_of(req)
+    body = await req.json()
     user = verify(body.get("initData", ""))
     if not user:
         return web.json_response({"ok": False})
@@ -1292,8 +1162,6 @@ async def api_bingo(req):
         return web.json_response({"ok": False})
     if uid in g["dq"]:                         # already banned in this round
         return web.json_response({"ok": False, "disq": True})
-    if uid in g["left"]:                       # pressed LEAVE: out of this round
-        return web.json_response({"ok": False, "left": True})
     card = make_card(g["players"][uid])
     # VALID press: a pattern completed by the latest called number.
     # Everybody else whose card completed on this same call shares the prize.
@@ -1315,16 +1183,15 @@ async def api_bingo(req):
 
 
 async def api_leave(req):
-    body = await body_of(req)
+    body = await req.json()
     user = verify(body.get("initData", ""))
     if user:
         g = room_of(user["id"])
         if g and g["phase"] == "lobby":
             remove_player(user["id"])              # lobby: stake is refunded
         elif g and g["phase"] == "playing":
-            g["left"].add(user["id"])              # round running: the player is OUT.
-                                                   # The bet stays in the prize pool, he can
-                                                   # not win and can not come back.
+            g["left"].add(user["id"])              # round running: bet stays in the game,
+                                                   # the server claims a win for this player
     return web.json_response({"ok": True})
 
 
@@ -1447,7 +1314,9 @@ START_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
               "Welcome! Tap Start to begin.")
 PHONE_TEXT = ("📱 ለመቀጠል ስልክ ቁጥርዎን ያጋሩ\n\n"
               "ከታች ያለውን «ስልክ ቁጥር ያጋሩ» ቁልፍ ይንኩ።\n\n"
-              "To continue, tap the button below to share your phone number.")
+              "To continue, tap the button below to share your phone number.\n\n"
+              "ቁልፉ ካልታየ ከመልእክት መጻፊያው አጠገብ ያለውን ▦ አዶ ይንኩ።\n"
+              "Can't see the button? Tap the ▦ icon next to the message box.")
 WELCOME_TEXT = ("👋 እንኳን በደህና መጡ! ቢንጎ ለመጫወት ዝግጁ ነዎት?\n\n"
                 "Welcome! Ready to play Bingo?\n\n"
                 f"{BRAND}")
@@ -1462,7 +1331,8 @@ def phone_kb():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📱 ስልክ ቁጥር ያጋሩ / Share phone number",
                                   request_contact=True)]],
-        resize_keyboard=True, one_time_keyboard=True)
+        resize_keyboard=True, one_time_keyboard=False,
+        input_field_placeholder="📱 Tap: Share phone number")
 
 
 async def need_phone(m: Message):
@@ -1475,11 +1345,14 @@ async def need_phone(m: Message):
 
 @dp.callback_query(F.data == "start:go")
 async def start_go(cb: CallbackQuery):
+    try:
+        await cb.answer()
+    except Exception:
+        pass
     if cb.from_user.id in phones:
         await cb.message.answer(WELCOME_TEXT, reply_markup=menu_kb(cb.from_user.id))
     else:
         await cb.message.answer(PHONE_TEXT, reply_markup=phone_kb())
-    await cb.answer()
 
 
 @dp.message(F.contact)
@@ -1491,26 +1364,10 @@ async def got_contact(m: Message):
                        "Please use the button to share your own number.",
                        reply_markup=phone_kb())
         return
-    first_time = uid not in phones              # only a NEW registration gets the welcome bonus
     phones[uid] = "".join(ch for ch in c.phone_number if ch.isdigit())
-    pk = phones[uid][-9:]
-    gift = 0
-    if (SIGNUP_BONUS > 0 and first_time and len(pk) == 9
-            and uid not in signup_given and pk not in signup_phones):
-        signup_given.add(uid)                   # once per account AND once per phone number
-        signup_phones.add(pk)
-        _save_counter("signup:" + pk, 1)
-        bonus[uid] = bonus.get(uid, 0) + SIGNUP_BONUS
-        log(uid, "bonus", SIGNUP_BONUS, "Welcome bonus")      # also saves the user
-        gift = SIGNUP_BONUS
-    else:
-        save_user(uid)
-    msg = "✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!"
-    if gift:
-        msg += (f"\n\n🎁 {gift} ብር የእንኳን ደህና መጡ ቦነስ አግኝተዋል! (ለመጫወት ብቻ)\n"
-                f"You got a {gift} birr welcome bonus (play only). "
-                "Anything you win with it is withdrawable.")
-    await m.answer(msg, reply_markup=ReplyKeyboardRemove())
+    save_user(uid)
+    await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
+                   reply_markup=ReplyKeyboardRemove())
     await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
 
 
@@ -1773,13 +1630,9 @@ async def cmd_instruction(m: Message):
         "after the next number was already called, or without a real pattern, "
         "your cartela is banned for that round. Players who complete a pattern on "
         "the same call share the prize.\n\n"
-        "ℹ️ After you choose a cartela you wait in the lobby until enough players join. You stay there until the round starts; press LEAVE to get your bet back. "
-        "If you keep the app closed for more than 1 hour, you are removed and refunded.\n"
+        "ℹ️ If a round cannot start, your stake is refunded.\n"
         "ℹ️ If you close the app during a round, your cartela stays in the game and "
-        "a win is added to your balance automatically.\n"
-        "🚪 If you press LEAVE during a round, you are OUT: your bet stays in the prize pool, "
-        "you cannot win this round and you cannot come back.\n"
-        "በጨዋታ ወቅት LEAVE ከነኩ ከጨዋታው ይወጣሉ፤ ብሩ በጨዋታው ውስጥ ይቀራል፣ ማሸነፍም አይችሉም።\n\n"
+        "a win is added to your balance automatically.\n\n"
         "💸 Withdrawing: your first deposit must be played "
         f"{fmt_x(FIRST_DEPOSIT_TURNOVER)} before you can withdraw it. Later deposits only need "
         f"{fmt_x(NEXT_DEPOSIT_TURNOVER)}. Every bet counts, win or lose, and your winnings "
@@ -1802,11 +1655,10 @@ async def cmd_invite(m: Message):
             "ይህን ሊንክ ለጓደኞችዎና ለቤተሰብዎ ያጋሩ።\n")
     if REF_BONUS_PERCENT:
         text += (f"💵 የጋበዙት ሰው ለመጀመሪያ ጊዜ ገንዘብ ሲያስገባ "
-                 f"ከተቀማጩ ገንዘብ {REF_BONUS_PERCENT}% ቦነስ ያገኛሉ! (ለመጫወት ብቻ)\n"
-                 f"ዝቅተኛ ተቀማጭ: {MIN_DEPOSIT} ብር\n")
+                 f"ከተቀማጩ ገንዘብ {REF_BONUS_PERCENT}% ቦነስ ያገኛሉ! (ለመጫወት ብቻ)\n")
     text += (f"\n🔗 የእርስዎ ሊንክ:\n{link}\n\n"
-             f"👤 ጠቅላላ የጋበዟቸው: {invited.get(uid, 0)}\n"
-             f"💰 ጠቅላላ ገቢ: {ref_earn.get(uid, 0):.2f} ብር")
+             f"👤 የጋበዟቸው ሰዎች: {invited.get(uid, 0)}\n"
+             f"💰 ያገኙት ቦነስ: {ref_earn.get(uid, 0)} ብር")
     share = ("https://t.me/share/url?url=" + quote(link) +
              "&text=" + quote("🎯 Rodas Friend Zone Bingo ተጫወቱ!"))
     kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -1903,9 +1755,6 @@ async def cmd_transactions(m: Message):
 async def menu_buttons(cb: CallbackQuery):
     action = (cb.data or "").split(":", 1)[1]
 
-    if not isinstance(cb.message, Message):     # message too old / not available
-        await cb.answer("Please send /start again.", show_alert=True)
-        return
     await cb.answer()
     # same message, but "from" is the player who pressed the button,
     # so the normal command handlers work unchanged
@@ -1940,7 +1789,6 @@ async def cmd_admin(m: Message):
     await m.answer(
         "🛠 Admin commands\n\n"
         "/stats\nPlayers, money, waiting requests, last 24h\n\n"
-        "/online\nWho has the game open right now\n\n"
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
@@ -1948,8 +1796,7 @@ async def cmd_admin(m: Message):
         "/resetfree\nRemove free balance from players who never deposited\n\n"
         "/ban <phone>\nBlock a player\n\n"
         "/unban <phone>\nUnblock a player\n\n"
-        "/broadcast <message>\nSend a message to all players with a 🎮 Play button (you confirm first). For a photo/video: send it to me, then reply to it with /broadcast\n\n"
-        "/backup\nSend a full backup file of all data (also sent automatically every day)\n\n"
+        "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
         "/lastsms\nLast SMS forwarded from your phone")
 
 
@@ -2004,46 +1851,6 @@ def players_page(page):
     if page < pages - 1:
         row.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"pl:{page + 1}"))
     return text, InlineKeyboardMarkup(inline_keyboard=[row] if row else [])
-
-
-@dp.message(Command("online"))
-async def cmd_online(m: Message):
-    """Who has the game app open right now (the app contacts the server every second)."""
-    if not is_admin(m):
-        return
-    now = time.time()
-    on = [u for u, t in seen.items() if now - t <= 30 and u in wallets]
-    recent = [u for u, t in seen.items() if now - t <= 300 and u in wallets]
-    day = [u for u, t in seen.items() if now - t <= 86400 and u in wallets]
-
-    def status(u):
-        g = room_of(u)
-        if not g:
-            return "📱 in the app (no cartela)"
-        if u in g["left"]:
-            return f"🚪 left the {g['bet']} birr round"
-        if g["phase"] == "playing":
-            return f"🎮 playing {g['bet']} birr"
-        if g["phase"] == "finished":
-            return f"🏁 {g['bet']} birr round just ended"
-        return f"⏳ waiting in {g['bet']} birr lobby"
-
-    lines = [f"🟢 Online now (last 30 sec): {len(on)}",
-             f"🕐 Active in the last 5 min: {len(recent)}",
-             f"📅 Active since the last restart (24h): {len(day)}",
-             f"👥 All players: {len(wallets)}", ""]
-    for bet, g in sorted(rooms.items()):
-        n_on = sum(1 for u in g["players"] if u in on)
-        lines.append(f"Room {bet} birr: {len(g['players'])} in round ({n_on} online) · {g['phase']}")
-    if on:
-        lines.append("")
-        for u in sorted(on, key=lambda x: names.get(x, ""))[:60]:
-            un = usernames.get(u, "")
-            lines.append(f"• {names.get(u, '?')}" + (f" @{un}" if un else "") + f" — {status(u)}")
-        if len(on) > 60:
-            lines.append(f"…and {len(on) - 60} more")
-    lines.append("\n(Only players with the game app open are counted. The list is cleared when the bot restarts.)")
-    await m.answer("\n".join(lines))
 
 
 @dp.message(Command("players"))
@@ -2187,100 +1994,37 @@ async def cmd_unban(m: Message, command: CommandObject):
     await m.answer(f"✅ {names.get(uid, 'Player')} ({phones.get(uid)}) is unblocked.")
 
 
-def broadcast_kb():
-    """The button under every broadcast: opens the game straight away."""
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🎮 ተጫወት / Play", web_app=WebAppInfo(url=WEBAPP_URL))]])
-
-
-async def _bc_send_one(bot, uid, bc):
-    """Send one broadcast to one player (plain text, or a copy of a photo/video/etc)."""
-    if bc["src"]:
-        chat_id, mid = bc["src"]
-        extra = {"caption": bc["text"]} if bc["text"] else {}
-        await bot.copy_message(uid, chat_id, mid, reply_markup=broadcast_kb(), **extra)
-    else:
-        await bot.send_message(uid, bc["text"], reply_markup=broadcast_kb())
-
-
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(m: Message, command: CommandObject):
     if not is_admin(m):
         return
     text = (command.args or "").strip()
-    src = m.reply_to_message
-    if not text and not src:
-        await m.answer("Send:\n/broadcast <your message>\n\n"
-                       "With a photo or video: send the photo/video to me first, then REPLY to it "
-                       "with /broadcast (text after the command replaces the caption).")
+    if not text:
+        await m.answer("Send:\n/broadcast <your message>")
         return
-    if src and len(text) > 1024:
-        await m.answer("A caption can have at most 1024 characters.")
-        return
-    bc = {"text": text, "src": (src.chat.id, src.message_id) if src else None}
-    bc_pending[m.from_user.id] = bc
+    bc_pending[m.from_user.id] = text
     n = len([u for u in wallets if u not in banned])
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=f"✅ Send to {n} players", callback_data="bc:send"),
         InlineKeyboardButton(text="❌ Cancel", callback_data="bc:cancel")]])
-    await m.answer("📢 This is what players will see (with the 🎮 Play button):")
-    try:
-        await _bc_send_one(m.bot, m.from_user.id, bc)
-    except Exception as e:
-        bc_pending.pop(m.from_user.id, None)
-        await m.answer(f"❌ Could not prepare this message: {e!r}")
-        return
-    await m.answer("Send it now?", reply_markup=kb)
+    await m.answer(f"📢 This is what players will see:\n\n{text}", reply_markup=kb)
 
 
-async def run_broadcast(bot, bc, admin_id):
-    ok = 0
-    failed = []                                  # (uid, reason)
+async def run_broadcast(bot, text, admin_id):
+    ok = fail = 0
     for uid in list(wallets):
         if uid in banned:
             continue
-        for attempt in (1, 2):
-            try:
-                await _bc_send_one(bot, uid, bc)
-                ok += 1
-                break
-            except Exception as e:
-                if e.__class__.__name__ == "TelegramRetryAfter" and attempt == 1:
-                    await asyncio.sleep(getattr(e, "retry_after", 5) + 1)   # Telegram said "slow down"
-                    continue
-                failed.append((uid, _why_failed(e)))
-                break
+        try:
+            await bot.send_message(uid, text)
+            ok += 1
+        except Exception:
+            fail += 1
         await asyncio.sleep(0.06)              # stay under Telegram's speed limit
     try:
-        await bot.send_message(admin_id, f"📢 Broadcast finished.\n✅ Sent: {ok}\n❌ Failed: {len(failed)}")
-        if failed:
-            lines = []
-            for uid, why in failed:
-                ph = phones.get(uid, "")
-                lines.append(f"• {names.get(uid, '?')} | id {uid}" + (f" | +{ph}" if ph else "") + f"\n   → {why}")
-            chunk = "Failed players:\n"
-            for ln in lines:
-                if len(chunk) + len(ln) > 3500:
-                    await bot.send_message(admin_id, chunk)
-                    chunk = ""
-                chunk += ln + "\n"
-            if chunk:
-                await bot.send_message(admin_id, chunk)
+        await bot.send_message(admin_id, f"📢 Broadcast finished.\n✅ Sent: {ok}\n❌ Failed: {fail}")
     except Exception:
         pass
-
-
-def _why_failed(e):
-    s = str(e).lower()
-    if "blocked by the user" in s:
-        return "blocked the bot"
-    if "deactivated" in s:
-        return "Telegram account deleted"
-    if "chat not found" in s:
-        return "chat not found (deleted the chat)"
-    if "forbidden" in s:
-        return "bot not allowed to write to him"
-    return (str(e) or e.__class__.__name__)[:80]
 
 
 @dp.callback_query(F.data.startswith("bc:"))
@@ -2289,8 +2033,8 @@ async def broadcast_buttons(cb: CallbackQuery):
         await cb.answer("Not allowed", show_alert=True)
         return
     action = (cb.data or "").split(":", 1)[1]
-    bc = bc_pending.pop(cb.from_user.id, None)
-    if action != "send" or not bc:
+    text = bc_pending.pop(cb.from_user.id, None)
+    if action != "send" or not text:
         try:
             await cb.message.edit_text("❌ Cancelled." if action != "send"
                                        else "Nothing to send.")
@@ -2303,7 +2047,7 @@ async def broadcast_buttons(cb: CallbackQuery):
     except Exception:
         pass
     await cb.answer()
-    task = asyncio.create_task(run_broadcast(cb.bot, bc, cb.from_user.id))
+    task = asyncio.create_task(run_broadcast(cb.bot, text, cb.from_user.id))
     bg_tasks.add(task)
     task.add_done_callback(bg_tasks.discard)
 
@@ -2392,64 +2136,6 @@ async def cmd_lastsms(m: Message):
     await m.answer("\n\n".join(parts), parse_mode="HTML")
 
 
-# ---------- /backup: one file with all the data, sent to the admin in Telegram ----------
-async def make_backup():
-    """Read every table from the database and pack it into one gzip-ed JSON file."""
-    await flush_db(15)                           # first save everything still waiting in the queue
-    out = {"format": 1, "made": int(time.time())}
-    async with pool.acquire() as c:
-        out["users"] = [[r["uid"], json.loads(r["data"])]
-                        for r in await c.fetch("SELECT uid, data FROM users")]
-        out["pending"] = [[r["rid"], json.loads(r["data"])]
-                          for r in await c.fetch("SELECT rid, data FROM pending")]
-        out["games"] = [[r["id"], json.loads(r["data"])]
-                        for r in await c.fetch("SELECT id, data FROM games")]
-        out["kv"] = [[r["k"], r["v"]] for r in await c.fetch("SELECT k, v FROM kv")]
-        out["used_sms"] = [r["h"] for r in await c.fetch("SELECT h FROM used_sms")]
-        out["room_players"] = [[r["uid"], r["bet"], r["card"], r["used"], r["bonus_used"]]
-                               for r in await c.fetch("SELECT * FROM room_players")]
-        out["bank_sms"] = [[r["h"], r["t"], json.loads(r["data"])]
-                           for r in await c.fetch("SELECT h, t, data FROM bank_sms")]
-    raw = gzip.compress(json.dumps(out, ensure_ascii=False).encode("utf-8"))
-    info = {k: len(v) for k, v in out.items() if isinstance(v, list)}
-    return raw, info
-
-
-async def send_backup(bot, chat_id, auto=False):
-    raw, info = await make_backup()
-    if len(raw) > 45 * 1024 * 1024:              # Telegram bots can send up to 50 MB
-        await bot.send_message(chat_id, f"⚠️ The backup is {len(raw) // 1048576} MB, too big "
-                                        "for Telegram. Use pg_dump from your computer.")
-        return
-    name = time.strftime("backup-%Y%m%d-%H%M.json.gz", time.gmtime())
-    cap = (("💾 Automatic backup" if auto else "💾 Backup") +
-           f"\nPlayers: {info['users']} · Games: {info['games']} · Waiting requests: {info['pending']}\n"
-           "Keep this file private (phone numbers + balances inside).")
-    await bot.send_document(chat_id, BufferedInputFile(raw, filename=name), caption=cap)
-
-
-@dp.message(Command("backup"))
-async def cmd_backup(m: Message):
-    if not is_admin(m):
-        return
-    await m.answer("⏳ Making the backup…")
-    try:
-        await send_backup(m.bot, m.from_user.id)
-    except Exception as e:
-        await m.answer(f"❌ Backup failed: {e!r}")
-
-
-async def auto_backup():
-    """Every BACKUP_EVERY_HOURS the admin gets a backup file in Telegram."""
-    await asyncio.sleep(600)                     # not right at start-up
-    while True:
-        try:
-            await send_backup(BOT, ADMIN_ID, auto=True)
-        except Exception as e:
-            print("auto backup failed:", repr(e))
-        await asyncio.sleep(BACKUP_EVERY_HOURS * 3600)
-
-
 @dp.message(F.text & ~F.text.startswith("/"))
 async def sms_deposit(m: Message):
     """Player pastes the payment SMS (CBE / Telebirr / CBE Birr)."""
@@ -2466,51 +2152,24 @@ async def sms_deposit(m: Message):
         await m.answer(f"ዝቅተኛው የማስገቢያ መጠን {MIN_DEPOSIT} ብር ነው።\nMinimum deposit is {MIN_DEPOSIT} birr.")
         return
     tokens = sms_tokens(text)
-    key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
-
-    # ===== NO "await" between the checks and the claim below =====
-    # (an await lets a second copy of the same SMS slip through the checks)
     if any(("tok:" + t) in used_sms for t in tokens):
         await m.answer("ይህ ክፍያ ቀደም ብሎ ተመዝግቧል። / This payment was already credited.")
         return
+    key = hashlib.sha256(re.sub(r"\s+", " ", text).encode()).hexdigest()
     if key in used_sms:
         await m.answer("ይህ መልዕክት ቀደም ብሎ ተልኳል። / This message was already sent.")
         return
-    if any(r["type"] == "deposit"
-           and (r.get("key") == key or set(r.get("tokens", [])) & tokens)
-           for r in pending.values()):
-        await m.answer("ይህ ክፍያ እየተረጋገጠ ነው። / This payment is already being checked.")
-        return
 
-    rec = find_bank_sms(amount, tokens)          # same SMS already came from YOUR phone?
-    pm = payer_match(rec["text"], uid) if rec else None
-    auto = bool(rec) and pm is not False         # a different payer phone = manual check
-    if not auto:
-        if not ADMIN_ID:
-            await m.answer(f"Deposits are handled by support: {SUPPORT}")
-            return
-        if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
-            await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
-                           f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
-            return
-
-    used_sms.add(key)                            # CLAIMED: a second copy is refused from now on
-    save_sms(key)
-    rid = None
-    if auto:
-        claim_bank(rec)
-    else:
-        req_counter[0] += 1
-        rid = req_counter[0]
-        pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
-                        "tokens": sorted(tokens), "key": key}
-        save_pending(rid)
-    # ===== end of the no-await part =====
-
+    # tell the player right away that the request was received
     await m.answer("Deposit request received. Your top-up will be done in a minute.\n"
                    "ጥያቄዎ ደርሶናል። በአንድ ደቂቃ ውስጥ ገንዘቡ ይገባል።")
 
-    if auto:                                     # 1) automatic
+    # 1) Automatic: the same payment SMS already arrived from YOUR phone
+    rec = find_bank_sms(amount, tokens)
+    if rec:
+        used_sms.add(key)
+        save_sms(key)
+        claim_bank(rec)
         await approve_deposit(m.bot, uid, rec["amount"])
         if ADMIN_ID:
             try:
@@ -2521,23 +2180,31 @@ async def sms_deposit(m: Message):
                 pass
         return
 
-    # 2) manual: the admin decides. If your phone's SMS arrives later
-    #    (and the payer phone fits), it is approved automatically.
-    if rec:
-        warn = ("⚠️ A matching SMS is on your phone, BUT the payer phone number in it "
-                "is NOT this player's number. Check carefully before approving.")
-    else:
-        warn = "⚠️ Not found in your phone's SMS yet. Check your account before approving."
+    # 2) Not found (yet): send to the admin. If your phone's SMS arrives
+    #    later, it is approved automatically.
+    if not ADMIN_ID:
+        await m.answer(f"Deposits are handled by support: {SUPPORT}")
+        return
+    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+        await m.answer(f"አስቀድመው {MAX_PENDING_DEPOSITS} ጥያቄዎች በመጠባበቅ ላይ ናቸው።\n"
+                       f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting. Please wait.")
+        return
+    used_sms.add(key)
+    save_sms(key)
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
+                    "tokens": sorted(tokens), "key": key}
+    save_pending(rid)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
         InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
-    try:
-        await m.bot.send_message(
-            ADMIN_ID,
-            f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
-            f"Amount: {amount} birr\n{warn}\n\nSMS:\n{text[:800]}", reply_markup=kb)
-    except Exception as e:
-        print("could not message admin:", repr(e))
+    await m.bot.send_message(
+        ADMIN_ID,
+        f"💰 Deposit request #{rid}\nUser: {names[uid]} ({uid})\n"
+        f"Amount: {amount} birr\n"
+        f"⚠️ Not found in your phone's SMS yet. Check your account before approving.\n\n"
+        f"SMS:\n{text[:800]}", reply_markup=kb)
     await m.answer(f"🔎 ጥያቄዎ #{rid} እየተረጋገጠ ነው። ሲጸድቅ መልዕክት ይደርስዎታል።\n"
                    f"Your payment #{rid} is being checked. You will get a message soon.")
 
@@ -2751,11 +2418,8 @@ async def main():
     asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
-    if ADMIN_ID and BACKUP_EVERY_HOURS > 0:
-        t0 = asyncio.create_task(auto_backup())
-        bg_tasks.add(t0)
 
-    await bot.delete_webhook(drop_pending_updates=False)
+    await bot.delete_webhook(drop_pending_updates=True)
 
     # branding on the bot's profile page
     try:
@@ -2816,17 +2480,11 @@ async def main():
                     BotCommand(command="unban", description="✅ Unblock a player"),
                     BotCommand(command="broadcast", description="📢 Message all players"),
                     BotCommand(command="lastsms", description="📩 Last forwarded SMS"),
-                    BotCommand(command="backup", description="💾 Download a backup"),
-                    BotCommand(command="online", description="🟢 Who is online now"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
             print("could not set admin menu:", repr(e))
-    try:
-        await dp.start_polling(bot)               # returns on SIGTERM / Ctrl+C
-    finally:
-        ready = False                             # stop taking new API calls
-        await flush_db()                          # save everything that is still queued
+    await dp.start_polling(bot)
 
 
 asyncio.run(main())
