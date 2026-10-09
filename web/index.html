@@ -406,8 +406,7 @@ const H = { scope:"recent", bet:10, q:"" };  // history filters
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
 async function get(p){
-  // initData goes in a header (never in the URL, so it can not leak into logs)
-  const r = await fetch(API+p, {headers:{"X-Init-Data": initData()}});
+  const r = await fetch(API+p+(p.includes("?")?"&":"?")+"initData="+encodeURIComponent(initData()));
   let j; try{ j = await r.json(); }catch(e){ j = {error:"http "+r.status}; }
   if(!r.ok && !j.error) j.error = "http "+r.status;
   return j;
@@ -801,7 +800,7 @@ $("leaveBtn").onclick=async()=>{
   if(S && S.phase==="lobby"){ await post("/leave",{}); await sync(); show("lobby"); return; }
   if(S && S.phase==="playing"){
     // leaving a running round is final: the player is OUT, the bet stays in the game
-    const ok = await askConfirm("Leave this round? You will be OUT: your bet stays in the game, you cannot win and you cannot come back.");
+    const ok = await askConfirm("Leave this round? Your bet stays in the game and a win is added to your balance automatically. You cannot come back to this round.");
     if(!ok) return;
     toast("You left the round. Your bet stays in the game.");
   }
