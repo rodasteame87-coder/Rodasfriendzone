@@ -418,6 +418,8 @@ async function post(p,b){
 function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
 const letter = n => COLS[Math.floor((n-1)/15)];
 const label = n => letter(n)+"-"+n;      // e.g. B-1, O-71
+const CALL_COLORS = ["var(--cB)","var(--cI)","var(--cN)","var(--cG)","var(--cO)"];   // B blue, I red, N green, G orange, O violet
+const colorOf = n => CALL_COLORS[Math.floor((n-1)/15)];
 const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* ---------- builders ---------- */
@@ -442,8 +444,9 @@ function paintCalls(){
   }
   const last = st.called.length ? st.called[st.called.length-1] : null;
   $("lastCall").textContent = last ? label(last) : "–";
+  $("lastCall").style.background = last ? colorOf(last) : "";
   $("recent").innerHTML = st.called.slice(-6,-1).reverse()
-      .map(n=>`<span>${label(n)}</span>`).join("");
+      .map(n=>`<span style="background:${colorOf(n)};color:#fff">${label(n)}</span>`).join("");
   $("gCall").textContent = st.called.length;
   return last;
 }
@@ -646,6 +649,7 @@ function render(){
   $("gBet").textContent=S.bet;
   $("ballTitle").textContent = S.phase==="lobby" ? "Starting in" : "Current Call";
   $("ball").textContent = S.phase==="lobby" ? S.time : (last ? label(last) : "–");
+  $("ball").style.background = (S.phase!=="lobby" && last) ? colorOf(last) : "";   // colour of the current call
 
   // routing:
   //  - chose a cartela but the round has not started: stay on the cartela screen
