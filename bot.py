@@ -32,7 +32,7 @@ CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
 SIGNUP_BONUS = int(os.getenv("SIGNUP_BONUS", "10"))   # play-only welcome bonus for NEW players (0 = off)
-REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
+REF_BONUS_PERCENT = int(os.getenv("REF_BONUS_PERCENT", "10"))     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
 
 BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
 
@@ -1795,10 +1795,11 @@ async def cmd_invite(m: Message):
             "ይህን ሊንክ ለጓደኞችዎና ለቤተሰብዎ ያጋሩ።\n")
     if REF_BONUS_PERCENT:
         text += (f"💵 የጋበዙት ሰው ለመጀመሪያ ጊዜ ገንዘብ ሲያስገባ "
-                 f"ከተቀማጩ ገንዘብ {REF_BONUS_PERCENT}% ቦነስ ያገኛሉ! (ለመጫወት ብቻ)\n")
+                 f"ከተቀማጩ ገንዘብ {REF_BONUS_PERCENT}% ቦነስ ያገኛሉ! (ለመጫወት ብቻ)\n"
+                 f"ዝቅተኛ ተቀማጭ: {MIN_DEPOSIT} ብር\n")
     text += (f"\n🔗 የእርስዎ ሊንክ:\n{link}\n\n"
-             f"👤 የጋበዟቸው ሰዎች: {invited.get(uid, 0)}\n"
-             f"💰 ያገኙት ቦነስ: {ref_earn.get(uid, 0)} ብር")
+             f"👤 ጠቅላላ የጋበዟቸው: {invited.get(uid, 0)}\n"
+             f"💰 ጠቅላላ ገቢ: {ref_earn.get(uid, 0):.2f} ብር")
     share = ("https://t.me/share/url?url=" + quote(link) +
              "&text=" + quote("🎯 Rodas Friend Zone Bingo ተጫወቱ!"))
     kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -1939,7 +1940,7 @@ async def cmd_admin(m: Message):
         "/resetfree\nRemove free balance from players who never deposited\n\n"
         "/ban <phone>\nBlock a player\n\n"
         "/unban <phone>\nUnblock a player\n\n"
-        "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
+        "/broadcast <message>\nSend a message to all players with a 🎮 Play button (you confirm first). For a photo/video: send it to me, then reply to it with /broadcast\n\n"
         "/backup\nSend a full backup file of all data (also sent automatically every day)\n\n"
         "/lastsms\nLast SMS forwarded from your phone")
 
@@ -2138,36 +2139,53 @@ async def cmd_unban(m: Message, command: CommandObject):
     await m.answer(f"✅ {names.get(uid, 'Player')} ({phones.get(uid)}) is unblocked.")
 
 
+def broadcast_kb():
+    """The button under every broadcast: opens the game straight away."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🎮 ተጫወት / Play", web_app=WebAppInfo(url=WEBAPP_URL))]])
+
+
+async def _bc_send_one(bot, uid, bc):
+    """Send one broadcast to one player (plain text, or a copy of a photo/video/etc)."""
+    if bc["src"]:
+        chat_id, mid = bc["src"]
+        extra = {"caption": bc["text"]} if bc["text"] else {}
+        await bot.copy_message(uid, chat_id, mid, reply_markup=broadcast_kb(), **extra)
+    else:
+        await bot.send_message(uid, bc["text"], reply_markup=broadcast_kb())
+
+
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(m: Message, command: CommandObject):
     if not is_admin(m):
         return
     text = (command.args or "").strip()
-    if not text:
-        await m.answer("Send:\n/broadcast <your message>")
+    src = m.reply_to_message
+    if not text and not src:
+        await m.answer("Send:\n/broadcast <your message>\n\n"
+                       "With a photo or video: send the photo/video to me first, then REPLY to it "
+                       "with /broadcast (text after the command replaces the caption).")
         return
-    bc_pending[m.from_user.id] = text
+    if src and len(text) > 1024:
+        await m.answer("A caption can have at most 1024 characters.")
+        return
+    bc = {"text": text, "src": (src.chat.id, src.message_id) if src else None}
+    bc_pending[m.from_user.id] = bc
     n = len([u for u in wallets if u not in banned])
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=f"✅ Send to {n} players", callback_data="bc:send"),
         InlineKeyboardButton(text="❌ Cancel", callback_data="bc:cancel")]])
-    await m.answer(f"📢 This is what players will see:\n\n{text}", reply_markup=kb)
+    await m.answer("📢 This is what players will see (with the 🎮 Play button):")
+    try:
+        await _bc_send_one(m.bot, m.from_user.id, bc)
+    except Exception as e:
+        bc_pending.pop(m.from_user.id, None)
+        await m.answer(f"❌ Could not prepare this message: {e!r}")
+        return
+    await m.answer("Send it now?", reply_markup=kb)
 
 
-def _why_failed(e):
-    s = str(e).lower()
-    if "blocked by the user" in s:
-        return "blocked the bot"
-    if "deactivated" in s:
-        return "Telegram account deleted"
-    if "chat not found" in s:
-        return "chat not found (deleted the chat)"
-    if "forbidden" in s:
-        return "bot not allowed to write to him"
-    return (str(e) or e.__class__.__name__)[:80]
-
-
-async def run_broadcast(bot, text, admin_id):
+async def run_broadcast(bot, bc, admin_id):
     ok = 0
     failed = []                                  # (uid, reason)
     for uid in list(wallets):
@@ -2175,7 +2193,7 @@ async def run_broadcast(bot, text, admin_id):
             continue
         for attempt in (1, 2):
             try:
-                await bot.send_message(uid, text)
+                await _bc_send_one(bot, uid, bc)
                 ok += 1
                 break
             except Exception as e:
@@ -2204,14 +2222,27 @@ async def run_broadcast(bot, text, admin_id):
         pass
 
 
+def _why_failed(e):
+    s = str(e).lower()
+    if "blocked by the user" in s:
+        return "blocked the bot"
+    if "deactivated" in s:
+        return "Telegram account deleted"
+    if "chat not found" in s:
+        return "chat not found (deleted the chat)"
+    if "forbidden" in s:
+        return "bot not allowed to write to him"
+    return (str(e) or e.__class__.__name__)[:80]
+
+
 @dp.callback_query(F.data.startswith("bc:"))
 async def broadcast_buttons(cb: CallbackQuery):
     if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
         await cb.answer("Not allowed", show_alert=True)
         return
     action = (cb.data or "").split(":", 1)[1]
-    text = bc_pending.pop(cb.from_user.id, None)
-    if action != "send" or not text:
+    bc = bc_pending.pop(cb.from_user.id, None)
+    if action != "send" or not bc:
         try:
             await cb.message.edit_text("❌ Cancelled." if action != "send"
                                        else "Nothing to send.")
@@ -2224,7 +2255,7 @@ async def broadcast_buttons(cb: CallbackQuery):
     except Exception:
         pass
     await cb.answer()
-    task = asyncio.create_task(run_broadcast(cb.bot, text, cb.from_user.id))
+    task = asyncio.create_task(run_broadcast(cb.bot, bc, cb.from_user.id))
     bg_tasks.add(task)
     task.add_done_callback(bg_tasks.discard)
 
