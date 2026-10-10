@@ -1,4 +1,5 @@
-import asyncio, hashlib, hmac, html, json, math, os, random, re, secrets, string, time
+import asyncio, hashlib, hmac, html, io, json, math, os, random, re, secrets, string, time, zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl, quote
 import asyncpg
@@ -10,7 +11,7 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            BotCommandScopeDefault, BotCommandScopeAllPrivateChats,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
-                           ReplyKeyboardRemove, WebAppInfo, FSInputFile)
+                           ReplyKeyboardRemove, WebAppInfo, FSInputFile, BufferedInputFile)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
@@ -1814,6 +1815,8 @@ async def cmd_admin(m: Message):
         "🛠 Admin commands\n\n"
         "/stats\nPlayers, money, waiting requests, last 24h\n\n"
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
+        "/online\nHow many players are online / checked in (now, 5 min, 1 hour, 24 hours)\n\n"
+        "/backup\nDownload a backup of all data (zip file) to your chat\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
         "/bonusmany <amount> all  or  <amount> <phone> <phone>...\nGive PLAY-ONLY bonus to many players (you confirm first)\n\n"
@@ -1850,6 +1853,99 @@ async def cmd_stats(m: Message):
         f"Paid to winners: {paid:,} ETB\n"
         f"House earned (approx): {stake - paid:,} ETB",
         parse_mode="HTML")
+
+
+# ---------- /online: how many players are in the app (admin only) ----------
+ONLINE_NOW = 15            # the web app asks the server every second, so 15 s = "online right now"
+
+
+@dp.message(Command("online"))
+async def cmd_online(m: Message):
+    if not is_admin(m):
+        return
+    now = time.time()
+    count = lambda sec: sum(1 for t in seen.values() if now - t <= sec)
+    new24 = sum(1 for t in joined.values() if t >= now - 86400)
+    room_lines = []
+    for b, g in rooms.items():
+        room_lines.append(f"  {b} birr: {len(g['players'])} player(s) · {g['phase']}")
+    on_now = sorted((u for u, t in seen.items() if now - t <= ONLINE_NOW),
+                    key=lambda u: -seen[u])
+    names_txt = ", ".join(html.escape(names.get(u, "Player")) for u in on_now[:25])
+    if len(on_now) > 25:
+        names_txt += f" … +{len(on_now) - 25} more"
+    await m.answer(
+        "🟢 <b>Players online</b>\n\n"
+        f"Online now: <b>{count(ONLINE_NOW)}</b>\n"
+        f"Last 5 minutes: {count(300)}\n"
+        f"Last 1 hour: {count(3600)}\n"
+        f"Last 24 hours: {count(86400)}\n\n"
+        f"New players (24h): {new24}\n"
+        f"Total players: {len(wallets)}\n\n"
+        "<b>In rooms</b>\n" + "\n".join(room_lines)
+        + (f"\n\n<b>Online now:</b> {names_txt}" if names_txt else "")
+        + "\n\n<i>Counts people who opened the web app. They reset when the bot restarts.</i>",
+        parse_mode="HTML")
+
+
+# ---------- /backup: send a backup file of all data (admin only) ----------
+BACKUP_TABLES = ("users", "pending", "games", "kv", "used_sms", "room_players", "bank_sms")
+
+
+def build_backup_zip(dump):
+    raw = json.dumps(dump, ensure_ascii=False, indent=1).encode("utf-8")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("backup.json", raw)
+    return buf.getvalue()
+
+
+@dp.message(Command("backup"))
+async def cmd_backup(m: Message):
+    if not is_admin(m):
+        return
+    note = await m.answer("⏳ Making backup…")
+    try:
+        for _ in range(20):                       # let pending database writes finish first
+            if _q is None or _q.empty():
+                break
+            await asyncio.sleep(0.25)
+        await asyncio.sleep(0.5)
+        dump = {"created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "tables": {}}
+        async with pool.acquire() as c:
+            # one consistent snapshot of all tables
+            async with c.transaction(isolation="repeatable_read", readonly=True):
+                for t in BACKUP_TABLES:
+                    rows = []
+                    for r in await c.fetch(f"SELECT * FROM {t}"):
+                        row = {}
+                        for k, v in dict(r).items():
+                            if isinstance(v, str) and k == "data":
+                                try:
+                                    v = json.loads(v)       # keep the JSON readable
+                                except ValueError:
+                                    pass
+                            row[k] = v
+                        rows.append(row)
+                    dump["tables"][t] = rows
+        data = await asyncio.to_thread(build_backup_zip, dump)
+        if len(data) > 49 * 1024 * 1024:
+            await note.edit_text("❌ Backup is bigger than Telegram's 50 MB file limit.")
+            return
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M")
+        counts = ", ".join(f"{t}: {len(dump['tables'][t])}" for t in BACKUP_TABLES)
+        await m.answer_document(
+            BufferedInputFile(data, filename=f"bingo-backup-{stamp}-UTC.zip"),
+            caption=f"✅ Backup ({len(data) // 1024} KB)\n{counts}\n\n"
+                    "Keep it private: it has phone numbers and balances.")
+        await note.delete()
+    except Exception as e:
+        print("backup failed:", repr(e))
+        try:
+            await note.edit_text("❌ Backup failed. Check the server log.")
+        except Exception:
+            pass
 
 
 # ---------- /players: see all players and their balances (admin only) ----------
@@ -2496,6 +2592,8 @@ async def main():
                     BotCommand(command="admin", description="🛠 Admin commands"),
                     BotCommand(command="stats", description="📊 Stats"),
                     BotCommand(command="players", description="👥 All player balances"),
+                    BotCommand(command="online", description="🟢 Players online"),
+                    BotCommand(command="backup", description="💾 Download backup"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
                     BotCommand(command="bonusmany", description="🎁 Bonus for many players"),
