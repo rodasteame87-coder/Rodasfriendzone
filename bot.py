@@ -1823,6 +1823,7 @@ async def cmd_admin(m: Message):
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/online\nHow many players are online / checked in (now, 5 min, 1 hour, 24 hours)\n\n"
         "/backup\nDownload a backup of all data (zip file) to your chat\n\n"
+        "/nophone\nAsk players who have no phone number to share it (Amharic + English)\n\n"
         "/post\nSend a picture or text with a ተጫወት button to all players (you see a preview first)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
@@ -2064,6 +2065,92 @@ async def post_buttons(cb: CallbackQuery):
         pass
     await cb.answer()
     t = asyncio.create_task(run_post_send(cb.bot, uids, chat_id, msg_id, cb.from_user.id))
+    bg_tasks.add(t)
+    t.add_done_callback(bg_tasks.discard)
+
+
+# ---------- /nophone: ask players who have no phone number to share it (admin only) ----------
+NOPHONE_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
+                "📱 ስልክ ቁጥርዎን ገና አላጋሩም።\n"
+                "You have not shared your phone number yet.\n\n") + PHONE_TEXT
+nophone_sending = False
+
+
+def nophone_uids():
+    return [u for u in wallets if u not in phones and u not in banned and u != ADMIN_ID]
+
+
+@dp.message(Command("nophone"))
+async def cmd_nophone(m: Message):
+    if not is_admin(m):
+        return
+    uids = nophone_uids()
+    if not uids:
+        await m.answer("✅ Every player has shared a phone number.")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"📤 Send to {len(uids)} players", callback_data="np:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="np:no")]])
+    await m.answer(f"📱 Players without a phone number: <b>{len(uids)}</b>\n\n"
+                   "I will send each of them a message (Amharic + English) with a "
+                   "“Share phone number” button.\n\n"
+                   "<i>Players who never pressed Start, or who blocked the bot, cannot receive it "
+                   "and will show as failed.</i>",
+                   parse_mode="HTML", reply_markup=kb)
+
+
+async def run_nophone_send(bot, uids, admin_id):
+    global nophone_sending
+    nophone_sending = True
+    ok = fail = 0
+    try:
+        for u in uids:
+            if u in phones:                                # shared in the meantime
+                continue
+            for attempt in (1, 2):
+                try:
+                    await bot.send_message(u, NOPHONE_TEXT, reply_markup=phone_kb())
+                    ok += 1
+                    break
+                except Exception as e:
+                    if attempt == 1 and e.__class__.__name__ == "TelegramRetryAfter":
+                        await asyncio.sleep(getattr(e, "retry_after", 5) + 1)
+                        continue
+                    fail += 1
+                    break
+            await asyncio.sleep(0.06)                      # stay under Telegram's speed limit
+    finally:
+        nophone_sending = False
+    try:
+        await bot.send_message(admin_id, f"📱 Phone requests finished.\n✅ Sent: {ok}\n"
+                                         f"❌ Failed: {fail} (never started the bot or blocked it)")
+    except Exception:
+        pass
+
+
+@dp.callback_query(F.data.startswith("np:"))
+async def nophone_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    if action != "go":
+        try:
+            await cb.message.edit_text("❌ Cancelled.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    if nophone_sending:
+        await cb.answer("Still sending. Wait for it to finish.", show_alert=True)
+        return
+    uids = nophone_uids()
+    try:
+        await cb.message.edit_text(f"📤 Sending to {len(uids)} players… I will tell you when it is done.")
+    except Exception:
+        pass
+    await cb.answer()
+    t = asyncio.create_task(run_nophone_send(cb.bot, uids, cb.from_user.id))
     bg_tasks.add(t)
     t.add_done_callback(bg_tasks.discard)
 
@@ -2733,6 +2820,7 @@ async def main():
                     BotCommand(command="online", description="🟢 Players online"),
                     BotCommand(command="backup", description="💾 Download backup"),
                     BotCommand(command="post", description="📣 Send post to players"),
+                    BotCommand(command="nophone", description="📱 Ask for phone numbers"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
                     BotCommand(command="bonusmany", description="🎁 Bonus for many players"),
