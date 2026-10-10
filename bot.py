@@ -55,7 +55,7 @@ CLAIM_GRACE = 2.0           # after the first claim, other manual players have t
 LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
-MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise stakes are refunded
+MIN_PLAYERS = 1            # TEST MODE: a round starts with 1 player. Set back to 5 for real games!
 IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
