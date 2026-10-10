@@ -405,15 +405,28 @@ const H = { scope:"recent", bet:10, q:"" };  // history filters
 
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
-async function get(p){
-  const r = await fetch(API+p+(p.includes("?")?"&":"?")+"initData="+encodeURIComponent(initData()));
-  let j; try{ j = await r.json(); }catch(e){ j = {error:"http "+r.status}; }
+// Every request has a time limit. On a slow phone a request that never answers would
+// otherwise hang forever (and block the 1-second sync). A timeout throws, so the
+// callers' existing catch / retry paths run.
+const GET_MS = 8000, POST_MS = 15000;
+async function fetchT(url, opts, ms){
+  const ctl = new AbortController();
+  const timer = setTimeout(()=>ctl.abort(), ms);   // also covers reading the body
+  try{
+    const r = await fetch(url, {...(opts||{}), signal:ctl.signal});
+    let j; try{ j = await r.json(); }catch(e){ if(ctl.signal.aborted) throw e; j = null; }
+    return {r, j};
+  } finally { clearTimeout(timer); }
+}
+async function get(p, ms){
+  const {r, j:body} = await fetchT(API+p+(p.includes("?")?"&":"?")+"initData="+encodeURIComponent(initData()), null, ms||GET_MS);
+  const j = body || {error:"http "+r.status};
   if(!r.ok && !j.error) j.error = "http "+r.status;
   return j;
 }
 async function post(p,b){
-  const r = await fetch(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})});
-  try{ return await r.json(); }catch(e){ return {ok:false, error:"Server error"}; }
+  const {j} = await fetchT(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})}, POST_MS);
+  return j || {ok:false, error:"Server error"};
 }
 function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
 const letter = n => COLS[Math.floor((n-1)/15)];
@@ -744,14 +757,15 @@ $("roomList").onclick=e=>{
   R=+b.dataset.r; show("pick"); sync();
 };
 $("backBtn").onclick=()=>show("lobby");
-$("pkLeave").onclick=async()=>{ await post("/leave",{}); await sync(); show("lobby"); };
+$("pkLeave").onclick=async()=>{ try{ await post("/leave",{}); }catch(e){ toast("Slow connection, try again"); return; } await sync(); show("lobby"); };
 
 $("pickGrid").onclick=async e=>{
   const el=e.target.closest(".num"); if(!el) return;
   if(S && S.myCard) return toast("You already chose cartela #"+S.myCard+". Wait for the game to start.");
   pv=+el.dataset.n;
   try{
-    const r=await fetch(API+"/card?card="+pv).then(r=>r.json());
+    const r=(await fetchT(API+"/card?card="+pv, null, GET_MS)).j || {};
+    if(!r.card) throw new Error("no card");
     $("pvTitle").textContent="Cartela "+pv+" · "+R+" birr";
     $("pvGrid").innerHTML=cardHTML(r.card,new Set());
     $("modal").hidden=false;
@@ -783,7 +797,9 @@ $("auto").onchange=()=>{
 };
 $("winBtn").onclick=async()=>{
   if(S && S.dq) return toast("Your cartela is banned this round");
-  const r=await post("/bingo",{});
+  let r;
+  try{ r=await post("/bingo",{}); }
+  catch(e){ toast("Slow connection, checking your result…"); sync(); return; }
   if(r.disq){
     toast(r.reason==="late"
       ? "🚫 Too late: that number already passed. Cartela banned this round"
@@ -801,7 +817,7 @@ function askConfirm(msg){
   });
 }
 $("leaveBtn").onclick=async()=>{
-  if(S && S.phase==="lobby"){ await post("/leave",{}); await sync(); show("lobby"); return; }
+  if(S && S.phase==="lobby"){ try{ await post("/leave",{}); }catch(e){ toast("Slow connection, try again"); return; } await sync(); show("lobby"); return; }
   if(S && S.phase==="playing"){
     // leaving a running round is final: the player is OUT, the bet stays in the game
     const ok = await askConfirm("Leave this round? Your bet stays in the game and a win is added to your balance automatically. You cannot come back to this round.");
@@ -810,7 +826,7 @@ $("leaveBtn").onclick=async()=>{
   }
   leftKey = S ? S.room+":"+S.round : "";
   show("lobby");
-  post("/leave",{}).then(sync);
+  post("/leave",{}).catch(()=>{}).then(sync);
 };
 $("refreshBtn").onclick=sync;
 
@@ -819,16 +835,48 @@ let sndOn = false, lastSpoken = -1, sndKey = "";
 try { sndOn = localStorage.getItem("snd") === "1"; } catch (e) {}
 $("snd").checked = sndOn;
 
+// Download-ahead: all 75 number sounds are fetched into memory (as blobs) before they
+// are needed, so a call plays instantly even when the connection is slow.
+const SND_URL = n => "/audio/" + n + ".mp3?v=2";
+const sndBlob = {};                          // n -> blob: URL, ready to play
+let sndLoading = false;
+async function loadOneSound(n){
+  for(let t=0; t<3 && !sndBlob[n]; t++){
+    const ctl = new AbortController();
+    const timer = setTimeout(()=>ctl.abort(), 20000);
+    try{
+      const r = await fetch(SND_URL(n), {signal:ctl.signal});
+      if(r.ok) sndBlob[n] = URL.createObjectURL(await r.blob());
+    }catch(e){}
+    finally{ clearTimeout(timer); }
+    if(!sndBlob[n]) await new Promise(res=>setTimeout(res, 1500*(t+1)));
+  }
+}
+async function preloadSounds(first){
+  if(sndLoading) return;
+  sndLoading = true;
+  try{
+    // the call that is playing right now first, then the rest, 2 at a time (gentle on slow links)
+    const order = [];
+    if(first) order.push(first);
+    for(let n=1;n<=75;n++) if(n!==first) order.push(n);
+    const queue = order.filter(n=>!sndBlob[n]);
+    const worker = async()=>{ while(queue.length) await loadOneSound(queue.shift()); };
+    await Promise.all([worker(), worker()]);
+  } finally { sndLoading = false; }
+}
 function speak(n){
   try {
-    const a = new Audio("/audio/" + n + ".mp3?v=2");
+    const a = new Audio(sndBlob[n] || SND_URL(n));   // from memory if downloaded, else straight from the server
     a.play().catch(() => {});
+    if(!sndBlob[n]) preloadSounds(n);                // not there yet: make sure the download is running
   } catch (e) {}
 }
 
 $("snd").onchange = () => {
   sndOn = $("snd").checked;
   try { localStorage.setItem("snd", sndOn ? "1" : "0"); } catch (e) {}
+  if (sndOn) preloadSounds();
   if (sndOn && st.called.length) speak(st.called[st.called.length - 1]);
   toast(sndOn ? "Sound ON 🔊" : "Sound OFF 🔇");
 };
@@ -847,7 +895,8 @@ function playNew(){
 
 /* ---------- start ---------- */
 buildCalls();
-sync(); setInterval(tick, 1000);     // 1 second, so manual players see each call quickly
+sync().then(()=>{ if(sndOn) preloadSounds(); });   // sound already ON from last time: download ahead now
+setInterval(tick, 1000);     // 1 second, so manual players see each call quickly
 setInterval(()=>{ if(screen==="lobby" && !$("tab-profile").hidden) loadProfile(); }, 5000);
 </script>
 </body>
