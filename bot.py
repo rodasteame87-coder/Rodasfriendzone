@@ -825,7 +825,7 @@ async def api_audio(req):
         print("audio failed:", repr(e))
         return web.Response(status=503)
     return web.FileResponse(
-        path, headers={"Cache-Control": "public, max-age=3600"})
+        path, headers={"Cache-Control": "public, max-age=604800, immutable"})   # files are versioned with ?v= in the page
 
 
 async def pregen_audio():
