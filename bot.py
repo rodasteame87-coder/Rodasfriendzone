@@ -412,7 +412,10 @@ def turnover_left(uid):
 
 def withdrawable_amount(uid):
     """Cash that can be withdrawn now: wallet minus the deposit still to be played.
-    Bonus money is never withdrawable, so it is not counted here."""
+    Bonus money is never withdrawable, so it is not counted here.
+    A player who has never deposited can withdraw nothing (see withdraw_blocked)."""
+    if withdraw_blocked(uid):
+        return 0
     return max(0, wallets.get(uid, 0) - turnover_left(uid))
 
 
@@ -460,6 +463,18 @@ def progress_text(uid):
                 f"⏳ ከተቀማጭዎ {t['left']} ብር መጫወት ይቀራል\n"
                 f"Play {t['left']} more birr to unlock your deposit.")
     return ""                  # requirement finished: show nothing
+
+
+WD_NEEDS_DEPOSIT = True       # True = a player must have made at least one deposit before any withdrawal
+NODEP_TEXT = ("⚠️ ገንዘብ ማውጣት የሚቻለው የመጀመሪያ ገንዘብዎን ካስገቡ በኋላ ነው።\n"
+              "ቦነስ ለመጫወት ብቻ ነው። ለመጀመር «💵 ገንዘብ አስገባ» ይንኩ።\n\n"
+              "⚠️ You can withdraw after you make your first deposit.\n"
+              "Bonus is for playing only. Tap “💵 Deposit” to start.")
+
+
+def withdraw_blocked(uid):
+    """True if this player has never deposited (so bonus-only players cannot cash out)."""
+    return WD_NEEDS_DEPOSIT and deposited.get(uid, 0) <= 0
 
 
 def turnover_msg(uid):
@@ -1538,6 +1553,9 @@ def wd_account_prompt(kind):
 
 
 async def submit_withdraw(m: Message, uid, amount, account, method):
+    if withdraw_blocked(uid):
+        await m.answer(NODEP_TEXT)
+        return
     if amount < MIN_WITHDRAW:
         await m.answer(f"ዝቅተኛው የማውጫ መጠን {MIN_WITHDRAW} ብር ነው።\n"
                        f"Minimum withdraw is {MIN_WITHDRAW} birr.")
@@ -1575,6 +1593,9 @@ async def cmd_withdraw(m: Message, command: CommandObject):
     if await need_phone(m):
         return
     wd_state.pop(uid, None)
+    if withdraw_blocked(uid):
+        await m.answer(NODEP_TEXT)
+        return
     if withdrawable_amount(uid) < MIN_WITHDRAW:
         await m.answer(turnover_msg(uid))
         return
@@ -1595,6 +1616,10 @@ async def withdraw_buttons(cb: CallbackQuery):
             wd_state.pop(uid, None)
             await cb.message.edit_text("❌ ተሰርዟል። / Cancelled")
         elif kind in WD_NAMES:
+            if withdraw_blocked(uid):
+                await cb.message.edit_text(NODEP_TEXT)
+                await cb.answer()
+                return
             if withdrawable_amount(uid) < MIN_WITHDRAW:
                 await cb.message.edit_text(turnover_msg(uid))
                 await cb.answer()
@@ -1621,6 +1646,10 @@ async def withdraw_steps(m: Message):
     uid = ensure(m.from_user)
     s = wd_state[uid]
     text = m.text.strip()
+    if withdraw_blocked(uid):
+        wd_state.pop(uid, None)
+        await m.answer(NODEP_TEXT)
+        return
     if s["step"] == "amount":
         amount = to_amount(text)
         if not amount:
@@ -1682,8 +1711,8 @@ async def cmd_instruction(m: Message):
         "are yours to withdraw. Use /balance to see your progress.\n"
         "የመጀመሪያ ገንዘብዎን አንድ ጊዜ፣ ቀጣይ ገንዘብዎን ግማሽ ጊዜ ይጫወቱ። ያሸነፉት ገንዘብ የእርስዎ ነው።\n\n"
         "🎁 Bonus money is for playing only and cannot be withdrawn. "
-        "Anything you win with it is yours to withdraw.\n"
-        "ቦነስ ለመጫወት ብቻ ነው፤ ማውጣት አይቻልም። በቦነስ ያሸነፉት ግን የእርስዎ ነው።\n\n"
+        "Withdrawals open after your first deposit.\n"
+        "ቦነስ ለመጫወት ብቻ ነው፤ ማውጣት አይቻልም። ገንዘብ ማውጣት የሚቻለው የመጀመሪያ ገንዘብዎን ካስገቡ በኋላ ነው።\n\n"
         + BRAND)
 
 
