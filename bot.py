@@ -30,6 +30,8 @@ TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "")
 CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
+BONUS_ADD_NOTIFY = True      # True = player gets a message when bonus is ADDED (/addbonus, /bonusmany). False = silent.
+BONUS_REMOVE_NOTIFY = False  # False = player gets NO message when bonus is REMOVED. True = send a message.
 REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
 
 BRAND = "© 2026 Rodas Friend Zone Bingo"     # footer / branding line (change the text here)
@@ -368,10 +370,14 @@ def verify(init_data: str):
         return None
 
 
-def log(uid, kind, amount, note=""):
-    """Save a transaction for the profile page (keeps the last 50)."""
+def log(uid, kind, amount, note="", hidden=False):
+    """Save a transaction for the profile page (keeps the last 50).
+    hidden=True: admin-only record. It is saved but NOT shown to the player."""
     h = history.setdefault(uid, [])
-    h.insert(0, {"t": int(time.time()), "k": kind, "a": amount, "n": note})
+    e = {"t": int(time.time()), "k": kind, "a": amount, "n": note}
+    if hidden:
+        e["adm"] = 1
+    h.insert(0, e)
     del h[50:]
     save_user(uid)                 # wallet + bonus + history saved to the database
 
@@ -1038,7 +1044,7 @@ async def api_profile(req):
         "joined": joined[uid],
         "wins": wins.get(uid, 0), "won": won.get(uid, 0),
         "turnover": turnover_info(uid),
-        "tx": history.get(uid, [])[:30],
+        "tx": [t for t in history.get(uid, []) if not t.get("adm")][:30],   # admin-only records are not shown to players
         "winlist": winlog.get(uid, [])[:30],
     })
 
@@ -1973,6 +1979,18 @@ def players_page(page):
     return text, InlineKeyboardMarkup(inline_keyboard=[row] if row else [])
 
 
+def admin_records_text(uid):
+    """Admin-only records (e.g. bonus removed) that the player cannot see. Last 5."""
+    rows = [t for t in history.get(uid, []) if t.get("adm")][:5]
+    if not rows:
+        return ""
+    lines = []
+    for t in rows:
+        when = time.strftime("%d %b %H:%M", time.gmtime(t["t"] + 3 * 3600))
+        lines.append(f"• {t['a']:+d} birr · {html.escape(t.get('n') or t['k'])} · {when}")
+    return "\n\n🔒 Admin-only records (player can't see):\n" + "\n".join(lines)
+
+
 @dp.message(Command("players"))
 async def cmd_players(m: Message, command: CommandObject):
     if not is_admin(m):
@@ -1991,7 +2009,8 @@ async def cmd_players(m: Message, command: CommandObject):
             f"Withdrawable: {withdrawable_amount(uid)} birr\n"
             f"Played: {t['played']} / {t['required']} birr\n"
             f"Deposited: {deposited.get(uid, 0)} · Won: {won.get(uid, 0)}"
-            + ("\n🚫 Blocked" if uid in banned else ""))
+            + ("\n🚫 Blocked" if uid in banned else "")
+            + admin_records_text(uid))
         return
     text, kb = players_page(0)
     await m.answer(text, parse_mode="HTML", reply_markup=kb)
@@ -2073,14 +2092,17 @@ async def cmd_addbonus(m: Message, command: CommandObject):
                 f"{amount} birr bonus was added (play only). "
                 "Anything you win with it is withdrawable.")
     else:
-        log(uid, "bonus", amount, "Bonus removed by admin")
+        log(uid, "bonus", amount, "Bonus removed by admin", hidden=not BONUS_REMOVE_NOTIFY)
         note = f"🎁 {-amount} birr bonus was removed from your account."
-    try:
-        await m.bot.send_message(uid, note)
-    except Exception:
-        pass
+    notify = BONUS_ADD_NOTIFY if amount > 0 else BONUS_REMOVE_NOTIFY
+    if notify:
+        try:
+            await m.bot.send_message(uid, note)
+        except Exception:
+            pass
     await m.answer(f"✅ Done.\nPlayer: {names.get(uid, 'Player')} ({phones.get(uid)})\n"
-                   f"Change: {amount:+d} birr bonus\nBonus now: {bonus[uid]} birr")
+                   f"Change: {amount:+d} birr bonus\nBonus now: {bonus[uid]} birr"
+                   + ("" if notify else "\n🔕 Player was not notified."))
 
 
 @dp.message(Command("ban"))
@@ -2419,13 +2441,15 @@ async def bonusmany_buttons(cb: CallbackQuery):
         log(u, "bonus", amount, "Bonus from admin")
     try:
         await cb.message.edit_text(f"✅ Gave {amount} birr bonus to {len(uids)} players.\n"
-                                   "📤 Sending messages…")
+                                   + ("📤 Sending messages…" if BONUS_ADD_NOTIFY
+                                      else "🔕 Players were not notified."))
     except Exception:
         pass
     await cb.answer()
-    t = asyncio.create_task(run_bonus_notify(cb.bot, uids, amount, cb.from_user.id))
-    bg_tasks.add(t)
-    t.add_done_callback(bg_tasks.discard)
+    if BONUS_ADD_NOTIFY:
+        t = asyncio.create_task(run_bonus_notify(cb.bot, uids, amount, cb.from_user.id))
+        bg_tasks.add(t)
+        t.add_done_callback(bg_tasks.discard)
 
 
 @dp.callback_query()
