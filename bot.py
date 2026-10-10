@@ -30,6 +30,11 @@ TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "")
 CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
+REG_BONUS = 10               # play-only bonus (birr) given once when a new player registers. 0 = no registration bonus.
+REG_BONUS_TEXT = ("🎁 እንኳን ወደ Rodas Friend Zone Bingo በደህና መጡ! {amount} ብር ቦነስ ወደ ሂሳብዎ ተጨምሯል።\n"
+                  "መልካም ዕድል 🍀!\n\n"
+                  "🎁 Welcome to Rodas friend zone bingo! {amount} ETB bonus added to your wallet. "
+                  "Good luck 🍀!")
 BONUS_ADD_NOTIFY = True      # True = player gets a message when bonus is ADDED (/addbonus, /bonusmany). False = silent.
 BONUS_REMOVE_NOTIFY = False  # False = player gets NO message when bonus is REMOVED. True = send a message.
 REF_BONUS_PERCENT = 10     # invite bonus: % of the invitee's FIRST deposit (0 = off). Play-only money.
@@ -1395,10 +1400,17 @@ async def got_contact(m: Message):
                        "Please use the button to share your own number.",
                        reply_markup=phone_kb())
         return
-    phones[uid] = "".join(ch for ch in c.phone_number if ch.isdigit())
+    first_time = uid not in phones                  # registration bonus only the first time
+    digits = "".join(ch for ch in c.phone_number if ch.isdigit())
+    phones[uid] = digits
     save_user(uid)
     await m.answer("✅ ስልክ ቁጥርዎ ተመዝግቧል። እናመሰግናለን!\nPhone number saved. Thank you!",
                    reply_markup=ReplyKeyboardRemove())
+    used_by_other = any(p == digits for u, p in phones.items() if u != uid)
+    if REG_BONUS > 0 and first_time and uid not in banned and not used_by_other:
+        bonus[uid] = bonus.get(uid, 0) + REG_BONUS
+        log(uid, "bonus", REG_BONUS, "Welcome bonus")      # also saves the player
+        await m.answer(REG_BONUS_TEXT.format(amount=REG_BONUS))
     await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
 
 
