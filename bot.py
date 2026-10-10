@@ -1823,6 +1823,7 @@ async def cmd_admin(m: Message):
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/online\nHow many players are online / checked in (now, 5 min, 1 hour, 24 hours)\n\n"
         "/backup\nDownload a backup of all data (zip file) to your chat\n\n"
+        "/post\nSend a picture or text with a ተጫወት button to all players (you see a preview first)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
         "/bonusmany <amount> all  or  <amount> <phone> <phone>...\nGive PLAY-ONLY bonus to many players (you confirm first)\n\n"
@@ -1952,6 +1953,119 @@ async def cmd_backup(m: Message):
             await note.edit_text("❌ Backup failed. Check the server log.")
         except Exception:
             pass
+
+
+# ---------- /post: send a picture/text + "ተጫወት" button to all players (admin only) ----------
+POST_BUTTON_TEXT = "🎮 ተጫወት"          # the button under the post; it opens the game lobby
+post_wait = set()                      # admin pressed /post and the next message is the post
+post_pending = {}                      # admin -> (chat_id, message_id, player ids) waiting for Confirm
+post_sending = False                   # only one send at a time
+
+
+def play_button_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=POST_BUTTON_TEXT, web_app=WebAppInfo(url=WEBAPP_URL))]])
+
+
+@dp.message(Command("post"))
+async def cmd_post(m: Message):
+    if not is_admin(m):
+        return
+    post_wait.add(m.from_user.id)
+    post_pending.pop(m.from_user.id, None)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="❌ Cancel", callback_data="pp:no")]])
+    await m.answer("📣 Send me the post now.\n\n"
+                   "• One picture with your caption under it (best), or just text.\n"
+                   f"• The button “{POST_BUTTON_TEXT}” is added under it automatically and opens the game.\n"
+                   "• You will see a preview first. Nothing is sent to players until you confirm.",
+                   reply_markup=kb)
+
+
+def post_waiting(m: Message):
+    if not ADMIN_ID or not m.from_user or m.from_user.id != ADMIN_ID:
+        return False
+    if ADMIN_ID not in post_wait:
+        return False
+    return not (m.text and m.text.startswith("/"))      # commands still work
+
+
+@dp.message(post_waiting)
+async def post_received(m: Message):
+    post_wait.discard(m.from_user.id)
+    uids = [u for u in wallets if u not in banned and u in phones]
+    if not uids:
+        await m.answer("No players found.")
+        return
+    try:                                                # preview = exactly what players will get
+        await m.bot.copy_message(m.chat.id, m.chat.id, m.message_id, reply_markup=play_button_kb())
+    except Exception as e:
+        print("post preview failed:", repr(e))
+        await m.answer("❌ I can't send this kind of message as a post. Send a picture with a caption, or text.")
+        return
+    post_pending[m.from_user.id] = (m.chat.id, m.message_id, uids)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"✅ Send to {len(uids)} players", callback_data="pp:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="pp:no")]])
+    await m.answer("👆 This is the preview players will get.\n"
+                   "Do not delete it until sending is finished.\n\nSend it?", reply_markup=kb)
+
+
+async def run_post_send(bot, uids, chat_id, msg_id, admin_id):
+    global post_sending
+    post_sending = True
+    ok = fail = 0
+    try:
+        kb = play_button_kb()
+        for u in uids:
+            for attempt in (1, 2):
+                try:
+                    await bot.copy_message(u, chat_id, msg_id, reply_markup=kb)
+                    ok += 1
+                    break
+                except Exception as e:
+                    if attempt == 1 and e.__class__.__name__ == "TelegramRetryAfter":
+                        await asyncio.sleep(getattr(e, "retry_after", 5) + 1)
+                        continue
+                    fail += 1                              # blocked the bot, deleted account, etc.
+                    break
+            await asyncio.sleep(0.06)                      # stay under Telegram's speed limit
+    finally:
+        post_sending = False
+    try:
+        await bot.send_message(admin_id, f"📣 Post finished.\n✅ Sent: {ok}\n❌ Failed: {fail} (blocked the bot or left)")
+    except Exception:
+        pass
+
+
+@dp.callback_query(F.data.startswith("pp:"))
+async def post_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    post_wait.discard(cb.from_user.id)
+    data = post_pending.pop(cb.from_user.id, None)
+    if action != "go" or not data:
+        try:
+            await cb.message.edit_text("❌ Cancelled." if action != "go" else "Nothing to send.")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    if post_sending:
+        post_pending[cb.from_user.id] = data
+        await cb.answer("Another post is still being sent. Wait for it to finish.", show_alert=True)
+        return
+    chat_id, msg_id, uids = data
+    try:
+        await cb.message.edit_text(f"📤 Sending to {len(uids)} players… I will tell you when it is done.")
+    except Exception:
+        pass
+    await cb.answer()
+    t = asyncio.create_task(run_post_send(cb.bot, uids, chat_id, msg_id, cb.from_user.id))
+    bg_tasks.add(t)
+    t.add_done_callback(bg_tasks.discard)
 
 
 # ---------- /players: see all players and their balances (admin only) ----------
@@ -2618,6 +2732,7 @@ async def main():
                     BotCommand(command="players", description="👥 All player balances"),
                     BotCommand(command="online", description="🟢 Players online"),
                     BotCommand(command="backup", description="💾 Download backup"),
+                    BotCommand(command="post", description="📣 Send post to players"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
                     BotCommand(command="bonusmany", description="🎁 Bonus for many players"),
