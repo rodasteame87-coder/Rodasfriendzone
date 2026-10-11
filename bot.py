@@ -63,6 +63,8 @@ LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
 MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise stakes are refunded
+AWAY_AFTER = 60            # seconds without contact: counted as AWAY during a round (a win is claimed for them)
+NOTIFY_AWAY_AFTER = 15     # seconds without contact when the game starts: sent a "game started" notification
 IDLE_KICK = 3600           # seconds without contact (3600 = 1 hour): removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
@@ -82,6 +84,7 @@ rooms = {b: {"bet": b, "phase": "lobby", "called": [], "players": {},
              "wcells": [], "wname": "", "finish_at": 0,
              "winners": [], "wlist": [], "share": 0, "dq": set(), "left": set(), "claims": set(), "claim_t": 0}
          for b in BETS}
+last_active = {}                                 # uid -> last time they used the app OR the bot chat (for /online only)
 wallets, names, seen = {}, {}, {}                  # wallets = real, withdrawable-type money
 bonus = {}                                         # PLAY-ONLY bonus money (never withdrawn / transferred)
 joined, usernames, wins, won = {}, {}, {}, {}      # profile data
@@ -501,6 +504,7 @@ def touch(user):
     names[uid] = nm
     usernames[uid] = un
     seen[uid] = time.time()
+    last_active[uid] = seen[uid]
     if changed:
         save_user(uid)
     return uid
@@ -881,6 +885,20 @@ async def reaper():
                     remove_player(uid)
 
 
+async def notify_game_started(uids, bet):
+    """Tell players who picked a cartela and then left the app that their game has started."""
+    text = (f"🎮 ጨዋታው ተጀምሯል! ({bet} ብር ክፍል)\n"
+            "ካርዶ በጨዋታው ውስጥ አለ። ለመግባት ከታች ይንኩ።\n\n"
+            f"🎮 Your game has started! ({bet} birr room)\n"
+            "Your cartela is in the game. Tap below to join.")
+    for u in uids:
+        try:
+            await BOT.send_message(u, text, reply_markup=play_button_kb())
+        except Exception:
+            pass                                    # blocked the bot, never started it, etc.
+        await asyncio.sleep(0.06)                  # stay under Telegram's speed limit
+
+
 async def run_round(g):
     g.update(called=[], phase="lobby", winner=None, prize=0,
              round=g["round"] + 1, deadline=None,
@@ -906,6 +924,12 @@ async def run_round(g):
 
     g["phase"] = "playing"
     g["prize"] = int(len(g["players"]) * g["bet"] * 0.8)
+    t0 = time.time()
+    gone = [u for u in g["players"] if t0 - seen.get(u, 0) > NOTIFY_AWAY_AFTER]
+    if gone:
+        tk = asyncio.create_task(notify_game_started(gone, g["bet"]))
+        bg_tasks.add(tk)
+        tk.add_done_callback(bg_tasks.discard)
     for n in g["seq"]:
         if (g["phase"] != "playing" or not g["players"]
                 or all(u in g["dq"] for u in g["players"])):
@@ -921,7 +945,7 @@ async def run_round(g):
         # Manual players must press BINGO themselves before the next number is called.
         now = time.time()
         away = {u for u in g["players"]
-                if now - seen.get(u, 0) > IDLE_KICK or u in g["left"]}
+                if now - seen.get(u, 0) > AWAY_AFTER or u in g["left"]}
         claimers = [u for u, no in g["players"].items()
                     if u not in g["dq"]
                     and (u in away or auto_pref.get(u))
@@ -1904,8 +1928,25 @@ async def cmd_stats(m: Message):
         parse_mode="HTML")
 
 
-# ---------- /online: how many players are in the app (admin only) ----------
-ONLINE_NOW = 15            # the web app asks the server every second, so 15 s = "online right now"
+# ---------- /online: how many players are online (admin only) ----------
+ONLINE_NOW = 60            # active in the app or the bot chat in the last 60 s = "online now"
+APP_NOW = 15               # the web app asks the server every second, so 15 s = "in the app right now"
+
+
+@dp.update.outer_middleware()
+async def mark_active(handler, event, data):
+    """Any message or button press to the bot counts as 'online' for /online."""
+    try:
+        u = None
+        if event.message and event.message.from_user:
+            u = event.message.from_user.id
+        elif event.callback_query and event.callback_query.from_user:
+            u = event.callback_query.from_user.id
+        if u is not None and u in wallets:
+            last_active[u] = time.time()
+    except Exception:
+        pass
+    return await handler(event, data)
 
 
 @dp.message(Command("online"))
@@ -1913,19 +1954,21 @@ async def cmd_online(m: Message):
     if not is_admin(m):
         return
     now = time.time()
-    count = lambda sec: sum(1 for t in seen.values() if now - t <= sec)
+    count = lambda sec: sum(1 for t in last_active.values() if now - t <= sec)
+    in_app = sum(1 for t in seen.values() if now - t <= APP_NOW)
     new24 = sum(1 for t in joined.values() if t >= now - 86400)
     room_lines = []
     for b, g in rooms.items():
         room_lines.append(f"  {b} birr: {len(g['players'])} player(s) · {g['phase']}")
-    on_now = sorted((u for u, t in seen.items() if now - t <= ONLINE_NOW),
-                    key=lambda u: -seen[u])
+    on_now = sorted((u for u, t in last_active.items() if now - t <= ONLINE_NOW),
+                    key=lambda u: -last_active[u])
     names_txt = ", ".join(html.escape(names.get(u, "Player")) for u in on_now[:25])
     if len(on_now) > 25:
         names_txt += f" … +{len(on_now) - 25} more"
     await m.answer(
         "🟢 <b>Players online</b>\n\n"
-        f"Online now: <b>{count(ONLINE_NOW)}</b>\n"
+        f"Online now (last minute): <b>{count(ONLINE_NOW)}</b>\n"
+        f"In the app this second: {in_app}\n"
         f"Last 5 minutes: {count(300)}\n"
         f"Last 1 hour: {count(3600)}\n"
         f"Last 24 hours: {count(86400)}\n\n"
@@ -1933,7 +1976,8 @@ async def cmd_online(m: Message):
         f"Total players: {len(wallets)}\n\n"
         "<b>In rooms</b>\n" + "\n".join(room_lines)
         + (f"\n\n<b>Online now:</b> {names_txt}" if names_txt else "")
-        + "\n\n<i>Counts people who opened the web app. They reset when the bot restarts.</i>",
+        + "\n\n<i>Counts players using the web app or the bot chat. A player with a locked phone "
+        "cannot be seen. Counts reset when the bot restarts.</i>",
         parse_mode="HTML")
 
 
