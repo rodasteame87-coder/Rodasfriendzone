@@ -63,7 +63,7 @@ LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
 MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise stakes are refunded
-IDLE_KICK = 60             # seconds without contact: removed from the LOBBY (refunded);
+IDLE_KICK = 3600           # seconds without contact (3600 = 1 hour): removed from the LOBBY (refunded);
                            # during a round the player stays and a win is claimed for them
 MIN_DEPOSIT = 50           # smallest deposit (50 is allowed, below 50 is not)
 MIN_WITHDRAW = 100
