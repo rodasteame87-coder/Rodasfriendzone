@@ -63,6 +63,7 @@ LOBBY_SECONDS = 30         # countdown after the FIRST player picks a cartela
 START_BALANCE = 0          # new players start with 0: balance comes only from deposits
 CARD_COUNT = 100
 MIN_PLAYERS = 5            # a round needs at least 5 players, otherwise stakes are refunded
+LOBBY_TIMEOUT = 20 * 60    # seconds a room waits with fewer than MIN_PLAYERS; then it closes and everyone is refunded
 AWAY_AFTER = 60            # seconds without contact: counted as AWAY during a round (a win is claimed for them)
 NOTIFY_AWAY_AFTER = 15     # seconds without contact when the game starts: sent a "game started" notification
 IDLE_KICK = 3600           # seconds without contact (3600 = 1 hour): removed from the LOBBY (refunded);
@@ -899,6 +900,21 @@ async def notify_game_started(uids, bet):
         await asyncio.sleep(0.06)                  # stay under Telegram's speed limit
 
 
+async def notify_lobby_closed(uids, bet):
+    """Tell players their room closed because too few players joined, and that they were refunded."""
+    mins = LOBBY_TIMEOUT // 60
+    text = (f"⏰ በ{mins} ደቂቃ ውስጥ {MIN_PLAYERS} ተጫዋች አልተሟላም። ጨዋታው ተዘግቷል፤ "
+            f"{bet} ብር ተመልሶልዎታል።\n\n"
+            f"⏰ Not enough players ({MIN_PLAYERS}) joined in {mins} minutes. "
+            f"The room closed and your {bet} birr was returned.")
+    for u in uids:
+        try:
+            await BOT.send_message(u, text, reply_markup=play_button_kb())
+        except Exception:
+            pass
+        await asyncio.sleep(0.06)
+
+
 async def run_round(g):
     g.update(called=[], phase="lobby", winner=None, prize=0,
              round=g["round"] + 1, deadline=None,
@@ -910,10 +926,25 @@ async def run_round(g):
     # wait until MIN_PLAYERS have chosen a cartela (that starts the countdown),
     # then count down. If players leave and fewer than MIN_PLAYERS remain,
     # the countdown stops and starts again when enough players are back.
+    waiting_since = None
     while True:
         if (g["deadline"] is not None and time.time() >= g["deadline"]
                 and len(g["players"]) >= MIN_PLAYERS):
             break
+        # Fewer than MIN_PLAYERS for LOBBY_TIMEOUT: close the room and give every stake back.
+        n_in = len(g["players"])
+        if n_in == 0 or n_in >= MIN_PLAYERS:
+            waiting_since = None                       # nobody waiting, or enough players
+        elif waiting_since is None:
+            waiting_since = time.time()                # first player(s) started waiting
+        elif time.time() - waiting_since >= LOBBY_TIMEOUT:
+            gone = list(g["players"])
+            for uid in gone:
+                remove_player(uid)                     # refunds the stake (lobby phase)
+            waiting_since = None
+            tk = asyncio.create_task(notify_lobby_closed(gone, g["bet"]))
+            bg_tasks.add(tk)
+            tk.add_done_callback(bg_tasks.discard)
         await asyncio.sleep(1)
 
     # provably fair: pick all numbers + secret first, publish the hash
