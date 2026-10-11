@@ -797,7 +797,12 @@ $("pvOk").onclick=async()=>{
   try{
     const r=await post("/join",{card:pv, room:R});
     $("modal").hidden=true;
-    if(!r.ok) toast(r.error||"Could not join");
+    if(!r.ok && r.needPhone && r.phoneLink && tg && tg.showPopup){
+      tg.showPopup({title:"📱 Phone number / ስልክ ቁጥር",
+        message:"Share your phone number first to play.\nለመጫወት መጀመሪያ ስልክ ቁጥርዎን ያጋሩ።",
+        buttons:[{id:"go",type:"default",text:"📱 Share phone number / ያጋሩ"},{type:"cancel"}]},
+        id=>{ if(id==="go"){ try{ tg.openTelegramLink(r.phoneLink); }catch(e){ toast("Open the bot chat and press Start"); } } });
+    } else if(!r.ok) toast(r.error||"Could not join");
   }catch(err){ $("modal").hidden=true; toast("Can't reach server"); }
   await sync();
 };
