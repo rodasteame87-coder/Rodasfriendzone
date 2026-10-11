@@ -174,6 +174,8 @@
   .leave{background:#e8212f;height:38px}.rf{background:#1565d8;height:38px}
   #toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;z-index:12}
   #toast.show{opacity:1}
+  #netBar{position:fixed;left:0;right:0;top:0;padding:calc(6px + env(safe-area-inset-top,0px)) 10px 6px;background:#b45309;color:#fff;text-align:center;font-size:13px;font-weight:700;z-index:13;display:none}
+  #netBar.ok{background:#15803d}
 
   /* footer at the bottom of the lobby */
   .brandfoot{text-align:center;color:#6b5a7c;font-size:12px;font-weight:600;margin:18px 0 6px;opacity:.85}
@@ -384,6 +386,7 @@
 </div>
 
 <div id="toast"></div>
+<div id="netBar"></div>
 
 <script>
 window.onerror = (m, s, l) => {
@@ -693,9 +696,21 @@ function render(){
 
   drawWin();
 }
+// A bar at the top stays visible for as long as the connection is down, and turns green
+// for a moment when it is back, so the player always knows what is happening.
+let netT = null;
+function showNet(msg, ok){
+  const b = $("netBar"); clearTimeout(netT);
+  if(!msg){ b.style.display = "none"; return; }
+  b.textContent = msg; b.className = ok ? "ok" : ""; b.style.display = "block";
+  if(ok) netT = setTimeout(()=>{ b.style.display = "none"; }, 2500);
+}
 function syncError(code){
   lastErr = code;
-  if(errShown) return;                       // tell the player once, not every second
+  showNet(code==="starting" ? "⏳ Server is starting, please wait… / ሰርቨሩ እየተነሳ ነው"
+       : code==="auth" ? "⚠️ Close the app and open it again from the bot / መተግበሪያውን ዘግተው እንደገና ይክፈቱ"
+       : "📡 No connection, reconnecting… / ግንኙነት የለም፣ እንደገና እየሞከረ ነው…", false);
+  if(errShown) return;                       // the toast only once, not every second
   errShown = true;
   toast(code==="starting" ? "Server is starting, please wait…"
       : code==="auth" ? "Please close the app and open it again from the bot in Telegram"
@@ -711,6 +726,7 @@ async function doSync(){
   }catch(e){ console.error(e); if(my===seq) syncError("net"); return; }
   if(my!==seq) return;                       // a newer request already started: drop this older answer
   if(d.error){ syncError(d.error); return; } // keep showing the last good state
+  if(errShown) showNet("✅ Back online / ግንኙነት ተመልሷል", true);
   S = d; errShown = false; lastErr = ""; render();
 }
 const sync = doSync;                         // used after player actions (always fetches fresh)
@@ -719,6 +735,11 @@ function tick(){                             // the 1-second timer never piles u
   busy = true;
   doSync().finally(()=>{ busy = false; });
 }
+
+/* ---------- reconnect right away when the app comes back or the network returns ---------- */
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) sync(); });
+window.addEventListener("online", ()=>sync());
+window.addEventListener("focus", ()=>sync());
 
 /* ---------- events ---------- */
 document.querySelectorAll(".nav div").forEach(d=>d.onclick=()=>{
