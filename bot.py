@@ -1154,8 +1154,9 @@ async def api_join(req):
         return web.json_response({"ok": False,
                                   "error": "Your account is blocked. Contact support"})
     if uid not in phones:
-        return web.json_response({"ok": False,
-                                  "error": "Press /start in the bot and share your phone number first"})
+        return web.json_response({"ok": False, "needPhone": True,
+                                  "phoneLink": await phone_link(BOT),
+                                  "error": "Share your phone number first / መጀመሪያ ስልክ ቁጥርዎን ያጋሩ"})
     try:
         g = rooms.get(int(body.get("room")))
     except (TypeError, ValueError):
@@ -1410,6 +1411,20 @@ def phone_kb():
         input_field_placeholder="📱 Tap: Share phone number")
 
 
+_bot_username = None
+
+
+async def phone_link(bot):
+    """https://t.me/<bot>?start=phone : opens the bot chat and shows the share-phone button."""
+    global _bot_username
+    if not _bot_username:
+        try:
+            _bot_username = (await bot.get_me()).username
+        except Exception:
+            return None
+    return f"https://t.me/{_bot_username}?start=phone"
+
+
 async def need_phone(m: Message):
     """True (and shows the Start button) if the player has not shared a phone yet."""
     if m.from_user.id in phones:
@@ -1472,6 +1487,8 @@ async def cmd_start(m: Message, command: CommandObject):
                 pass
     if uid in phones:
         await m.answer(WELCOME_TEXT, reply_markup=menu_kb(uid))
+    elif arg == "phone":                       # came from the "share phone number" link or button
+        await m.answer(PHONE_TEXT, reply_markup=phone_kb())
     else:
         await m.answer(START_TEXT, reply_markup=start_kb())
 
@@ -1888,6 +1905,7 @@ async def cmd_admin(m: Message):
         "/players\nAll players and balances (or /players <phone> for one player)\n\n"
         "/online\nHow many players are online / checked in (now, 5 min, 1 hour, 24 hours)\n\n"
         "/backup\nDownload a backup of all data (zip file) to your chat\n\n"
+        "/phonelink\nGet a link to send to players so they can share their phone number\n\n"
         "/nophone\nAsk players who have no phone number to share it (Amharic + English)\n\n"
         "/post\nSend a picture or text with a ተጫወት button to all players (you see a preview first)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
@@ -2154,10 +2172,29 @@ async def post_buttons(cb: CallbackQuery):
     t.add_done_callback(bg_tasks.discard)
 
 
+@dp.message(Command("phonelink"))
+async def cmd_phonelink(m: Message):
+    if not is_admin(m):
+        return
+    link = await phone_link(m.bot)
+    if not link:
+        await m.answer("❌ Could not read the bot's username. Try again.")
+        return
+    await m.answer("🔗 Send this link to players who did not share their phone number.\n"
+                   "When they tap it, the bot opens and shows the “Share phone number” button.\n\n"
+                   f"{link}\n\n"
+                   "Ready-to-send message (copy it):")
+    await m.answer("📱 ስልክ ቁጥርዎን ያጋሩ እና መጫወት ይጀምሩ!\n"
+                   "Share your phone number and start playing!\n\n"
+                   f"👉 {link}")
+
+
 # ---------- /nophone: ask players who have no phone number to share it (admin only) ----------
 NOPHONE_TEXT = ("🎯 Rodas Friend Zone Bingo\n\n"
                 "📱 ስልክ ቁጥርዎን ገና አላጋሩም።\n"
-                "You have not shared your phone number yet.\n\n") + PHONE_TEXT
+                "You have not shared your phone number yet.\n\n"
+                "ለመቀጠል ከታች ያለውን ቁልፍ ይንኩ።\n"
+                "Tap the button below to continue.")
 nophone_sending = False
 
 
@@ -2188,13 +2225,16 @@ async def run_nophone_send(bot, uids, admin_id):
     global nophone_sending
     nophone_sending = True
     ok = fail = 0
+    link = await phone_link(bot)
+    link_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text="📱 ስልክ ቁጥር ያጋሩ / Share phone number", url=link)]]) if link else phone_kb()
     try:
         for u in uids:
             if u in phones:                                # shared in the meantime
                 continue
             for attempt in (1, 2):
                 try:
-                    await bot.send_message(u, NOPHONE_TEXT, reply_markup=phone_kb())
+                    await bot.send_message(u, NOPHONE_TEXT, reply_markup=link_kb)
                     ok += 1
                     break
                 except Exception as e:
@@ -2906,6 +2946,7 @@ async def main():
                     BotCommand(command="backup", description="💾 Download backup"),
                     BotCommand(command="post", description="📣 Send post to players"),
                     BotCommand(command="nophone", description="📱 Ask for phone numbers"),
+                    BotCommand(command="phonelink", description="🔗 Phone number link"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
                     BotCommand(command="bonusmany", description="🎁 Bonus for many players"),
