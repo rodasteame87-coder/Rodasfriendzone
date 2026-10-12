@@ -8,6 +8,9 @@ Stage 3 (server side): a game number that counts separately inside each lobby
          ("50 birr Game 7"), the anonymous start poll, the admin START button,
          the "game starts in 60 seconds" message, and saved past games that can
          be read back from the database by their game number.
+         Poll rules: the FIRST tap of a player is final; after voting the player
+         sees the Yes / No percentages, which refresh live; the admin buttons are
+         tied to one specific game so an old button can never start a newer one.
 
 NOT built yet: the player screen and the lottery animation (stage 4). Keep
 NUMBER_GAME_ENABLED off (default) until those are done and the legal check is finished.
@@ -67,6 +70,7 @@ PLACES = ("gold", "silver", "bronze")
 PER_NUMBER = {50: (30, 5, 3), 100: (70, 10, 5)}
 HISTORY_KEEP = 50
 RESULTS_PAGE = 20        # past games sent to the screen at once (max 50)
+POLL_REFRESH = 5         # seconds between live updates of the players' poll messages
 
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS ng_rounds(
@@ -144,6 +148,7 @@ ng_counter = [0]               # last round id used
 game_counter = {p: 0 for p in PRICES}   # lobby price -> last REAL game number used (test rounds never use one)
 start_notices = []             # frozen rounds whose players still get "game starts in 60 seconds"
 _tasks = set()                 # background tasks (keeps them alive until they finish)
+_refreshing = [False]          # True while the poll messages are being updated
 
 
 def init(**deps):
@@ -197,6 +202,8 @@ def _new_round(lobby, rid, created, status="open", full_at=None):
             "game_no": None,   # "Game 7" of this lobby (None for test rounds)
             "poll_at": None,   # when the admin opened the start poll (None = no poll)
             "votes": {},       # uid -> 1 (yes) / 0 (no). Only the totals are ever shown.
+            "poll_msgs": {},   # uid -> Telegram message id of that player's poll message (memory only)
+            "poll_dirty": False, "poll_synced": 0.0,   # live-update bookkeeping (memory only)
             "owners": {},      # number -> {"uid", "name", "t", "slot", "used"}
             "by_uid": {}}      # uid -> [numbers]
 
@@ -479,15 +486,31 @@ def summary_text(r):
 
 # ---------- stage 2: background work ----------
 async def _send(uid, text, markup=None):
+    """Send a Telegram message. Returns its message id (or None if it could not be sent)."""
     if not uid:
-        return
+        return None
     try:
         if markup is None:
-            await D["send"](uid, text)
+            m = await D["send"](uid, text)
         else:
-            await D["send"](uid, text, reply_markup=markup)
+            m = await D["send"](uid, text, reply_markup=markup)
+        return getattr(m, "message_id", None)
     except Exception as e:                      # blocked bot, network...: never stop the loop
         print("number game message failed:", uid, repr(e))
+        return None
+
+
+async def _edit(uid, mid, text, rows=None):
+    """Change a message we sent earlier. Errors (message not modified, blocked...) are ignored."""
+    if D.get("edit") is None or not mid:
+        return
+    try:
+        if rows:
+            await D["edit"](uid, mid, text, reply_markup=_kb(rows))
+        else:
+            await D["edit"](uid, mid, text)
+    except Exception:
+        pass
 
 
 async def after_settle():
@@ -521,6 +544,8 @@ async def ticker():
             await after_settle()
             if start_notices:
                 _spawn(send_start_notices())
+            if any(r["poll_msgs"] for r in rounds.values()) and not _refreshing[0]:
+                _spawn(poll_refresh())
         except Exception as e:
             print("number game tick error:", repr(e))
 
@@ -595,7 +620,17 @@ def poll_tally(r):
     yes = sum(1 for v in r["votes"].values() if v == 1)
     no = sum(1 for v in r["votes"].values() if v == 0)
     players = len(real_players(r))
-    return {"yes": yes, "no": no, "players": players, "not_voted": max(0, players - yes - no)}
+    voted = yes + no
+    yes_pct = int(yes * 100 / voted + 0.5) if voted else 0
+    return {"yes": yes, "no": no, "players": players, "not_voted": max(0, players - voted),
+            "voted": voted, "yes_pct": yes_pct, "no_pct": (100 - yes_pct) if voted else 0}
+
+
+def vote_line(r):
+    """'Yes 28 (70%) / No 12 (30%)': totals and percentages only, never who voted what."""
+    t = poll_tally(r)
+    return (f"✅ Yes {t['yes']} ({t['yes_pct']}%) · ❌ No {t['no']} ({t['no_pct']}%)\n"
+            f"{t['voted']} of {t['players']} players voted · anonymous")
 
 
 def open_poll(lobby):
@@ -618,7 +653,7 @@ def open_poll(lobby):
 
 
 def cast_vote(uid, rid, yes):
-    """A player votes yes or no (they may change their mind until the game starts).
+    """A player votes yes or no. The FIRST tap is final: a second tap changes nothing.
     Only owners of a number in this round may vote, one vote each. No await inside."""
     r = next((x for x in rounds.values() if x["id"] == rid), None)
     if r is None:
@@ -631,10 +666,14 @@ def cast_vote(uid, rid, yes):
         return {"ok": False, "error": "Your account is blocked"}
     if not r["by_uid"].get(uid):
         return {"ok": False, "error": "Only players who own a number can vote"}
+    if uid in r["votes"]:                           # already voted: the first vote stays
+        return {"ok": False, "code": "voted", "vote": r["votes"][uid],
+                "error": "You already voted. Your vote is final / ድምጽዎ ተቀምጧል፣ መቀየር አይቻልም"}
     vote = 1 if yes else 0
     r["votes"][uid] = vote
+    r["poll_dirty"] = True
     D["enqueue"]("INSERT INTO ng_votes(round_id, uid, vote, t) VALUES($1, $2, $3, $4) "
-                 "ON CONFLICT (round_id, uid) DO UPDATE SET vote = EXCLUDED.vote, t = EXCLUDED.t",
+                 "ON CONFLICT (round_id, uid) DO NOTHING",
                  r["id"], uid, vote, int(time.time()))
     return {"ok": True, "vote": vote}
 
@@ -669,16 +708,18 @@ def panel_text(r):
     g, s_, b = prizes_for(r["lobby"], sold)
     return (f"🗳 Poll · {game_label(r['lobby'], r['game_no'], r['id'])}\n"
             f"Sold {sold}/{NUMBERS} · players {t['players']}\n"
-            f"✅ Yes {t['yes']} · ❌ No {t['no']} · not voted {t['not_voted']}\n"
+            f"✅ Yes {t['yes']} ({t['yes_pct']}%) · ❌ No {t['no']} ({t['no_pct']}%) · "
+            f"not voted {t['not_voted']}\n"
             f"If you start now: 🥇 {g} · 🥈 {s_} · 🥉 {b} ETB\n\n"
             f"Votes are anonymous and only advise you. Nothing starts until you press Start.")
 
 
 def panel_rows(r, confirm=False):
-    p = r["lobby"]
+    """Buttons are tied to THIS game (its round id), so an old button can never start a newer game."""
+    p = r["id"]
     if confirm:
-        return [[("✅ Yes, start now", f"ngp:{p}:y"), ("↩️ Cancel", f"ngp:{p}:n")]]
-    return [[("🔄 Refresh", f"ngp:{p}:r"), ("▶️ Start game now", f"ngp:{p}:s")]]
+        return [[("✅ Yes, start now", f"ngq:{p}:y"), ("↩️ Cancel", f"ngq:{p}:n")]]
+    return [[("🔄 Refresh", f"ngq:{p}:r"), ("▶️ Start game now", f"ngq:{p}:s")]]
 
 
 def start_text(r):
@@ -687,12 +728,68 @@ def start_text(r):
             f"Number Game {game_label(r['lobby'], r['game_no'], r['id'])}")
 
 
+def vote_rows(r):
+    return [[("✅ አዎ · Yes", f"ngv:{r['id']}:1"), ("❌ አይ · No", f"ngv:{r['id']}:0")]]
+
+
+def player_poll_view(r, uid):
+    """(text, button rows) of one player's poll message.
+    Before voting: the question and two buttons. After voting: his vote (final) and
+    the live percentages, no buttons."""
+    v = r["votes"].get(uid)
+    if v is None:
+        return poll_player_text(r), vote_rows(r)
+    mine = "✅ አዎ · Yes" if v == 1 else "❌ አይ · No"
+    return (f"{poll_player_text(r)}\n\n{vote_line(r)}\n"
+            f"✔ Your vote: {mine} (final / የመጨረሻ)"), None
+
+
+def closed_poll_text(r):
+    return (f"🔒 ድምጽ መስጫው ተዘግቷል · ጨዋታው ተጀምሯል።\n"
+            f"Vote closed: the game has started.\n\n"
+            f"Number Game {game_label(r['lobby'], r['game_no'], r['id'])}\n{vote_line(r)}")
+
+
 async def send_poll(r):
-    markup = _kb([[("✅ አዎ · Yes", f"ngv:{r['id']}:1"), ("❌ አይ · No", f"ngv:{r['id']}:0")]])
-    text = poll_player_text(r)
+    """Send the vote to every player who has not got it yet (so running it again only
+    reaches players who bought a number after the poll was opened)."""
     for uid in real_players(r):
-        await _send(uid, text, markup)
+        if uid in r["poll_msgs"] or uid in r["votes"]:
+            continue
+        text, rows = player_poll_view(r, uid)
+        mid = await _send(uid, text, _kb(rows) if rows else None)
+        if mid:
+            r["poll_msgs"][uid] = mid
         await asyncio.sleep(0.06)
+
+
+async def poll_refresh():
+    """Live percentages: update the players' poll messages (at most every POLL_REFRESH
+    seconds), and when the game starts close them for everybody."""
+    if D.get("edit") is None or _refreshing[0]:
+        return
+    _refreshing[0] = True
+    try:
+        now = time.time()
+        for r in list(rounds.values()):
+            if not r["poll_msgs"]:
+                continue
+            closed = r["status"] != "open"
+            if not closed and not (r["poll_dirty"] and now - r["poll_synced"] >= POLL_REFRESH):
+                continue
+            r["poll_dirty"], r["poll_synced"] = False, now
+            msgs = dict(r["poll_msgs"])
+            if closed:
+                r["poll_msgs"] = {}                 # the final edit is made only once
+            for uid, mid in msgs.items():
+                if closed:
+                    await _edit(uid, mid, closed_poll_text(r))
+                else:
+                    text, rows = player_poll_view(r, uid)
+                    await _edit(uid, mid, text, rows)
+                await asyncio.sleep(0.05)
+    finally:
+        _refreshing[0] = False
 
 
 async def send_start_notices():
@@ -1111,8 +1208,9 @@ def register(dp):
             return
         r = res["round"]
         await m.answer(panel_text(r), reply_markup=_kb(panel_rows(r)))
-        if not res["already"]:
-            await m.answer(f"📨 Sending the vote to {len(real_players(r))} players…")
+        todo = [u for u in real_players(r) if u not in r["poll_msgs"] and u not in r["votes"]]
+        if todo:                       # first time: everybody. Again later: only new buyers
+            await m.answer(f"📨 Sending the vote to {len(todo)} players…")
             _spawn(send_poll(r))
 
     @dp.message(Command("ngstart"))
@@ -1136,39 +1234,55 @@ def register(dp):
 
     @dp.callback_query(F.data.startswith("ngv:"))
     async def cb_vote(cb: CallbackQuery):
-        """A player pressed Yes / No under the poll message."""
+        """A player pressed Yes / No under the poll message. The first tap is final."""
         parts = (cb.data or "").split(":")
         rid = _int(parts[1]) if len(parts) == 3 else None
         if rid is None or parts[2] not in ("0", "1"):
             await cb.answer()
             return
         res = cast_vote(cb.from_user.id, rid, parts[2] == "1")
+        r = next((x for x in rounds.values() if x["id"] == rid), None)
         if not res["ok"]:
             await cb.answer(res["error"], show_alert=True)
+            if res.get("code") == "voted" and r is not None:    # take the buttons away
+                try:
+                    text, _ = player_poll_view(r, cb.from_user.id)
+                    await cb.message.edit_text(text)
+                except Exception:
+                    pass
             return
         mine = "✅ አዎ · Yes" if res["vote"] else "❌ አይ · No"
-        await cb.answer("Saved: " + mine)
-        try:                                    # show the player what he chose (he may still change it)
-            base = (cb.message.text or "").split("\n\n✔")[0]
-            await cb.message.edit_text(f"{base}\n\n✔ Your vote: {mine}\n(You can change it until the game starts.)",
-                                       reply_markup=cb.message.reply_markup)
+        await cb.answer("Saved (final): " + mine)
+        try:                                    # show his vote and the live percentages
+            text, _ = player_poll_view(r, cb.from_user.id)
+            await cb.message.edit_text(text)
         except Exception:
             pass
 
     @dp.callback_query(F.data.startswith("ngp:"))
+    async def cb_panel_old(cb: CallbackQuery):
+        """Buttons of an older panel (tied to a lobby, not to a game): never act on them."""
+        if D.get("admin_id") and cb.from_user.id == D["admin_id"]:
+            await cb.answer("This button is out of date. Send /ngpoll again.", show_alert=True)
+        else:
+            await cb.answer()
+
+    @dp.callback_query(F.data.startswith("ngq:"))
     async def cb_panel(cb: CallbackQuery):
-        """Admin buttons under the poll panel: refresh / start (with a confirm step)."""
+        """Admin buttons under the poll panel: refresh / start (with a confirm step).
+        Every button names ONE game (round id): it can only ever act on that game."""
         if not (D.get("admin_id") and cb.from_user.id == D["admin_id"]):
             await cb.answer()
             return
         parts = (cb.data or "").split(":")
-        lobby = _int(parts[1]) if len(parts) == 3 else None
+        rid = _int(parts[1]) if len(parts) == 3 else None
         act = parts[2] if len(parts) == 3 else ""
-        r = rounds.get(lobby) if lobby in PRICES else None
-        if r is None:
-            await cb.answer()
+        r = next((x for x in rounds.values() if x["id"] == rid), None) if rid is not None else None
+        if r is None or r["poll_at"] is None:
+            await cb.answer("This panel is out of date (that game has started or is over)", show_alert=True)
             return
-        if act == "y":                                          # confirmed: start now
+        lobby = r["lobby"]
+        if act == "y":                                          # confirmed: start THIS game now
             res = admin_start(lobby)
             if not res["ok"]:
                 await cb.answer(res["error"], show_alert=True)
@@ -1180,8 +1294,8 @@ def register(dp):
             except Exception:
                 pass
             return
-        if r["status"] != "open" or r["poll_at"] is None:
-            await cb.answer("This poll is over (the round started or changed)", show_alert=True)
+        if r["status"] != "open":
+            await cb.answer("This poll is over (the game has started)", show_alert=True)
             return
         await cb.answer()
         try:
