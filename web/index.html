@@ -425,6 +425,7 @@
   <div class="ngprize" id="ngPrizes"></div>
   <div class="pgrid" id="ngGrid"></div>
   <div class="panel" id="ngMine" hidden><h3>🎟 My numbers</h3><div id="ngMineList"></div></div>
+  <button class="winb" id="ngStart" hidden style="margin-top:12px">▶ START GAME NOW (admin only)</button>
   <div class="panel" id="ngLast" hidden></div>
   <div id="ngLive" hidden>
     <div id="ngStage"></div>
@@ -1123,6 +1124,7 @@ function ngDraw(){
   ["ngMsg","ngPrizes","ngGrid"].forEach(i=>{ $(i).hidden = !pick; });
   $("ngStats").hidden = !pick;
   $("ngMine").hidden = !pick || !s.mine.length;
+  $("ngStart").hidden = !(pick && s.admin && open && s.sold>=s.min_force);   // only the admin ever sees this
   $("ngLive").hidden = pick;
   $("ngNext").hidden = NG.mode!=="after";
   if(!pick){ ngLiveDraw(); $("ngLast").hidden = true; return; }
@@ -1305,6 +1307,19 @@ $("ngRooms").onclick = e=>{
   show("ng"); if(NG.s && NG.s.lobby===NG.lobby) ngDraw(); ngSync();
 };
 $("ngBack").onclick = ()=>{ if(NG.watch && NG.mode==="after") NG.watch.closed = true; show("lobby"); };
+$("ngStart").onclick = async ()=>{
+  const s = NG.s; if(!s || !s.admin || s.status!=="open") return;
+  const [g,sv,b] = s.per_number.map(x=>x*s.sold);
+  const ok = await askConfirm("Start "+s.lobby+" birr "+ngGame(s)+" now with "+s.sold+" numbers sold?\n\nPrizes: 🥇 "+g+" · 🥈 "+sv+" · 🥉 "+b+" birr.\nThis cannot be undone.");
+  if(!ok) return;
+  $("ngStart").disabled = true;
+  let r;
+  try{ r = await post("/ng/start", { lobby:s.lobby, round:s.round }); }
+  catch(e){ toast("Slow connection. Check the screen before pressing again."); $("ngStart").disabled = false; return; }
+  $("ngStart").disabled = false;
+  toast(r.ok ? "▶ Game started!" : (r.error||"Could not start"));
+  ngSync();
+};
 $("ngNext").onclick = ()=>{ if(NG.watch) NG.watch.closed = true; ngSync(); if(NG.s) ngDraw(); };
 $("ngLiveInfo").onclick = e=>{ const b=e.target.closest(".cp"); if(b) copyText($(b.dataset.c).textContent); };
 $("ngLast").onclick = ()=>{ const g=+$("ngLast").dataset.g; if(g) openNgGame(NG.lobby, g); };
