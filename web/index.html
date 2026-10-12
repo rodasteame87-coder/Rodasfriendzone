@@ -207,6 +207,18 @@
   .wnote{color:#d1d5db;font-size:13px;margin-top:8px}
   .wprize{color:#fbbf24;font-weight:800;margin:0 0 16px;font-size:30px;line-height:1.15}
   .wcount{color:#9ca3af;margin-top:12px;font-size:15px}
+
+  /* number game */
+  .room .b .gl{font-size:11px;font-weight:600;color:#6b5a7c;margin-top:2px}
+  .ngprize{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+  .ngprize div{background:var(--cream);border-radius:10px;padding:7px 4px;text-align:center;font-size:12px;font-weight:700;color:var(--title);box-shadow:var(--shadow)}
+  .ngprize small{display:block;color:#6b5a7c;font-weight:600;font-size:10px;margin-bottom:2px}
+  #ngMine{padding:10px 12px;margin-top:12px}
+  #ngMine h3{margin:0 0 8px;font-size:13px;color:var(--title)}
+  #ngMine span{display:inline-block;background:var(--green);color:#fff;font-weight:700;font-size:12px;border-radius:12px;padding:5px 10px;margin:0 6px 6px 0}
+  #ngModal{position:fixed;inset:0;background:rgba(20,5,30,.55);display:flex;align-items:center;justify-content:center;padding:14px;z-index:6}
+  #ngName{width:100%;border:1.5px solid #b98bd0;border-radius:10px;padding:11px 12px;font-size:15px;outline:none;color:var(--ink)}
+  .ngsmall{color:#6b5a7c;font-size:12px;text-align:center;margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -222,6 +234,11 @@
     <div class="gt">🎯 BINGO GAMES</div>
     <div class="colhead"><span>BET</span><span>POSSIBLE WIN · STATUS</span></div>
     <div id="roomList"></div>
+    <div id="ngBox" hidden>
+      <div class="gt">🎟 NUMBER GAME</div>
+      <div class="colhead"><span>PRICE</span><span>TOP PRIZE · SOLD</span></div>
+      <div id="ngRooms"></div>
+    </div>
     <div class="practice">
       <div><b>🎮 FREE</b><p>Practice Mode — No Real Money</p></div>
       <button id="openFree">OPEN</button>
@@ -311,6 +328,34 @@
   <div class="pickTitle" id="pickTitle">Choose Your Cartela</div>
   <button class="leave" id="pkLeave" hidden style="margin-bottom:10px">LEAVE · get my money back</button>
   <div class="pgrid" id="pickGrid"></div>
+</div>
+
+<!-- ============ NUMBER GAME ============ -->
+<div id="ng" hidden>
+  <button class="back" id="ngBack">← Back</button>
+  <h1>🎟 Number Game · <span id="ngTitle"></span></h1>
+  <div class="stats">
+    <div class="stat"><small>Sold</small><b id="ngSold">0</b></div>
+    <div class="stat"><small>Wallet</small><b id="ngWallet">0</b></div>
+    <div class="stat"><small>Mine</small><b id="ngMineN">0</b></div>
+    <div class="stat"><small>Price</small><b id="ngPrice">50</b></div>
+  </div>
+  <div class="pickTitle" id="ngMsg">Choose your number</div>
+  <div class="ngprize" id="ngPrizes"></div>
+  <div class="pgrid" id="ngGrid"></div>
+  <div class="panel" id="ngMine" hidden><h3>🎟 My numbers</h3><div id="ngMineList"></div></div>
+</div>
+
+<div id="ngModal" hidden>
+  <div class="mbox">
+    <h3 id="ngmTitle">Number</h3>
+    <input id="ngName" type="text" maxlength="20" autocomplete="off" placeholder="Name your number (max 20)">
+    <p class="ngsmall" id="ngmNote"></p>
+    <div class="mbtns">
+      <button style="background:#888" id="ngmCancel">CANCEL</button>
+      <button style="background:#16a34a" id="ngmOk">BUY</button>
+    </div>
+  </div>
 </div>
 
 <!-- ============ GAME ============ -->
@@ -431,7 +476,7 @@ async function post(p,b){
   const {j} = await fetchT(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})}, POST_MS);
   return j || {ok:false, error:"Server error"};
 }
-function show(n){ screen=n; ["lobby","pick","game"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
+function show(n){ screen=n; ["lobby","pick","game","ng"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); }
 const letter = n => COLS[Math.floor((n-1)/15)];
 const label = n => letter(n)+"-"+n;      // e.g. B-1, O-71
 const CALL_COLORS = ["var(--cB)","var(--cI)","var(--cN)","var(--cG)","var(--cO)"];   // B blue, I red, N green, G orange, O violet
@@ -672,7 +717,7 @@ function render(){
   //  - round started (playing / finished): go to the game screen
   //  - no cartela: never stay on the game screen
   if(S.myCard && S.phase!=="lobby" && screen!=="game" && leftKey!==key) show("game");
-  if(S.myCard && S.phase==="lobby" && screen!=="pick") show("pick");
+  if(S.myCard && S.phase==="lobby" && screen!=="pick" && screen!=="ng") show("pick");
   if(!S.myCard && screen==="game") show("pick");
 
   if(S.phase==="finished" && S.winners && S.winners.length && shownRound!==key){
@@ -919,7 +964,151 @@ function playNew(){
   }
 }
 
+/* ---------- Number Game (stage 4, part 1: lobby entry + number picker) ---------- */
+/* The server decides who may see it: while the game is OFF only the admin gets an
+   answer, everybody else gets "closed" and never sees the section at all. */
+const NG = { lobby:50, s:null, all:{}, avail:false, seq:0, beat:0, pend:null, buying:false, pick:0 };
+const ngKey = () => {
+  try{ const a=new Uint8Array(16); crypto.getRandomValues(a); return Array.from(a,b=>b.toString(16).padStart(2,"0")).join(""); }
+  catch(e){ return (Date.now().toString(36)+Math.random().toString(36).slice(2)+"abcdefgh").slice(0,32); }
+};
+const ngGame = x => x.game ? "Game "+x.game : "Test round";
+
+async function ngSync(){
+  const my = ++NG.seq;
+  let d;
+  try{ d = await get("/ng/state?lobby="+NG.lobby); }catch(e){ return; }
+  if(my!==NG.seq) return;
+  if(d.error){
+    if(d.error==="closed" || d.error==="auth" || d.error==="blocked"){
+      NG.avail=false; $("ngBox").hidden=true;
+      if(screen==="ng") show("lobby");
+    }
+    return;
+  }
+  NG.s = d; NG.avail = true; NG.all[d.lobby] = d;
+  if(screen!=="ng"){                                   // lobby: also read the other lobbies
+    await Promise.all(d.lobbies.filter(l=>l.price!==d.lobby).map(async l=>{
+      try{ const o = await get("/ng/state?lobby="+l.price); if(!o.error) NG.all[l.price]=o; }catch(e){}
+    }));
+    if(my!==NG.seq) return;
+  }
+  ngRender();
+}
+
+function ngRender(){
+  const s = NG.s; if(!s) return;
+  $("ngBox").hidden = !NG.avail;
+  $("ngRooms").innerHTML = s.lobbies.map(l=>{
+    const a = NG.all[l.price] || (l.price===s.lobby ? s : null);
+    const top = a ? a.prize_full[0] : "";
+    const open = l.status==="open";
+    return `<div class="room"><div class="b">${l.price} <small>BIRR</small>`+
+           `<div class="gl">${ngGame(l)}${l.mine?" · you "+l.mine:""}</div></div>`+
+           `<div class="w">${top?"🥇 "+top:""}</div>`+
+           `<div class="s${open?"":" t"}">${open ? l.sold+"/"+s.count : "starting"}</div>`+
+           `<button class="j" data-l="${l.price}">${open?"Join":"View"}</button></div>`;
+  }).join("");
+  if(screen==="ng" && s.lobby===NG.lobby) ngDraw();
+}
+
+function ngDraw(){
+  const s = NG.s, open = s.status==="open";
+  const mineSet = new Set(s.mine.map(m=>m.num));
+  $("ngTitle").textContent = s.lobby+" birr · "+ngGame(s);
+  $("ngSold").textContent = s.sold+"/"+s.count;
+  $("ngWallet").textContent = s.cash;
+  $("ngMineN").textContent = s.mine.length+"/"+s.max;
+  $("ngPrice").textContent = s.lobby;
+  let msg;
+  if(!open){
+    const d = s.draw;
+    msg = d && d.phase==="countdown" ? "🔒 Game started · draw in "+d.seconds_left+"s"
+        : d ? "🎰 Drawing the winners…" : "🔒 This game is closed";
+  } else if(s.mine.length>=s.max) msg = "✅ You own "+s.max+"/"+s.max+" numbers · good luck!";
+  else msg = s.mine.length ? "Choose another number ("+s.mine.length+"/"+s.max+")" : "Choose your number";
+  $("ngMsg").textContent = msg;
+  const [g,sv,b] = s.per_number.map(x=>x*s.sold);
+  $("ngPrizes").innerHTML =
+    `<div><small>FULL GAME (100 sold)</small>🥇 ${s.prize_full[0]} · 🥈 ${s.prize_full[1]} · 🥉 ${s.prize_full[2]}</div>`+
+    `<div><small>IF IT STARTS NOW</small>🥇 ${g} · 🥈 ${sv} · 🥉 ${b}</div>`;
+  let h = "";
+  for(let n=1;n<=s.count;n++){
+    const c = mineSet.has(n) ? " mine" : (s.taken.includes(n) || !open) ? " taken" : "";
+    h += `<div class="num${c}" data-n="${n}">${n}</div>`;
+  }
+  $("ngGrid").innerHTML = h;
+  $("ngMine").hidden = !s.mine.length;
+  $("ngMineList").innerHTML = s.mine.map(m=>`<span>#${m.num} · ${esc(m.name)}</span>`).join("");
+}
+
+function ngOpenBuy(n){
+  const s = NG.s; if(!s) return;
+  if(s.status!=="open") return toast("This game is closed");
+  if(s.mine.length>=s.max) return toast("You can own at most "+s.max+" numbers here");
+  if(s.taken.includes(n)) return toast("Sorry, this number is taken");
+  if(s.cash<s.lobby) return toast("Not enough balance / በቂ ሂሳብ የለም");
+  NG.pick = n;
+  $("ngmTitle").textContent = "Number #"+n+" · "+s.lobby+" birr";
+  $("ngmNote").textContent = "Give this number a name. It is shown if your number wins.";
+  let last = ""; try{ last = localStorage.getItem("ngName")||""; }catch(e){}
+  $("ngName").value = last;
+  $("ngmOk").disabled = false;
+  $("ngModal").hidden = false;
+  setTimeout(()=>{ try{ $("ngName").focus(); }catch(e){} }, 50);
+}
+
+async function ngBuy(){
+  if(NG.buying) return;
+  const s = NG.s, n = NG.pick;
+  const name = $("ngName").value.replace(/\s+/g," ").trim();
+  if(!name || name.length>20) return toast("Give the number a name (1 to 20 characters)");
+  NG.buying = true; $("ngmOk").disabled = true;
+  // The same attempt keeps the same key, so a retry after a bad connection can never charge twice.
+  const p = NG.pend;
+  if(!p || p.n!==n || p.lobby!==s.lobby || p.name!==name) NG.pend = { n, lobby:s.lobby, name, key:ngKey() };
+  let r;
+  try{ r = await post("/ng/buy", { lobby:s.lobby, num:n, name, idem:NG.pend.key }); }
+  catch(e){
+    toast("Slow connection. Tap BUY again, you will not be charged twice.");
+    NG.buying = false; $("ngmOk").disabled = false; return;
+  }
+  NG.buying = false; $("ngmOk").disabled = false;
+  if(r.ok){
+    NG.pend = null; $("ngModal").hidden = true;
+    try{ localStorage.setItem("ngName", name); }catch(e){}
+    toast("✅ Number #"+r.num+" is yours!");
+  } else {
+    NG.pend = null;
+    $("ngModal").hidden = true;
+    if(r.needPhone){
+      const msg = "Open the bot chat and share your phone number first.\nመጀመሪያ በቦቱ ውስጥ ስልክ ቁጥርዎን ያጋሩ።";
+      if(tg && tg.showPopup){ try{ tg.showPopup({title:"📱 Phone number / ስልክ ቁጥር", message:msg, buttons:[{type:"ok"}]}); }catch(e){ toast(msg); } }
+      else toast(msg);
+    } else toast(r.error==="auth" ? "Please close the app and open it again from the bot" : (r.error||"Could not buy"));
+  }
+  ngSync(); sync();                                    // fresh board + fresh wallet
+}
+
+$("ngRooms").onclick = e=>{
+  const b = e.target.closest(".j"); if(!b) return;
+  NG.lobby = +b.dataset.l; NG.s = NG.all[NG.lobby] || NG.s;
+  show("ng"); if(NG.s && NG.s.lobby===NG.lobby) ngDraw(); ngSync();
+};
+$("ngBack").onclick = ()=>show("lobby");
+$("ngGrid").onclick = e=>{ const el=e.target.closest(".num"); if(el) ngOpenBuy(+el.dataset.n); };
+$("ngmCancel").onclick = ()=>{ $("ngModal").hidden = true; };
+$("ngmOk").onclick = ngBuy;
+$("ngName").onkeydown = e=>{ if(e.key==="Enter") ngBuy(); };
+setInterval(()=>{                                      // every 2 s on the number screen, every 4 s in the lobby
+  if(document.hidden) return;
+  NG.beat++;
+  if(screen==="ng" || (screen==="lobby" && !$("tab-game").hidden && NG.beat%2===0)) ngSync();
+}, 2000);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) ngSync(); });
+
 /* ---------- start ---------- */
+ngSync();
 buildCalls();
 sync().then(()=>{ if(sndOn) preloadSounds(); });   // sound already ON from last time: download ahead now
 setInterval(tick, 1000);     // 1 second, so manual players see each call quickly
