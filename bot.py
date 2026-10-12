@@ -226,21 +226,34 @@ def save_room_clear(bet):
     _enqueue("DELETE FROM room_players WHERE bet = $1", bet)
 
 
+CONN_ERRORS = (OSError, asyncio.TimeoutError, asyncpg.InterfaceError,
+               asyncpg.PostgresConnectionError)
+
+
 async def db_writer():
     while True:
         batch = [await _q.get()]
         while not _q.empty():
             batch.append(_q.get_nowait())
-        while True:                                   # never drop a write
+        while True:
             try:
                 async with pool.acquire() as conn:
                     async with conn.transaction():
                         for sql, args in batch:
                             await conn.execute(sql, *args)
                 break
-            except Exception as e:
-                print("db write failed, retrying:", repr(e))
+            except CONN_ERRORS as e:                  # database down: never drop a write, keep retrying
+                print("db down, retrying:", repr(e))
                 await asyncio.sleep(3)
+            except Exception as e:                    # bad data in the batch: save one by one
+                print("bad batch, saving one by one:", repr(e))
+                for sql, args in batch:
+                    try:
+                        async with pool.acquire() as conn:
+                            await conn.execute(sql, *args)
+                    except Exception as e2:
+                        print("SKIPPED bad write:", sql[:60], repr(e2))
+                break
 
 
 SCHEMA = """
@@ -2825,6 +2838,10 @@ async def admin_buttons(cb: CallbackQuery):
     note = None
     if req["type"] == "deposit":
         if approved:
+            if any(("tok:" + t) in used_sms for t in req.get("tokens", [])):
+                await cb.answer("Already credited: same payment number", show_alert=True)
+                await cb.message.edit_text(cb.message.text + "\n\n⚠️ DUPLICATE, not credited")
+                return
             await approve_deposit(cb.bot, uid, amount, req.get("tokens", []))
         else:
             if req.get("key"):
