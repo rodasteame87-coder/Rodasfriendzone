@@ -325,7 +325,7 @@ def settle_time(r):
     return r["close_at"] + DRAW_INTRO + 3 * REVEAL_GAP
 
 
-def freeze_round(lobby, early=False):
+def freeze_round(lobby, early=False, min_sold=None):
     """Stop sales, draw the 3 winners, save them, publish the hash, start the countdown.
     No await inside: it is one uninterruptible step. A frozen round can never be drawn again."""
     r = rounds.get(lobby)
@@ -334,8 +334,9 @@ def freeze_round(lobby, early=False):
     sold = sorted(r["owners"])
     n = len(sold)
     if early:
-        if n < max(MIN_EARLY_START, MIN_DRAW):
-            return {"ok": False, "error": f"At least {MIN_EARLY_START} numbers must be sold (now {n})"}
+        need = max(MIN_EARLY_START if min_sold is None else min_sold, MIN_DRAW)
+        if n < need:
+            return {"ok": False, "error": f"At least {need} numbers must be sold (now {n})"}
     elif n < NUMBERS:
         return {"ok": False, "error": f"The round is not full ({n}/{NUMBERS})"}
     now = int(time.time())
@@ -678,16 +679,18 @@ def cast_vote(uid, rid, yes):
     return {"ok": True, "vote": vote}
 
 
-def admin_start(lobby):
-    """Admin pressed START: freeze now, draw the winners, begin the 60-second countdown."""
+def admin_start(lobby, force=False):
+    """Admin pressed START: freeze now, draw the winners, begin the 60-second countdown.
+    force=True: the admin may start with as few as MIN_DRAW (3) numbers sold, because three
+    different winners are needed. Without force the normal early-start minimum applies."""
     r = rounds.get(lobby)
     if r is None or r["status"] != "open":
         return {"ok": False, "error": "This round is not open"}
     if r["test"]:
         return {"ok": False, "error": "This is a test round (fake players). Use /ngtestfreeze"}
-    res = freeze_round(lobby, early=True)
+    res = freeze_round(lobby, early=True, min_sold=MIN_DRAW if force else None)
     if res["ok"]:
-        audit("admin_start", D.get("admin_id"), lobby, r["id"], {"sold": res["sold"]})
+        audit("admin_start", D.get("admin_id"), lobby, r["id"], {"sold": res["sold"], "force": bool(force)})
     return res
 
 
@@ -973,6 +976,7 @@ def state_for(uid, lobby):
         "mine": mine, "cash": D["wallets"].get(uid, 0),
         "prize_full": [per * NUMBERS for per in PER_NUMBER[lobby]],
         "per_number": list(PER_NUMBER[lobby]), "min_early": MIN_EARLY_START,
+        "admin": bool(D.get("admin_id") and uid == D["admin_id"]), "min_force": MIN_DRAW,
         "draw": result_view(r) if r["status"] == "countdown" else None,
         "last": (result_view(last_result(lobby)) if last_result(lobby) else None),
         "lobbies": [{"price": p, "round": rounds[p]["id"], "game": rounds[p]["game_no"],
@@ -1024,6 +1028,24 @@ async def _gate(query):
     if not allowed(uid):
         return None, {"ok": False, "error": "closed", "msg": "Number Game is not open yet"}
     return uid, None
+
+
+async def handle_start(body):
+    """ADMIN ONLY. The Start button on the number screen. Names the game (round id) it was
+    pressed for, so an old screen can never start a newer game."""
+    user = D["verify"](body.get("initData", ""))
+    if not user:
+        return {"ok": False, "error": "auth"}
+    uid = D["touch"](user)
+    if not (D.get("admin_id") and uid == D["admin_id"]):
+        return {"ok": False, "error": "Admin only"}
+    lobby, rid = _int(body.get("lobby")), _int(body.get("round"))
+    r = rounds.get(lobby)
+    if r is None:
+        return {"ok": False, "error": "Unknown lobby"}
+    if rid is None or rid != r["id"]:
+        return {"ok": False, "error": "This game has changed. Refresh the screen"}
+    return admin_start(lobby, force=True)
 
 
 async def handle_results(query):
@@ -1094,6 +1116,15 @@ def routes():
             body = {}
         return web.json_response(await handle_buy(body))
 
+    async def api_start(req):
+        try:
+            body = await req.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        return web.json_response(await handle_start(body))
+
     async def api_results(req):
         return web.json_response(await handle_results(dict(req.query)))
 
@@ -1101,7 +1132,8 @@ def routes():
         return web.json_response(await handle_game(dict(req.query)))
 
     return [web.get("/api/ng/state", api_state), web.post("/api/ng/buy", api_buy),
-            web.get("/api/ng/results", api_results), web.get("/api/ng/game", api_game)]
+            web.get("/api/ng/results", api_results), web.get("/api/ng/game", api_game),
+            web.post("/api/ng/start", api_start)]
 
 
 # ---------- admin test commands (only the ADMIN_ID account) ----------
@@ -1231,6 +1263,24 @@ def register(dp):
         await m.answer(f"▶️ {game_label(lobby, r['game_no'], r['id'])} started with {res['sold']} numbers. "
                        f"Countdown {COUNTDOWN_SECONDS}s. Players are being told.\n"
                        f"Hash: {r['draw']['hash']}")
+
+    @dp.message(Command("ngforce"))
+    async def cmd_ngforce(m: Message, command: CommandObject):
+        """/ngforce 50 : admin starts the game NOW with as few as 3 numbers sold."""
+        if not is_admin(m):
+            return
+        lobby = _lobby_arg(command)
+        if lobby is None:
+            await m.answer("Send: /ngforce <lobby 50 or 100>\n\nStarts the game now with any "
+                           f"number of sold numbers from {MIN_DRAW} up. Prizes shrink in proportion.")
+            return
+        res = admin_start(lobby, force=True)
+        if not res["ok"]:
+            await m.answer("❌ " + res["error"])
+            return
+        r = rounds[lobby]
+        await m.answer(f"▶️ {game_label(lobby, r['game_no'], r['id'])} started with {res['sold']} numbers. "
+                       f"Countdown {COUNTDOWN_SECONDS}s.\nHash: {r['draw']['hash']}")
 
     @dp.callback_query(F.data.startswith("ngv:"))
     async def cb_vote(cb: CallbackQuery):
