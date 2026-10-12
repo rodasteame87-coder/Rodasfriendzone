@@ -219,6 +219,54 @@
   #ngModal{position:fixed;inset:0;background:rgba(20,5,30,.55);display:flex;align-items:center;justify-content:center;padding:14px;z-index:6}
   #ngName{width:100%;border:1.5px solid #b98bd0;border-radius:10px;padding:11px 12px;font-size:15px;outline:none;color:var(--ink)}
   .ngsmall{color:#6b5a7c;font-size:12px;text-align:center;margin:8px 0 0}
+
+  /* number game: draw stage (countdown, mixing, reveals) */
+  .stg{background:#1f2430;color:#fff;border-radius:16px;padding:14px 10px 16px;text-align:center;margin-bottom:10px}
+  .stg-t{font-weight:700;font-size:15px;color:#e8d8f5;min-height:20px}
+  .stg-c{font-size:58px;font-weight:800;line-height:1.1;color:#f7c32c;min-height:64px}
+  .stg-n{font-size:13px;color:#b8b2c4;min-height:18px;margin:6px 0 12px}
+  .drum{position:relative;width:132px;height:132px;margin:6px auto 4px;border-radius:50%;border:4px solid #5b3a82;background:radial-gradient(circle at 35% 30%,#3a2f55,#1b1630);overflow:hidden}
+  .drum i{position:absolute;width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.75);animation:drumb var(--dur) ease-in-out infinite;animation-delay:var(--del);animation-play-state:paused}
+  .drum.spin i{animation-play-state:running}
+  @keyframes drumb{0%{transform:translate(0,0)}25%{transform:translate(var(--dx),var(--dy))}50%{transform:translate(calc(var(--dx)*-1),var(--dy))}75%{transform:translate(var(--dy),calc(var(--dx)*-1))}100%{transform:translate(0,0)}}
+  .slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .slot{background:#2b3142;border-radius:12px;padding:10px 2px 8px;border:2px solid transparent}
+  .slot.me{border-color:#4ade80;background:#1e3a2a}
+  .sl-b{width:60px;height:60px;border-radius:50%;margin:0 auto 6px;background:#3b4256;color:#9ca3af;font-size:24px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sl-b.next{animation:nxt 1s ease-in-out infinite;color:#fff}
+  @keyframes nxt{50%{transform:scale(1.1);background:#5b3a82}}
+  .sl-b.on{color:#fff;box-shadow:0 0 0 3px #fff inset}
+  .sl-b.p0{background:#e29a10}.sl-b.p1{background:#8d97a8}.sl-b.p2{background:#b4672a}
+  .sl-b.pop{animation:pop .7s ease-out}
+  @keyframes pop{0%{transform:scale(.2);opacity:0}60%{transform:scale(1.3);opacity:1}100%{transform:scale(1)}}
+  .sl-p{font-size:12px;font-weight:700}
+  .sl-z{font-size:12px;color:#fbbf24;font-weight:700;margin-top:2px}
+  .sl-w{font-size:12px;margin-top:4px;word-break:break-word;min-height:15px}
+  .sl-w small{display:block;color:#9ca3af;font-size:10px}
+  .stg-win{margin-top:12px;background:#14532d;color:#d1fae5;border-radius:12px;padding:10px;font-weight:700;font-size:14px;line-height:1.4}
+  .stg-win.no{background:#2b3142;color:#cbd5e1;font-weight:600}
+  #ngLive .fair{margin-bottom:10px}
+  #ngLive .fair p{margin-top:8px}
+  #ngLast{padding:10px 12px;margin-top:12px;cursor:pointer;font-size:12px;color:var(--title);line-height:1.6}
+  #ngLast b{font-size:13px}
+  /* number game: history + game detail */
+  .hs-kind{display:grid;grid-template-columns:1fr 1fr;background:#bb9fd3;border-radius:14px;padding:4px;margin-bottom:10px}
+  .hs-kind span{text-align:center;padding:10px 0;border-radius:11px;font-weight:600;color:#fff;cursor:pointer}
+  .hs-kind span.on{background:#fff;color:#a883c6}
+  .ng-chips{display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
+  .ng-chips span{padding:8px 12px;border-radius:12px;background:#bb9fd3;font-weight:600;font-size:13px;cursor:pointer}
+  .ng-chips span.on{background:#fff;color:#a883c6}
+  .ng-more{background:#7d6a92;height:38px;margin-bottom:10px}
+  #ngd{position:fixed;inset:0;background:#ab87c8;z-index:8;overflow-y:auto;padding:12px 14px 34px;color:#fff;max-width:520px;margin:0 auto}
+  #ngd .back{color:#fff}
+  #ngd h2{text-align:center;margin:8px 0 4px;font-size:21px}
+  .ngd-sub{text-align:center;font-size:12px;color:#f1e7fa;margin-bottom:12px;line-height:1.5}
+  .ngboard{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin:12px 0 6px}
+  .nb{height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:rgba(255,255,255,.14);color:#e6d8f2}
+  .nb.sold{background:#fff;color:#7b0a82}
+  .nb.g0{background:#e29a10;color:#fff}.nb.g1{background:#8d97a8;color:#fff}.nb.g2{background:#b4672a;color:#fff}
+  .nb.me{box-shadow:0 0 0 2px #22c55e}
+  .ngleg{font-size:11px;color:#f1e7fa;text-align:center;margin-bottom:14px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -247,12 +295,16 @@
 
   <div id="tab-history" hidden>
     <div class="hs">
-      <div class="hs-top"><span>Bingo History</span><button id="hsRef">↻</button></div>
-      <div class="hs-seg">
+      <div class="hs-top"><span>History</span><button id="hsRef">↻</button></div>
+      <div class="hs-kind" id="hsKind" hidden>
+        <span class="on" data-k="bingo">🎱 Bingo</span>
+        <span data-k="ng">🎟 Number Game</span>
+      </div>
+      <div class="hs-seg" id="hsScope">
         <span class="on" data-s="recent">Recent Games</span>
         <span data-s="mine">My Games</span>
       </div>
-      <div class="hs-chips">
+      <div class="hs-chips" id="hsBets">
         <span class="on" data-b="10">10 Birr</span>
         <span data-b="20">20 Birr</span>
         <span data-b="50">50 Birr</span>
@@ -260,6 +312,10 @@
       </div>
       <input class="hs-search" id="hsQ" type="search" placeholder="🔍  Search by game number...">
       <div id="hsList"></div>
+      <div id="ngHistory" hidden>
+        <div class="ng-chips" id="ngChips"></div>
+        <div id="ngHsList"></div>
+      </div>
     </div>
   </div>
 
@@ -315,6 +371,31 @@
   <div class="gdate" id="gdDate"></div>
 </div>
 
+<!-- ============ NUMBER GAME DETAIL (from History) ============ -->
+<div id="ngd" hidden>
+  <button class="back" id="ngdBack">← Back</button>
+  <h2 id="ngdTitle"></h2>
+  <div class="ngd-sub" id="ngdSub"></div>
+  <div id="ngdStage"></div>
+  <button class="rf" id="ngdReplay" style="margin-bottom:12px">▶ Replay the draw</button>
+  <div class="ngd-sub" id="ngdMine"></div>
+  <div class="ngboard" id="ngdBoard"></div>
+  <div class="ngleg">⚪ sold · 🥇🥈🥉 winners · green outline = your numbers</div>
+  <div class="fair">
+    <h3>GAME FAIRNESS</h3>
+    <div class="fl"><span>Secret Key:</span><button class="cp" data-c="ngdSecret">Copy</button></div>
+    <div class="fb" id="ngdSecret"></div>
+    <div class="fl"><span>Game Hash:</span><button class="cp" data-c="ngdHash">Copy</button></div>
+    <div class="fb" id="ngdHash"></div>
+    <p><b style="color:#fff">How to verify:</b><br>
+       Compute the SHA-256 hash of the Verification String below using any online SHA-256 tool.
+       The result will exactly match the Game Hash. The hash was published before the countdown, so the winners could not be changed.</p>
+    <div class="fl"><span>Verification String:</span><button class="cp" data-c="ngdVer">Copy</button></div>
+    <div class="fb v" id="ngdVer"></div>
+  </div>
+  <div class="gdate" id="ngdDate"></div>
+</div>
+
 <!-- ============ PICK CARTELA ============ -->
 <div id="pick" hidden>
   <button class="back" id="backBtn">← Back</button>
@@ -334,7 +415,7 @@
 <div id="ng" hidden>
   <button class="back" id="ngBack">← Back</button>
   <h1>🎟 Number Game · <span id="ngTitle"></span></h1>
-  <div class="stats">
+  <div class="stats" id="ngStats">
     <div class="stat"><small>Sold</small><b id="ngSold">0</b></div>
     <div class="stat"><small>Wallet</small><b id="ngWallet">0</b></div>
     <div class="stat"><small>Mine</small><b id="ngMineN">0</b></div>
@@ -344,6 +425,12 @@
   <div class="ngprize" id="ngPrizes"></div>
   <div class="pgrid" id="ngGrid"></div>
   <div class="panel" id="ngMine" hidden><h3>🎟 My numbers</h3><div id="ngMineList"></div></div>
+  <div class="panel" id="ngLast" hidden></div>
+  <div id="ngLive" hidden>
+    <div id="ngStage"></div>
+    <div id="ngLiveInfo"></div>
+    <button class="winb" id="ngNext" hidden>🎟 Play the next game</button>
+  </div>
 </div>
 
 <div id="ngModal" hidden>
@@ -449,7 +536,7 @@ let R = 0;                                   // room (bet) the player is looking
 let leftKey = "";                            // round the player walked out of (stays out of the game screen)
 let S = null, screen = "lobby", pv = 0, lastRound = "", shownRound = "", errShown = false, lastErr = "";
 let P = null, pfTab = "ov";                  // profile data + selected profile tab
-const H = { scope:"recent", bet:10, q:"" };  // history filters
+const H = { scope:"recent", bet:10, q:"", kind:"bingo" };  // history filters
 
 const toast = m => { const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); };
 const initData = () => (tg && tg.initData) || "";
@@ -586,6 +673,7 @@ function drawHistory(list){
   }).join("");
 }
 async function loadHistory(){
+  if(H.kind==="ng") return loadNgHistory();
   try{
     const r = await get(`/history?scope=${H.scope}&bet=${H.bet}&q=${encodeURIComponent(H.q)}`);
     drawHistory(r.list||[]);
@@ -807,7 +895,7 @@ document.querySelectorAll(".hs-chips span").forEach(s=>s.onclick=()=>{
   loadHistory();
 });
 let hsT=null;
-$("hsQ").oninput=()=>{ H.q=$("hsQ").value; clearTimeout(hsT); hsT=setTimeout(loadHistory,300); };
+$("hsQ").oninput=()=>{ H.q=$("hsQ").value; if(H.kind==="ng"){ drawNgHistory(); return; } clearTimeout(hsT); hsT=setTimeout(loadHistory,300); };
 $("hsRef").onclick=loadHistory;
 $("hsList").onclick=e=>{ const it=e.target.closest(".hs-item"); if(it) openGame(+it.dataset.id); };
 $("gdBack").onclick=()=>$("gd").hidden=true;
@@ -967,7 +1055,8 @@ function playNew(){
 /* ---------- Number Game (stage 4, part 1: lobby entry + number picker) ---------- */
 /* The server decides who may see it: while the game is OFF only the admin gets an
    answer, everybody else gets "closed" and never sees the section at all. */
-const NG = { lobby:50, s:null, all:{}, avail:false, seq:0, beat:0, pend:null, buying:false, pick:0 };
+const NG = { lobby:50, s:null, all:{}, avail:false, seq:0, beat:0, pend:null, buying:false, pick:0,
+             watch:null, mode:"pick", stage:null, stageRound:0, force:0, gd:null, rp:null, rpT:null };
 const ngKey = () => {
   try{ const a=new Uint8Array(16); crypto.getRandomValues(a); return Array.from(a,b=>b.toString(16).padStart(2,"0")).join(""); }
   catch(e){ return (Date.now().toString(36)+Math.random().toString(36).slice(2)+"abcdefgh").slice(0,32); }
@@ -999,6 +1088,7 @@ async function ngSync(){
 function ngRender(){
   const s = NG.s; if(!s) return;
   $("ngBox").hidden = !NG.avail;
+  $("hsKind").hidden = !NG.avail;
   $("ngRooms").innerHTML = s.lobbies.map(l=>{
     const a = NG.all[l.price] || (l.price===s.lobby ? s : null);
     const top = a ? a.prize_full[0] : "";
@@ -1007,40 +1097,159 @@ function ngRender(){
            `<div class="gl">${ngGame(l)}${l.mine?" · you "+l.mine:""}</div></div>`+
            `<div class="w">${top?"🥇 "+top:""}</div>`+
            `<div class="s${open?"":" t"}">${open ? l.sold+"/"+s.count : "starting"}</div>`+
-           `<button class="j" data-l="${l.price}">${open?"Join":"View"}</button></div>`;
+           `<button class="j" data-l="${l.price}">${open?"Join":"Watch"}</button></div>`;
   }).join("");
   if(screen==="ng" && s.lobby===NG.lobby) ngDraw();
 }
 
+const PL = ["gold","silver","bronze"], PLI = ["🥇","🥈","🥉"], PLN = ["Gold","Silver","Bronze"];
+
 function ngDraw(){
   const s = NG.s, open = s.status==="open";
   const mineSet = new Set(s.mine.map(m=>m.num));
+  const live = !open && !!s.draw;
+  let w = NG.watch;
+  if(live){
+    if(!w || w.round!==s.draw.round) w = NG.watch = { round:s.draw.round, lobby:s.lobby, off:null, closed:false, mine:[], view:null };
+    w.view = s.draw; w.mine = s.mine.slice();
+    const est = s.draw.server_now*1000 + 500 - Date.now();     // server clock vs this phone's clock
+    if(w.off===null || Math.abs(est-w.off)>1500) w.off = est;
+  } else if(w && w.lobby===s.lobby && w.round!==s.round && s.last && s.last.round===w.round){
+    w.view = s.last;                                           // the finished game, with all 3 winners
+  }
+  const after = !live && !!w && w.lobby===s.lobby && w.round!==s.round && !w.closed;
+  NG.mode = live ? "live" : after ? "after" : "pick";
+  const pick = NG.mode==="pick";
+  ["ngMsg","ngPrizes","ngGrid"].forEach(i=>{ $(i).hidden = !pick; });
+  $("ngStats").hidden = !pick;
+  $("ngMine").hidden = !pick || !s.mine.length;
+  $("ngLive").hidden = pick;
+  $("ngNext").hidden = NG.mode!=="after";
+  if(!pick){ ngLiveDraw(); $("ngLast").hidden = true; return; }
+
   $("ngTitle").textContent = s.lobby+" birr · "+ngGame(s);
   $("ngSold").textContent = s.sold+"/"+s.count;
   $("ngWallet").textContent = s.cash;
   $("ngMineN").textContent = s.mine.length+"/"+s.max;
   $("ngPrice").textContent = s.lobby;
-  let msg;
-  if(!open){
-    const d = s.draw;
-    msg = d && d.phase==="countdown" ? "🔒 Game started · draw in "+d.seconds_left+"s"
-        : d ? "🎰 Drawing the winners…" : "🔒 This game is closed";
-  } else if(s.mine.length>=s.max) msg = "✅ You own "+s.max+"/"+s.max+" numbers · good luck!";
-  else msg = s.mine.length ? "Choose another number ("+s.mine.length+"/"+s.max+")" : "Choose your number";
-  $("ngMsg").textContent = msg;
+  $("ngMsg").textContent = s.mine.length>=s.max ? "✅ You own "+s.max+"/"+s.max+" numbers · good luck!"
+                         : s.mine.length ? "Choose another number ("+s.mine.length+"/"+s.max+")" : "Choose your number";
   const [g,sv,b] = s.per_number.map(x=>x*s.sold);
   $("ngPrizes").innerHTML =
     `<div><small>FULL GAME (100 sold)</small>🥇 ${s.prize_full[0]} · 🥈 ${s.prize_full[1]} · 🥉 ${s.prize_full[2]}</div>`+
     `<div><small>IF IT STARTS NOW</small>🥇 ${g} · 🥈 ${sv} · 🥉 ${b}</div>`;
   let h = "";
   for(let n=1;n<=s.count;n++){
-    const c = mineSet.has(n) ? " mine" : (s.taken.includes(n) || !open) ? " taken" : "";
+    const c = mineSet.has(n) ? " mine" : s.taken.includes(n) ? " taken" : "";
     h += `<div class="num${c}" data-n="${n}">${n}</div>`;
   }
   $("ngGrid").innerHTML = h;
-  $("ngMine").hidden = !s.mine.length;
   $("ngMineList").innerHTML = s.mine.map(m=>`<span>#${m.num} · ${esc(m.name)}</span>`).join("");
+  const L = s.last;
+  $("ngLast").hidden = !(L && L.game && L.winners && L.winners.length);
+  if(!$("ngLast").hidden){
+    $("ngLast").dataset.g = L.game;
+    $("ngLast").innerHTML = `<b>Last game · Game ${L.game}</b> <span style="float:right">see all ›</span><br>`+
+      L.winners.map((x,i)=>`${PLI[i]} #${x.num} ${esc(x.name)} · ${x.prize} birr`).join("<br>");
+  }
 }
+
+/* ----- the draw stage: countdown -> mixing -> reveals -> results. One component, used live and for replays ----- */
+function makeStage(root){
+  const cols = ["var(--cB)","var(--cI)","var(--cN)","var(--cG)","var(--cO)"];
+  let drum = "";
+  for(let i=0;i<14;i++){
+    const dx = 18+Math.random()*30|0, dy = 18+Math.random()*30|0;
+    drum += `<i style="background:${cols[i%5]};--dx:${dx}px;--dy:${dy}px;--dur:${(1.1+Math.random()*1.2).toFixed(2)}s;`+
+            `--del:-${(Math.random()*2).toFixed(2)}s;left:${8+(i*7)%72}%;top:${8+(i*11)%72}%"></i>`;
+  }
+  root.innerHTML = `<div class="stg"><div class="stg-t"></div><div class="stg-c"></div>`+
+    `<div class="drum">${drum}</div><div class="stg-n"></div><div class="slots">`+
+    [0,1,2].map(i=>`<div class="slot"><div class="sl-b">?</div><div class="sl-p">${PLI[i]} ${PLN[i]}</div>`+
+                   `<div class="sl-z"></div><div class="sl-w"></div></div>`).join("")+
+    `</div><div class="stg-win" hidden></div></div>`;
+  const q = c => root.querySelector(c);
+  const slots = [...root.querySelectorAll(".slot")];
+  const st2 = { shown:[false,false,false], onReveal:null };
+  st2.update = (tl, now, quiet)=>{
+    const first = Math.min(...tl.reveal), last = Math.max(...tl.reveal);
+    const phase = now<tl.closeAt ? "count" : now<first ? "mix" : now>=last ? "done" : "reveal";
+    q(".stg-t").textContent = phase==="count" ? "⏱ ጨዋታው ይጀምራል · Game starts in" : phase==="mix" ? "🎰 Mixing the balls…"
+                            : phase==="reveal" ? "🎉 Revealing the winners" : "🏆 Results";
+    q(".stg-c").textContent = phase==="count" ? Math.max(0, Math.ceil((tl.closeAt-now)/1000)) : "";
+    q(".drum").classList.toggle("spin", phase==="mix" || phase==="reveal");
+    let next = -1;
+    for(let i=0;i<3;i++) if(now<tl.reveal[i] && (next<0 || tl.reveal[i]<tl.reveal[next])) next = i;
+    q(".stg-n").textContent = phase==="count" ? tl.sold+" numbers in the game · winners are already locked 🔒"
+      : next>=0 ? "Next: "+PLI[next]+" "+PLN[next]+" in "+Math.max(0, Math.ceil((tl.reveal[next]-now)/1000))+"s" : "";
+    const mine = new Set(tl.mine), won = [];
+    for(let i=0;i<3;i++){
+      const el = slots[i], b = el.querySelector(".sl-b"), w = tl.winners[i];
+      const revealed = now>=tl.reveal[i];
+      el.querySelector(".sl-z").textContent = tl.prizes[i]+" birr";
+      if(revealed && w){
+        b.textContent = w.num; b.className = "sl-b on p"+i;
+        el.querySelector(".sl-w").innerHTML = esc(w.name)+(w.player?`<small>${esc(w.player)}</small>`:"");
+        const me = mine.has(w.num);
+        el.classList.toggle("me", me);
+        if(me) won.push({i, w});
+        if(!st2.shown[i]){
+          st2.shown[i] = true;
+          if(!quiet){ void b.offsetWidth; b.classList.add("pop"); if(st2.onReveal) st2.onReveal(i, w, me); }
+        }
+      } else if(revealed){ b.textContent = "…"; b.className = "sl-b next"; }
+      else { b.textContent = "?"; b.className = "sl-b"+(i===next && phase!=="count" ? " next" : ""); el.querySelector(".sl-w").textContent = ""; el.classList.remove("me"); }
+    }
+    const wb = q(".stg-win");
+    if(won.length){
+      wb.hidden = false; wb.className = "stg-win";
+      wb.innerHTML = "🎉 እንኳን ደስ አለዎ! Congratulations!<br>"+won.map(x=>`${PLI[x.i]} #${x.w.num} · ${x.w.prize} birr`).join("<br>")+
+                     "<br><small>The prize is added to your wallet when the game finishes.</small>";
+    } else if(phase==="done" && mine.size){
+      wb.hidden = false; wb.className = "stg-win no"; wb.textContent = "Not this time. Better luck in the next game! 🍀";
+    } else wb.hidden = true;
+  };
+  return st2;
+}
+
+function ngLiveDraw(){
+  const w = NG.watch, v = w.view;
+  if(!NG.stage || NG.stageRound!==w.round){
+    NG.stage = makeStage($("ngStage")); NG.stageRound = w.round;
+    NG.stage.onReveal = (i, x, me)=>{
+      if(me){ try{ tg.HapticFeedback.notificationOccurred("success"); }catch(e){} toast("🎉 You won "+x.prize+" birr!"); }
+    };
+  }
+  $("ngTitle").textContent = v.lobby+" birr · "+ngGame(v);
+  const key = v.hash+(v.secret?"1":"0");
+  if($("ngLiveInfo").dataset.k!==key){
+    $("ngLiveInfo").dataset.k = key;
+    $("ngLiveInfo").innerHTML = `<div class="fair"><h3>🔐 FAIR DRAW</h3>`+
+      `<div class="ngd-sub" style="margin:4px 0 0">${v.sold} numbers · prize pool ${v.prize_total} birr${v.early?" · ⚡ early start":""}<br>`+
+      `The winners were drawn and locked before the countdown. This hash proves it.</div>`+
+      `<div class="fl"><span>Game Hash:</span><button class="cp" data-c="ngHash">Copy</button></div><div class="fb" id="ngHash">${esc(v.hash)}</div>`+
+      (v.secret ? `<div class="fl"><span>Secret Key:</span><button class="cp" data-c="ngSecret">Copy</button></div><div class="fb" id="ngSecret">${esc(v.secret)}</div>`+
+                  `<div class="fl"><span>Verification String:</span><button class="cp" data-c="ngVer">Copy</button></div><div class="fb v" id="ngVer">${esc(v.verify)}</div>`+
+                  `<p>SHA-256 of the Verification String = the Game Hash.</p>`
+                : `<p>The secret key is shown here after the game finishes.</p>`)+
+      `</div>`;
+  }
+  stageTick();
+}
+
+function stageTick(){
+  const w = NG.watch;
+  if(screen!=="ng" || NG.mode==="pick" || !w || !w.view || !NG.stage) return;
+  const v = w.view, off = w.off||0, L = t=>t*1000-off, now = Date.now();
+  const tl = { closeAt:L(v.draw_at), reveal:v.reveal_at.map(L), settleAt:L(v.settle_at), sold:v.sold, prizes:v.prizes,
+               winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:w.mine.map(m=>m.num) };
+  NG.stage.update(tl, now, false);
+  if(NG.mode==="live"){                                  // a reveal time passed but the server answer has not arrived yet: ask now
+    const missing = tl.winners.some((x,i)=>!x && now>=tl.reveal[i]);
+    if((missing || now>=tl.settleAt) && now-NG.force>900){ NG.force = now; ngSync(); }
+  }
+}
+setInterval(stageTick, 250);
 
 function ngOpenBuy(n){
   const s = NG.s; if(!s) return;
@@ -1095,7 +1304,10 @@ $("ngRooms").onclick = e=>{
   NG.lobby = +b.dataset.l; NG.s = NG.all[NG.lobby] || NG.s;
   show("ng"); if(NG.s && NG.s.lobby===NG.lobby) ngDraw(); ngSync();
 };
-$("ngBack").onclick = ()=>show("lobby");
+$("ngBack").onclick = ()=>{ if(NG.watch && NG.mode==="after") NG.watch.closed = true; show("lobby"); };
+$("ngNext").onclick = ()=>{ if(NG.watch) NG.watch.closed = true; ngSync(); if(NG.s) ngDraw(); };
+$("ngLiveInfo").onclick = e=>{ const b=e.target.closest(".cp"); if(b) copyText($(b.dataset.c).textContent); };
+$("ngLast").onclick = ()=>{ const g=+$("ngLast").dataset.g; if(g) openNgGame(NG.lobby, g); };
 $("ngGrid").onclick = e=>{ const el=e.target.closest(".num"); if(el) ngOpenBuy(+el.dataset.n); };
 $("ngmCancel").onclick = ()=>{ $("ngModal").hidden = true; };
 $("ngmOk").onclick = ngBuy;
@@ -1106,6 +1318,97 @@ setInterval(()=>{                                      // every 2 s on the numbe
   if(screen==="ng" || (screen==="lobby" && !$("tab-game").hidden && NG.beat%2===0)) ngSync();
 }, 2000);
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) ngSync(); });
+
+/* ---------- Number Game: history list + game detail with replay ---------- */
+const NH = { lobby:0, list:[], more:false, next:null, tok:0 };
+document.querySelectorAll(".hs-kind span").forEach(x=>x.onclick=()=>{
+  H.kind = x.dataset.k;
+  document.querySelectorAll(".hs-kind span").forEach(y=>y.classList.toggle("on", y===x));
+  const ng = H.kind==="ng";
+  $("hsScope").hidden = ng; $("hsBets").hidden = ng; $("hsList").hidden = ng; $("ngHistory").hidden = !ng;
+  $("hsQ").placeholder = ng ? "🔍  Search by game number..." : "🔍  Search by game number...";
+  loadHistory();
+});
+function drawNgChips(){
+  const prices = (NG.s && NG.s.lobbies ? NG.s.lobbies.map(l=>l.price) : [50]);
+  $("ngChips").innerHTML = prices.map(p=>`<span data-l="${p}" class="${p===NH.lobby?"on":""}">${p} Birr</span>`).join("");
+}
+async function loadNgHistory(append){
+  if(!NG.avail){ $("ngHsList").innerHTML = `<div class="hs-empty">Number Game is not open yet</div>`; return; }
+  if(!NH.lobby) NH.lobby = NG.s.lobbies[0].price;
+  drawNgChips();
+  const tok = ++NH.tok, before = append ? NH.next : null;
+  try{
+    const r = await get(`/ng/results?lobby=${NH.lobby}&limit=20`+(before?`&before=${before}`:""));
+    if(tok!==NH.tok) return;
+    if(r.error){ toast(r.error==="busy" ? "Busy, try again in a moment" : "Could not load the games"); return; }
+    NH.list = append ? NH.list.concat(r.results) : r.results;
+    NH.more = r.more; NH.next = r.next_before;
+    drawNgHistory();
+  }catch(e){ toast("Can't reach server"); }
+}
+function drawNgHistory(){
+  const q = $("hsQ").value.trim();
+  const list = q ? NH.list.filter(g=>String(g.game).includes(q.replace(/\D/g,"")||"\u0000")) : NH.list;
+  let h = list.map(g=>
+    `<div class="hs-item" data-g="${g.game}"><div class="tr">🎟</div><div class="mid"><b>Game ${g.game}</b>`+
+    `<small>${g.sold}/100 sold · ${g.lobby} birr${g.early?" · ⚡ early":""}</small>`+
+    g.winners.map((x,i)=>`<small>${PLI[i]} #${x.num} ${esc(x.name)} · ${x.prize}</small>`).join("")+`</div>`+
+    `<div class="rt">📅 ${dDate(g.settled_at||g.frozen_at)}<br>🕒 ${dTime(g.settled_at||g.frozen_at)}<br>`+
+    `<span class="hs-pill">🥇 ${g.prizes[0]}</span></div></div>`).join("");
+  if(!list.length) h = `<div class="hs-empty">${q ? "No game with that number loaded" : "No finished games yet"}</div>`;
+  if(q && /^\d+$/.test(q) && !list.some(g=>String(g.game)===q)) h += `<button class="ng-more" data-open="${+q}">Open Game ${+q}</button>`;
+  if(NH.more && !q) h += `<button class="ng-more" id="ngMoreBtn">Load older games</button>`;
+  $("ngHsList").innerHTML = h;
+}
+$("ngChips").onclick = e=>{ const c=e.target.closest("span"); if(!c) return; NH.lobby=+c.dataset.l; NH.list=[]; NH.next=null; loadNgHistory(); };
+$("ngHsList").onclick = e=>{
+  const it = e.target.closest(".hs-item"); if(it) return openNgGame(NH.lobby, +it.dataset.g);
+  const o = e.target.closest("[data-open]"); if(o) return openNgGame(NH.lobby, +o.dataset.open);
+  if(e.target.closest("#ngMoreBtn")) loadNgHistory(true);
+};
+
+async function openNgGame(lobby, game){
+  let d;
+  try{ d = await get(`/ng/game?lobby=${lobby}&game=${game}`); }catch(e){ return toast("Can't reach server"); }
+  if(!d || !d.ok) return toast(d && d.error==="notfound" ? "Game not found" : "Could not load the game");
+  NG.gd = d.game;
+  const v = NG.gd, won = new Map(v.winners.map((w,i)=>[w.num,i]));
+  $("ngdTitle").textContent = "🎟 "+v.lobby+" ETB · Game "+v.game;
+  $("ngdSub").innerHTML = `Sold ${v.sold}/100 · sales ${v.total_sales} ETB · prizes ${v.prize_total} ETB${v.early?" · ⚡ early start":""}`;
+  $("ngdMine").textContent = v.mine.length ? "Your numbers: "+v.mine.map(m=>"#"+m.num+" "+m.name).join(" · ") : "You had no numbers in this game.";
+  const mineSet = new Set(v.mine.map(m=>m.num)), sold = new Set(v.board);
+  let b = "";
+  for(let n=1;n<=100;n++){
+    const c = (won.has(n)?" g"+won.get(n):sold.has(n)?" sold":"")+(mineSet.has(n)?" me":"");
+    b += `<div class="nb${c}">${n}</div>`;
+  }
+  $("ngdBoard").innerHTML = b;
+  $("ngdSecret").textContent = v.secret||""; $("ngdHash").textContent = v.hash||""; $("ngdVer").textContent = v.verify||"";
+  $("ngdDate").textContent = "📅 "+dDate(v.settled_at||v.frozen_at)+"   🕒 "+dTime(v.settled_at||v.frozen_at);
+  ngdStage(false);
+  $("ngd").hidden = false; $("ngd").scrollTop = 0;
+}
+function ngdStage(play){
+  const v = NG.gd; if(!v) return;
+  clearInterval(NG.rpT);
+  const rp = v.replay, start = play ? Date.now() : Date.now()-1e9, reveal = [0,0,0];
+  rp.order.forEach((idx,k)=>{ reveal[idx] = start + (rp.intro + k*rp.gap)*1000; });
+  const tl = { closeAt:start, reveal, settleAt:start+(rp.intro+3*rp.gap)*1000, sold:v.sold, prizes:v.prizes,
+               winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:v.mine.map(m=>m.num) };
+  const stage = makeStage($("ngdStage"));
+  stage.update(tl, Date.now(), !play);
+  if(play){
+    $("ngdReplay").disabled = true;
+    NG.rpT = setInterval(()=>{
+      const n = Date.now(); stage.update(tl, n, false);
+      if(n>tl.settleAt){ clearInterval(NG.rpT); $("ngdReplay").disabled = false; $("ngdReplay").textContent = "▶ Replay again"; }
+    }, 250);
+  } else { $("ngdReplay").disabled = false; $("ngdReplay").textContent = "▶ Replay the draw"; }
+}
+$("ngdReplay").onclick = ()=>ngdStage(true);
+$("ngdBack").onclick = ()=>{ clearInterval(NG.rpT); $("ngd").hidden = true; };
+$("ngd").onclick = e=>{ const b=e.target.closest(".cp"); if(b) copyText($(b.dataset.c).textContent); };
 
 /* ---------- start ---------- */
 ngSync();
