@@ -1971,6 +1971,8 @@ async def cmd_admin(m: Message):
         "/lastsms\nLast SMS forwarded from your phone\n\n"
         "/ngstatus\nNumber Game: both lobbies (test)\n\n"
         "/ngbuy <lobby> <number> <name>\nNumber Game: test purchase with your own wallet\n\n"
+        "/ngpoll <lobby>\nNumber Game: ask the players (anonymous) if the game should start now\n\n"
+        "/ngstart <lobby>\nNumber Game: start the game now (50+ numbers sold)\n\n"
         "/ngresult <lobby>\nNumber Game: latest finished round + proof hash\n\n"
         "/ngtestfill <lobby> <how many>\nNumber Game TEST: fill with fake players (no money)\n\n"
         "/ngtestfreeze <lobby>\nNumber Game TEST: early start of a fake round")
@@ -2955,6 +2957,7 @@ async def main():
             enqueue=_enqueue, save_counter=_save_counter, verify=verify, touch=touch,
             phones=phones, banned=banned, admin_id=ADMIN_ID, ensure=ensure, names=names,
             send=lambda uid, text, **kw: BOT.send_message(uid, text, **kw),
+            edit=lambda uid, mid, text, **kw: BOT.edit_message_text(text, chat_id=uid, message_id=mid, **kw),
             db_mark=lambda: _enq_n[0], db_done=lambda: _done_n[0], pool=pool)
     await load_state()
     async with pool.acquire() as c:
