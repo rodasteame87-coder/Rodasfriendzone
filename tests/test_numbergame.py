@@ -93,6 +93,7 @@ def make_env():
         ng.game_counter[p] = 0
     ng.start_notices.clear()
     ng.ENABLED = True
+    ng.MIN_EARLY_START = 50          # shipped value is 3 (testing); old tests check the rule with 50
     ng.D.pop("pool", None)
     ng._kb = lambda rows: rows            # no Telegram library in the tests: keep the plain rows
     ng.init(wallets=e.wallets, wagered=e.wagered, turnover_left=e.turnover_left, log=e.log,
@@ -101,7 +102,6 @@ def make_env():
             names=e.names, send=e.send, edit=e.edit, db_mark=e.mark, db_done=e.done)
     ng.history[50].clear()
     ng.history[100].clear()
-    ng.pending_notify.clear()
     ng.to_save.clear()
     ng.ensure_rounds()
     e.queue.clear()
@@ -588,22 +588,32 @@ class Stage2Base(unittest.TestCase):
 
 
 class Prizes(Stage2Base):
-    def test_full_round_prizes_are_your_numbers(self):
-        self.assertEqual(ng.prizes_for(50, 100), [3000, 500, 300])
+    def test_full_round_prizes_are_the_fixed_amounts(self):
+        self.assertEqual(ng.prizes_for(50, 100), [3000, 1000, 500])
         self.assertEqual(ng.prizes_for(100, 100), [7000, 1000, 500])
+        self.assertEqual(ng.prizes_for(5050, 50), [1500, 500, 250])
+        self.assertEqual(ng.prizes_for(10050, 50), [3000, 700, 300])
 
     def test_early_start_prizes_scale_with_numbers_sold(self):
-        self.assertEqual(ng.prizes_for(50, 50), [1500, 250, 150])
-        self.assertEqual(ng.prizes_for(50, 70), [2100, 350, 210])
+        self.assertEqual(ng.prizes_for(50, 50), [1500, 500, 250])
+        self.assertEqual(ng.prizes_for(50, 60), [1800, 600, 300])
+        self.assertEqual(ng.prizes_for(50, 3), [90, 30, 15])
         self.assertEqual(ng.prizes_for(100, 50), [3500, 500, 250])
         self.assertEqual(ng.prizes_for(100, 70), [4900, 700, 350])
 
+    def test_the_four_rooms(self):
+        self.assertEqual({k: (v["price"], v["size"], v["early"]) for k, v in ng.ROOMS.items()},
+                         {50: (50, 100, True), 100: (100, 100, True),
+                          5050: (50, 50, False), 10050: (100, 50, False)})
+        self.assertEqual(ng.room_name(5050), "በ 50ብር / 50 ቁጥሮች")
+        self.assertEqual(ng.room_name(100), "በ 100ብር / 100 ቁጥሮች")
+
     def test_always_whole_birr_and_always_below_sales(self):
-        for lobby in (50, 100):
-            for sold in range(50, 101):
+        for lobby in ng.PRICES:
+            for sold in range(3, ng.size_of(lobby) + 1):
                 pr = ng.prizes_for(lobby, sold)
                 self.assertTrue(all(isinstance(x, int) and x > 0 for x in pr))
-                self.assertLess(sum(pr), sold * lobby)          # the house never pays out more than it took in
+                self.assertLess(sum(pr), sold * ng.price_of(lobby))          # the house never pays out more than it took in
                 self.assertGreater(pr[0], pr[1])
                 self.assertGreater(pr[1], pr[2])
 
@@ -617,7 +627,7 @@ class Freeze(Stage2Base):
         self.assertEqual(len(set(d["winners"])), 3)
         self.assertTrue(all(1 <= w <= 100 for w in d["winners"]))
         self.assertEqual(r["close_at"], d["frozen_at"] + ng.COUNTDOWN_SECONDS)
-        self.assertEqual(d["prizes"], [3000, 500, 300])
+        self.assertEqual(d["prizes"], [3000, 1000, 500])
         self.assertEqual(d["sold"], 100)
         self.assertFalse(r["early"])
         self.e.fund(500, 1000)
@@ -671,7 +681,7 @@ class Freeze(Stage2Base):
         r = ng.rounds[50]
         self.assertEqual(r["status"], "countdown")
         self.assertTrue(r["early"])
-        self.assertEqual(r["draw"]["prizes"], [1500, 250, 150])
+        self.assertEqual(r["draw"]["prizes"], [1500, 500, 250])
         self.assertTrue(set(r["draw"]["winners"]) <= set(r["owners"]))   # only SOLD numbers can win
 
     def test_draw_uses_only_the_sold_numbers(self):
@@ -757,18 +767,18 @@ class Settlement(Stage2Base):
         t = ng.settle_time(r)
         self.assertIs(ng.settle_round(50, now=t), r)
         self.assertEqual(self.e.wallets[1], old[1] + 3000)
-        self.assertEqual(self.e.wallets[2], old[2] + 500)
-        self.assertEqual(self.e.wallets[3], old[3] + 300)
+        self.assertEqual(self.e.wallets[2], old[2] + 1000)
+        self.assertEqual(self.e.wallets[3], old[3] + 500)
         self.assertEqual(self.e.wallets[4], old[4])
         for _ in range(5):                                # retries / ticks / second ticker
             self.assertIsNone(ng.settle_round(50, now=t + 1))
             ng.tick(now=t + 2)
         self.assertEqual(self.e.wallets[1], old[1] + 3000)
-        self.assertEqual(self.e.wallets[2], old[2] + 500)
-        self.assertEqual(self.e.wallets[3], old[3] + 300)
+        self.assertEqual(self.e.wallets[2], old[2] + 1000)
+        self.assertEqual(self.e.wallets[3], old[3] + 500)
         self.assertEqual(sum(1 for q in self.e.queue if q[0].startswith("INSERT INTO ng_prizes")), 3)
         self.assertEqual([h[1:3] for h in self.e.history if h[1] == "win"],
-                         [("win", 3000), ("win", 500), ("win", 300)])
+                         [("win", 3000), ("win", 1000), ("win", 500)])
 
     def test_new_round_and_history(self):
         r = self.full_round()
@@ -785,7 +795,7 @@ class Settlement(Stage2Base):
         r = self.full_round(50, (1, 2, 3))                # all owned by player 1
         before = self.e.wallets[1]
         ng.settle_round(50, now=ng.settle_time(r))
-        self.assertEqual(self.e.wallets[1], before + 3800)
+        self.assertEqual(self.e.wallets[1], before + 4500)
 
     def test_100_lobby_full_round(self):
         r = self.full_round(100, (1, 6, 11))
@@ -800,8 +810,8 @@ class Settlement(Stage2Base):
         r = ng.rounds[50]
         ng.settle_round(50, now=ng.settle_time(r))
         self.assertEqual(self.e.wallets[1], 10000 - 250 + 2100)
-        self.assertEqual(self.e.wallets[2], 10000 - 250 + 350)
-        self.assertEqual(self.e.wallets[3], 10000 - 250 + 210)
+        self.assertEqual(self.e.wallets[2], 10000 - 250 + 700)
+        self.assertEqual(self.e.wallets[3], 10000 - 250 + 350)
 
     def test_credit_and_status_are_saved_together(self):
         r = self.full_round()
@@ -822,49 +832,50 @@ class Settlement(Stage2Base):
         before1 = self.e.wallets[1]
         ng.settle_round(50, now=ng.settle_time(r))
         self.assertEqual(self.e.wallets[1], before1)
-        self.assertEqual(self.e.wallets[2], 10000 - 250 + 500)
-        self.assertEqual(self.e.wallets[3], 10000 - 250 + 300)
+        self.assertEqual(self.e.wallets[2], 10000 - 250 + 1000)
+        self.assertEqual(self.e.wallets[3], 10000 - 250 + 500)
 
 
 class Announce(Stage2Base):
-    def test_waits_for_the_database_before_announcing(self):
+    def test_waits_for_the_database_and_sends_no_telegram_message(self):
         ng._rng = FixedRng([1, 6, 11])
         fill_round(self.e, 50)
         r = ng.rounds[50]
         ng.settle_round(50, now=ng.settle_time(r))
+        self.e.sent.clear()
         self.assertEqual(ng.result_view(r, now=ng.settle_time(r))["settlement"], "settling")
         asyncio.run(ng.after_settle())                     # database has NOT finished yet
-        self.assertEqual(self.e.sent, [])
         self.assertFalse(r["saved"])
         self.e.done_n = self.e.enq_n                       # now it has
         asyncio.run(ng.after_settle())
         self.assertTrue(r["saved"])
         self.assertEqual(ng.result_view(r, now=ng.settle_time(r))["settlement"], "paid")
-        self.assertEqual(sorted(u for u, _ in self.e.sent), sorted([ADMIN, 1, 2, 3]))
-        gold = next(t for u, t in self.e.sent if u == 1)
-        self.assertIn("3000 ETB", gold)
-        self.assertIn("🥇", gold)
-        n_sent = len(self.e.sent)
-        asyncio.run(ng.after_settle())                     # nothing is sent twice
-        self.assertEqual(len(self.e.sent), n_sent)
-        notified = [q for q in self.e.queue if q[0].startswith("UPDATE ng_prizes SET notified")]
-        self.assertEqual(len(notified), 3)
+        self.assertEqual(self.e.sent, [])                  # no summary to the admin, no prize message to winners
+        self.assertEqual(self.e.wallets[1], 10000 - 250 + 3000)   # but the prize IS in the wallet
+        self.assertEqual(self.e.wallets[2], 10000 - 250 + 1000)
+        self.assertEqual(self.e.wallets[3], 10000 - 250 + 500)
+        self.assertEqual([q for q in self.e.queue if q[0].startswith("UPDATE ng_prizes SET notified")], [])
+        prizes = [q[1] for q in self.e.queue if q[0].startswith("INSERT INTO ng_prizes")]
+        self.assertEqual({p[6] for p in prizes}, {1})      # saved as "nothing left to send"
 
-    def test_failed_message_does_not_stop_the_game(self):
-        ng._rng = FixedRng([1, 6, 11])
-        fill_round(self.e, 50)
+    def test_a_blocked_player_never_stops_the_game(self):
+        """The 60-second message may fail for one player; the rest still get it and the game goes on."""
+        fill_round(self.e, 50, count=60)
+        ng.admin_start(50)
+        calls = []
+
+        async def flaky(uid, text, **kw):
+            calls.append(uid)
+            if uid == 1:
+                raise RuntimeError("blocked")
+            return types.SimpleNamespace(message_id=1)
+        ng.D["send"] = flaky
+        with fast_sleep():
+            asyncio.run(ng.send_start_notices())
+        self.assertEqual(len(calls), 12)
         r = ng.rounds[50]
-        ng.settle_round(50, now=ng.settle_time(r))
-        self.e.done_n = self.e.enq_n
-
-        async def boom(uid, text):
-            raise RuntimeError("blocked")
-        ng.D["send"] = boom
-        asyncio.run(ng.after_settle())
-        self.assertTrue(r["saved"])
-        self.assertEqual(ng.pending_notify, [])
-        self.assertEqual(self.e.wallets[1], 10000 - 250 + 3000)
-
+        settle_now(50)
+        self.assertEqual(r["status"], "settled")
 
 class RestartStage2(Stage2Base):
     def counting_rows(self, status="countdown", winners=(1, 6, 11), close_at=1000):
@@ -925,17 +936,14 @@ class RestartStage2(Stage2Base):
         self.assertEqual(v["settlement"], "paid")
         self.assertEqual(v["secret"], "S" * 20)
 
-    def test_unsent_winner_messages_are_sent_after_restart(self):
+    def test_no_prize_message_after_a_restart(self):
         row, _, _ = self.counting_rows("settled")
         ng.rounds.clear()
         ng.history[50].clear()
-        un = [{"round_id": 9, "place": 1, "num": 1, "uid": 1, "amount": 3000, "lobby": 50,
-               "data": row["data"]}]
-        asyncio.run(ng.load_state(FakeConn([], [], settled=[row], unnotified=un, counter=9)))
+        asyncio.run(ng.load_state(FakeConn([], [], settled=[row], counter=9)))
+        self.e.sent.clear()
         asyncio.run(ng.after_settle())
-        self.assertEqual([u for u, _ in self.e.sent], [1])
-        self.assertIn("3000 ETB", self.e.sent[0][1])
-
+        self.assertEqual(self.e.sent, [])
 
 class TestMode(Stage2Base):
     def test_fake_round_runs_the_whole_cycle_without_money(self):
@@ -1001,9 +1009,9 @@ class ResultsApi(Stage2Base):
         res = asyncio.run(ng.handle_results({"initData": "u1", "lobby": "50"}))
         v = res["results"][0]
         self.assertEqual((v["round"], v["lobby"], v["sold"]), (r["id"], 50, 100))
-        self.assertEqual((v["total_sales"], v["prize_total"]), (5000, 3800))
+        self.assertEqual((v["total_sales"], v["prize_total"]), (5000, 4500))
         self.assertEqual([w["place"] for w in v["winners"]], ["gold", "silver", "bronze"])
-        self.assertEqual([w["prize"] for w in v["winners"]], [3000, 500, 300])
+        self.assertEqual([w["prize"] for w in v["winners"]], [3000, 1000, 500])
         self.assertEqual((v["settlement"], v["status"]), ("paid", "settled"))
         self.assertEqual(hashlib.sha256(v["verify"].encode()).hexdigest(), v["hash"])
         st = asyncio.run(ng.handle_state({"initData": "u1", "lobby": "50"}))
@@ -1036,8 +1044,8 @@ class FullCycleSql(Stage2Base):
         self.assertEqual(row[2:4], (0, 0))
         prizes = con.execute("SELECT place, num, uid, amount, status, notified FROM ng_prizes "
                              "WHERE round_id=? ORDER BY place", (r["id"],)).fetchall()
-        self.assertEqual(prizes, [(1, 1, 1, 3000, "paid", 1), (2, 6, 2, 500, "paid", 1),
-                                  (3, 11, 3, 300, "paid", 1)])
+        self.assertEqual(prizes, [(1, 1, 1, 3000, "paid", 1), (2, 6, 2, 1000, "paid", 1),
+                                  (3, 11, 3, 500, "paid", 1)])
         data = json.loads(con.execute("SELECT data FROM ng_rounds WHERE id=?", (r["id"],)).fetchone()[0])
         self.assertEqual(data["winners"], [1, 6, 11])
         with self.assertRaises(sqlite3.IntegrityError):            # a place can never be saved twice
@@ -1126,17 +1134,17 @@ class GameNumbers(Stage2Base):
         self.assertEqual(v["game"], 1)
         self.assertIn("Game 1", ng.summary_text(r))
         self.assertIn("Game 1", ng.result_text(r))
-        item = ng.pending_notify[0] if ng.pending_notify else None
         self.e.done_n = self.e.enq_n                         # the database has written everything
+        self.e.sent.clear()
         asyncio.run(ng.after_settle())
-        self.assertTrue(any("50 ETB · Game 1" in text for _, text in self.e.sent))
+        self.assertEqual(self.e.sent, [])                    # no result / prize messages any more
         st = ng.state_for(1, 50)
         self.assertEqual(st["game"], 2)
-        self.assertEqual({x["price"]: x["game"] for x in st["lobbies"]}, {50: 2, 100: 1})
-        self.assertIsNotNone(item)
+        self.assertEqual({x["key"]: x["game"] for x in st["lobbies"]},
+                         {50: 2, 100: 1, 5050: 1, 10050: 1})
 
     def test_status_text_shows_game(self):
-        self.assertIn("50 ETB · Game 1", ng.status_text())
+        self.assertIn("በ 50ብር / 100 ቁጥሮች · Game 1", ng.status_text())
 
 
 class PollRules(Stage2Base):
@@ -1300,8 +1308,8 @@ class PollRules(Stage2Base):
         text = ng.poll_player_text(ng.rounds[50])
         self.assertIn("60/100", text)
         self.assertIn("1800", text)          # 30 * 60
-        self.assertIn("300", text)           # 5 * 60
-        self.assertIn("180", text)           # 3 * 60
+        self.assertIn("600", text)           # 1000 * 60 / 100
+        self.assertIn("300", text)           # 500 * 60 / 100
 
     def test_no_await_inside_the_money_and_draw_steps(self):
         for fn in (ng.open_poll, ng.cast_vote, ng.admin_start, ng.freeze_round, ng.settle_round):
@@ -1327,7 +1335,7 @@ class AdminStart(Stage2Base):
         self.assertEqual(res["sold"], 60)
         self.assertGreaterEqual(r["close_at"], before + ng.COUNTDOWN_SECONDS)
         self.assertEqual(r["draw"]["winners"], [2, 7, 12])
-        self.assertEqual(r["draw"]["prizes"], [1800, 300, 180])     # scaled to 60 sold
+        self.assertEqual(r["draw"]["prizes"], [1800, 600, 300])     # scaled to 60 sold
         self.assertEqual(r["game_no"], 1)
 
     def test_cannot_start_twice_or_buy_afterwards(self):
@@ -1354,8 +1362,8 @@ class AdminStart(Stage2Base):
         ng.admin_start(50)
         settle_now(50)
         self.assertEqual(self.e.wallets[1], before[1] + 1800)       # number 1 -> player 1
-        self.assertEqual(self.e.wallets[2], before[2] + 300)        # number 6 -> player 2
-        self.assertEqual(self.e.wallets[3], before[3] + 180)        # number 11 -> player 3
+        self.assertEqual(self.e.wallets[2], before[2] + 600)        # number 6 -> player 2
+        self.assertEqual(self.e.wallets[3], before[3] + 300)        # number 11 -> player 3
         settle_now(50) if ng.rounds[50]["status"] == "countdown" else None
         self.assertEqual(self.e.wallets[1], before[1] + 1800)       # paid exactly once
 
@@ -1581,16 +1589,13 @@ class RestartStage3(Stage2Base):
         updates = [a for sql, a in self.e.queue if sql.startswith("UPDATE ng_rounds SET game_no")]
         self.assertEqual(sorted(a[0] for a in updates), [1, 2, 3])  # saved to the database too
 
-    def test_unsent_winner_message_names_the_game(self):
-        ng.pending_notify.clear()
+    def test_old_settled_games_do_not_message_anybody(self):
         draw = {"winners_info": [{"num": 5, "name": "Abe", "uid": 1}] * 3}
-        un = [{"round_id": 9, "place": 1, "num": 5, "uid": 1, "amount": 3000, "lobby": 50,
-               "game_no": 4, "data": json.dumps(draw)}]
         row = rrow(9, 50, "settled", close_at=1, data=draw, settled_at=2, game_no=4)
-        asyncio.run(ng.load_state(FakeConn([], [], settled=[row], unnotified=un, counter=9)))
+        asyncio.run(ng.load_state(FakeConn([], [], settled=[row], counter=9)))
+        self.e.sent.clear()
         asyncio.run(ng.after_settle())
-        self.assertTrue(any("Game 4" in t for _, t in self.e.sent))
-
+        self.assertEqual(self.e.sent, [])
 
 class FakePool:
     def __init__(self, conn, fail=False):
@@ -1663,7 +1668,7 @@ class PastGames(Stage2Base):
         self.assertEqual((g["game"], g["lobby"], g["sold"], g["status"]), (2, 50, 100, "settled"))
         self.assertEqual([w["place"] for w in g["winners"]], ["gold", "silver", "bronze"])
         self.assertEqual([w["num"] for w in g["winners"]], [2, 7, 12])
-        self.assertEqual([w["prize"] for w in g["winners"]], [3000, 500, 300])
+        self.assertEqual([w["prize"] for w in g["winners"]], [3000, 1000, 500])
         self.assertEqual(g["board"], list(range(1, 101)))                # the numbers that were sold
         self.assertEqual([m["num"] for m in g["mine"]], [6, 7, 8, 9, 10])    # player 2 owned 6..10
         self.assertEqual(g["replay"], {"intro": ng.DRAW_INTRO, "gap": ng.REVEAL_GAP,
@@ -2040,7 +2045,7 @@ class AdminForceStart(unittest.TestCase):
         self.assertTrue(res["ok"])
         r = ng.rounds[50]
         self.assertEqual(r["status"], "countdown")
-        self.assertEqual(r["draw"]["prizes"], [90, 15, 9])       # 3 sold: 30/5/3 per number
+        self.assertEqual(r["draw"]["prizes"], [90, 30, 15])       # 3 sold: 30/5/3 per number
 
     def test_force_needs_at_least_3(self):
         ng.rounds[50]["owners"].pop(9)
@@ -2065,6 +2070,94 @@ class AdminForceStart(unittest.TestCase):
     def test_state_tells_only_the_admin(self):
         self.assertTrue(ng.state_for(ADMIN, 50)["admin"])
         self.assertFalse(ng.state_for(1, 50)["admin"])
+
+
+# =====================  STAGE 4: four rooms  =====================
+class FourRooms(Stage2Base):
+    def test_shipped_early_start_minimum_is_3(self):
+        import importlib
+        fresh = importlib.reload(ng)               # what bot.py really gets
+        self.assertEqual(fresh.MIN_EARLY_START, 3)
+        make_env()                                  # put the test setup back
+
+    def test_100_number_rooms_start_early_with_3(self):
+        ng.MIN_EARLY_START = 3
+        for lobby in (50, 100):
+            self.e.fund(1, 10000)
+            for n in (1, 2, 3):
+                self.assertTrue(buy(1, lobby, n)["ok"])
+            res = ng.admin_start(lobby)
+            self.assertTrue(res["ok"], lobby)
+            self.assertEqual(ng.rounds[lobby]["status"], "countdown")
+
+    def test_50_number_rooms_never_start_early(self):
+        ng.MIN_EARLY_START = 3
+        for lobby in (5050, 10050):
+            self.e.fund(1, 10000)
+            for n in range(1, 40):
+                u = 100 + n // 5
+                self.e.fund(u, 10000)
+                self.assertTrue(buy(u, lobby, n)["ok"])
+            for call in (lambda: ng.admin_start(lobby), lambda: ng.admin_start(lobby, force=True),
+                         lambda: ng.freeze_round(lobby, early=True), lambda: ng.open_poll(lobby)):
+                res = call()
+                self.assertFalse(res["ok"], lobby)
+                self.assertIn("all 50", res["error"])
+            self.assertEqual(ng.rounds[lobby]["status"], "open")
+
+    def test_50_number_room_is_numbered_1_to_50_and_freezes_when_full(self):
+        self.e.fund(1, 100000)
+        self.assertEqual(buy(1, 5050, 51)["code"], "num")
+        self.assertEqual(buy(1, 5050, 0)["code"], "num")
+        for n in range(1, 51):
+            u = 200 + (n - 1) // 5
+            if u not in self.e.wallets:
+                self.e.fund(u, 10000)
+            r = buy(u, 5050, n)
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["full"], n == 50)
+        r = ng.rounds[5050]
+        self.assertEqual(r["status"], "countdown")
+        self.assertEqual(r["draw"]["prizes"], [1500, 500, 250])
+        self.assertTrue(set(r["draw"]["winners"]) <= set(range(1, 51)))
+        self.assertEqual(self.e.wallets[200], 10000 - 250)          # 5 x 50 birr
+        self.assertEqual(ng.rounds[50]["status"], "open")           # other rooms not touched
+
+    def test_100_birr_50_number_room_pays_its_prizes(self):
+        ng._rng = FixedRng([1, 6, 11])
+        for u in range(1, 11):
+            self.e.fund(u, 10000)
+        for n in range(1, 51):
+            self.assertTrue(buy(1 + (n - 1) // 5, 10050, n)["ok"])
+        self.assertEqual(self.e.wallets[1], 10000 - 500)            # 5 x 100 birr
+        r = ng.rounds[10050]
+        ng.settle_round(10050, now=ng.settle_time(r))
+        self.assertEqual([self.e.wallets[u] for u in (1, 2, 3)],
+                         [10000 - 500 + 3000, 10000 - 500 + 700, 10000 - 500 + 300])
+        self.assertEqual(ng.rounds[10050]["game_no"], 2)            # each room counts its own games
+        self.assertEqual(ng.rounds[5050]["game_no"], 1)
+
+    def test_screen_data_names_every_room(self):
+        st = ng.state_for(1, 5050)
+        self.assertEqual((st["price"], st["size"], st["count"], st["early_ok"]), (50, 50, 50, False))
+        self.assertEqual(st["name"], "በ 50ብር / 50 ቁጥሮች")
+        self.assertEqual(st["prize_full"], [1500, 500, 250])
+        self.assertEqual([(x["key"], x["price"], x["size"]) for x in st["lobbies"]],
+                         [(50, 50, 100), (100, 100, 100), (5050, 50, 50), (10050, 100, 50)])
+        self.assertTrue(ng.state_for(1, 50)["early_ok"])
+
+    def test_the_only_telegram_message_is_the_60_second_one(self):
+        fill_round(self.e, 5050 if False else 50, count=60)
+        ng.admin_start(50)
+        with fast_sleep():
+            asyncio.run(ng.send_start_notices())
+        settle_now(50)
+        self.e.done_n = self.e.enq_n
+        with fast_sleep():
+            asyncio.run(ng.after_settle())
+        self.assertEqual({t.split(chr(10))[0] for _, t in self.e.sent}, {self.e.sent[0][1].split(chr(10))[0]})
+        self.assertTrue(all("60 seconds" in t for _, t in self.e.sent))
+        self.assertEqual(len(self.e.sent), 12)                      # 12 players, once each, nothing else
 
 
 if __name__ == "__main__":
