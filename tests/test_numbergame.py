@@ -7,6 +7,7 @@ import ast
 import asyncio
 import inspect
 import textwrap
+import types
 import os
 import random
 import re
@@ -34,8 +35,8 @@ class Env:
         self.wallets, self.wagered, self.required = {}, {}, {}
         self.queue, self.history = [], []
         self.phones, self.banned = set(), set()
-        self.names, self.sent, self.markups = {}, [], []
-        self.enq_n, self.done_n = 0, 0
+        self.names, self.sent, self.markups, self.edits = {}, [], [], []
+        self.enq_n, self.done_n, self._mid = 0, 0, 1000
 
     def turnover_left(self, uid):
         return max(0, self.required.get(uid, 0) - self.wagered.get(uid, 0))
@@ -58,6 +59,11 @@ class Env:
         self.sent.append((uid, text))
         if kw.get("reply_markup") is not None:
             self.markups.append((uid, kw["reply_markup"]))
+        self._mid += 1
+        return types.SimpleNamespace(message_id=self._mid)      # real Telegram returns the new message
+
+    async def edit(self, uid, mid, text, **kw):
+        self.edits.append((uid, mid, text, kw.get("reply_markup")))
 
     def save_counter(self, key, value):
         self.queue.append(("COUNTER", (key, value)))
@@ -92,7 +98,7 @@ def make_env():
     ng.init(wallets=e.wallets, wagered=e.wagered, turnover_left=e.turnover_left, log=e.log,
             enqueue=e.enqueue, save_counter=e.save_counter, verify=e.verify, touch=e.touch,
             phones=e.phones, banned=e.banned, admin_id=ADMIN, ensure=e.ensure,
-            names=e.names, send=e.send, db_mark=e.mark, db_done=e.done)
+            names=e.names, send=e.send, edit=e.edit, db_mark=e.mark, db_done=e.done)
     ng.history[50].clear()
     ng.history[100].clear()
     ng.pending_notify.clear()
@@ -1189,27 +1195,79 @@ class PollRules(Stage2Base):
         self.assertFalse(ng.cast_vote(2, rid, True)["ok"])
         self.assertNotIn(2, ng.rounds[50]["votes"])
 
-    def test_one_vote_each_and_changing_mind_does_not_double_count(self):
+    def test_first_vote_is_final(self):
+        rid = ng.rounds[50]["id"]
+        ng.open_poll(50)
+        self.assertTrue(ng.cast_vote(1, rid, True)["ok"])
+        for choice in (True, False):                         # same or other choice: refused
+            res = ng.cast_vote(1, rid, choice)
+            self.assertFalse(res["ok"])
+            self.assertEqual((res["code"], res["vote"]), ("voted", 1))
+        t = ng.poll_tally(ng.rounds[50])
+        self.assertEqual((t["yes"], t["no"]), (1, 0))        # nothing changed, nothing double counted
+        self.assertTrue(ng.cast_vote(2, rid, False)["ok"])   # other players still vote normally
+        t = ng.poll_tally(ng.rounds[50])
+        self.assertEqual((t["yes"], t["no"], t["players"], t["not_voted"]), (1, 1, 12, 10))
+
+    def test_a_refused_second_vote_writes_nothing_to_the_database(self):
         rid = ng.rounds[50]["id"]
         ng.open_poll(50)
         ng.cast_vote(1, rid, True)
-        ng.cast_vote(1, rid, True)
-        self.assertEqual(ng.poll_tally(ng.rounds[50])["yes"], 1)
+        self.e.queue.clear()
         ng.cast_vote(1, rid, False)
+        self.assertEqual(self.e.queue, [])
+
+    def test_percentages(self):
+        rid = ng.rounds[50]["id"]
+        ng.open_poll(50)
         t = ng.poll_tally(ng.rounds[50])
-        self.assertEqual((t["yes"], t["no"]), (0, 1))
+        self.assertEqual((t["yes_pct"], t["no_pct"], t["voted"]), (0, 0, 0))   # nobody voted yet
+        for u, v in ((1, True), (2, True), (3, True), (4, False)):
+            ng.cast_vote(u, rid, v)
+        t = ng.poll_tally(ng.rounds[50])
+        self.assertEqual((t["yes_pct"], t["no_pct"]), (75, 25))
+        for u in (5, 6):
+            ng.cast_vote(u, rid, False)
+        t = ng.poll_tally(ng.rounds[50])                      # 3 yes, 3 no
+        self.assertEqual((t["yes_pct"], t["no_pct"]), (50, 50))
+        for u in range(7, 13):
+            ng.cast_vote(u, rid, u == 7)
+        t = ng.poll_tally(ng.rounds[50])                      # 4 yes of 12
+        self.assertEqual((t["yes"], t["voted"], t["yes_pct"], t["no_pct"]), (4, 12, 33, 67))
+        self.assertIn("Yes 4 (33%)", ng.vote_line(ng.rounds[50]))
+        self.assertIn("No 8 (67%)", ng.vote_line(ng.rounds[50]))
+
+    def test_percentages_always_add_up_to_100(self):
+        rid = ng.rounds[50]["id"]
+        ng.open_poll(50)
+        for u in range(1, 13):
+            ng.cast_vote(u, rid, u % 3 == 0)
+            t = ng.poll_tally(ng.rounds[50])
+            self.assertEqual(t["yes_pct"] + t["no_pct"], 100)
+
+    def test_player_sees_results_only_after_voting(self):
+        rid = ng.rounds[50]["id"]
+        r = ng.rounds[50]
+        ng.open_poll(50)
         ng.cast_vote(2, rid, True)
-        t = ng.poll_tally(ng.rounds[50])
-        self.assertEqual((t["yes"], t["no"], t["players"], t["not_voted"]), (1, 1, 12, 10))
+        text, rows = ng.player_poll_view(r, 1)               # player 1 has not voted
+        self.assertNotIn("%", text)
+        self.assertEqual([d for _, d in rows[0]], [f"ngv:{rid}:1", f"ngv:{rid}:0"])
+        ng.cast_vote(1, rid, False)
+        text, rows = ng.player_poll_view(r, 1)               # now he has
+        self.assertIn("Yes 1 (50%)", text)
+        self.assertIn("No 1 (50%)", text)
+        self.assertIn("final", text)
+        self.assertIsNone(rows)                              # no buttons any more
 
     def test_votes_are_anonymous_in_everything_the_admin_sees(self):
         rid = ng.rounds[50]["id"]
         ng.open_poll(50)
         ng.cast_vote(3, rid, True)
         t = ng.poll_tally(ng.rounds[50])
-        self.assertEqual(set(t), {"yes", "no", "players", "not_voted"})   # counts only
+        self.assertEqual(set(t), {"yes", "no", "players", "not_voted", "voted", "yes_pct", "no_pct"})  # totals only
         text = ng.panel_text(ng.rounds[50])
-        self.assertIn("Yes 1", text)
+        self.assertIn("Yes 1 (100%)", text)
         self.assertNotIn("Player3", text)
         self.assertNotIn("uid", text)
 
@@ -1350,6 +1408,117 @@ class StartNotice(Stage2Base):
         self.assertEqual(sorted(u for u, _ in self.e.markups), list(range(1, 13)))
         rows = self.e.markups[0][1]
         self.assertEqual([d for _, d in rows[0]], [f"ngv:{rid}:1", f"ngv:{rid}:0"])
+
+
+class PollLive(Stage2Base):
+    """Live percentages: every player's poll message is updated, but not too often."""
+
+    def setUp(self):
+        super().setUp()
+        fill_round(self.e, 50, count=60)               # players 1..12
+        ng.open_poll(50)
+        self.r = ng.rounds[50]
+        self.rid = self.r["id"]
+        with fast_sleep():
+            asyncio.run(ng.send_poll(self.r))
+
+    def refresh(self):
+        with fast_sleep():
+            asyncio.run(ng.poll_refresh())
+
+    def test_message_ids_are_remembered(self):
+        self.assertEqual(sorted(self.r["poll_msgs"]), list(range(1, 13)))
+        self.assertEqual(len(set(self.r["poll_msgs"].values())), 12)
+
+    def test_sending_again_reaches_only_new_buyers(self):
+        n = len(self.e.sent)
+        with fast_sleep():
+            asyncio.run(ng.send_poll(self.r))
+        self.assertEqual(len(self.e.sent), n)                    # nobody gets it twice
+        self.e.fund(500, 1000)
+        buy(500, 50, 61)                                         # a new player buys a number
+        with fast_sleep():
+            asyncio.run(ng.send_poll(self.r))
+        self.assertEqual(len(self.e.sent), n + 1)
+        self.assertEqual(self.e.sent[-1][0], 500)
+        self.assertIn(500, self.r["poll_msgs"])
+
+    def test_players_who_already_voted_are_not_sent_the_vote_again(self):
+        r = ng.rounds[50]
+        r["poll_msgs"].clear()
+        ng.cast_vote(1, self.rid, True)
+        n = len(self.e.sent)
+        with fast_sleep():
+            asyncio.run(ng.send_poll(r))
+        self.assertEqual(len(self.e.sent) - n, 11)
+
+    def test_a_vote_updates_everybodys_message(self):
+        ng.cast_vote(1, self.rid, True)
+        ng.cast_vote(2, self.rid, False)
+        self.refresh()
+        self.assertEqual(sorted(u for u, _, _, _ in self.e.edits), list(range(1, 13)))
+        by_uid = {u: (t, rows) for u, _, t, rows in self.e.edits}
+        self.assertIn("Yes 1 (50%)", by_uid[1][0])               # voters see the percentages ...
+        self.assertIsNone(by_uid[1][1])
+        self.assertNotIn("%", by_uid[7][0])                      # ... players who did not vote yet do not
+        self.assertIsNotNone(by_uid[7][1])                       # and still have their buttons
+        ids = {u: mid for u, mid, _, _ in self.e.edits}
+        self.assertEqual(ids, self.r["poll_msgs"])               # each edit hits that player's own message
+
+    def test_updates_are_throttled_and_only_when_something_changed(self):
+        self.refresh()
+        self.assertEqual(self.e.edits, [])                       # nothing changed: nothing to edit
+        ng.cast_vote(1, self.rid, True)
+        self.refresh()
+        self.assertEqual(len(self.e.edits), 12)
+        ng.cast_vote(2, self.rid, True)
+        self.refresh()
+        self.assertEqual(len(self.e.edits), 12)                  # too soon: waits
+        self.r["poll_synced"] -= ng.POLL_REFRESH + 1
+        self.refresh()
+        self.assertEqual(len(self.e.edits), 24)
+        self.refresh()
+        self.assertEqual(len(self.e.edits), 24)                  # up to date again
+
+    def test_messages_are_closed_for_everybody_when_the_game_starts(self):
+        ng.cast_vote(1, self.rid, True)
+        ng.cast_vote(2, self.rid, False)
+        ng.admin_start(50)
+        self.refresh()
+        self.assertEqual(len(self.e.edits), 12)
+        for _, _, text, rows in self.e.edits:
+            self.assertIn("Vote closed", text)
+            self.assertIn("Yes 1 (50%)", text)
+            self.assertIsNone(rows)
+        self.assertEqual(self.r["poll_msgs"], {})
+        self.refresh()
+        self.assertEqual(len(self.e.edits), 12)                  # closed only once
+
+    def test_nothing_breaks_without_an_edit_function_or_when_telegram_refuses(self):
+        ng.cast_vote(1, self.rid, True)
+        self.r["poll_synced"] = 0
+        ng.D.pop("edit")
+        self.refresh()                                           # no edit function: nothing happens
+        self.assertEqual(self.e.edits, [])
+
+        async def boom(*a, **k):
+            raise RuntimeError("message is not modified")
+        ng.D["edit"] = boom
+        self.r["poll_dirty"] = True
+        self.refresh()                                           # errors are swallowed
+        self.assertFalse(ng._refreshing[0])
+
+    def test_the_ticker_starts_the_updates(self):
+        ng.cast_vote(1, self.rid, True)
+        self.r["poll_synced"] = 0
+
+        async def go():
+            t = asyncio.ensure_future(ng.ticker())
+            await asyncio.sleep(1.4)
+            t.cancel()
+            await asyncio.gather(*list(ng._tasks), return_exceptions=True)
+        asyncio.run(go())
+        self.assertEqual(len(self.e.edits), 12)
 
 
 class RestartStage3(Stage2Base):
@@ -1556,7 +1725,7 @@ class Stage3Sql(Stage2Base):
         rid = ng.rounds[50]["id"]
         ng.open_poll(50)
         ng.cast_vote(1, rid, True)
-        ng.cast_vote(1, rid, False)                     # changed his mind: updates the same row
+        ng.cast_vote(1, rid, False)                     # second tap: refused, first vote stays
         ng.cast_vote(2, rid, True)
         r = ng.rounds[50]
         ng.admin_start(50)
@@ -1569,11 +1738,15 @@ class Stage3Sql(Stage2Base):
         self.assertEqual((row[0], row[2], row[3]), (1, 1, "settled"))
         self.assertIsNotNone(row[1])
         votes = con.execute("SELECT uid, vote FROM ng_votes WHERE round_id=? ORDER BY uid", (rid,)).fetchall()
-        self.assertEqual(votes, [(1, 0), (2, 1)])          # one row per player, last choice kept
+        self.assertEqual(votes, [(1, 1), (2, 1)])          # one row per player, FIRST choice kept
+        ins = ("INSERT INTO ng_votes(round_id, uid, vote, t) VALUES($1, $2, $3, $4) "
+               "ON CONFLICT (round_id, uid) DO NOTHING")
+        con.execute(SqlCheck.lite(ins), (rid, 1, 0, 99))   # the database itself also keeps the first vote
+        self.assertEqual(con.execute("SELECT vote FROM ng_votes WHERE round_id=? AND uid=1", (rid,)).fetchone()[0], 1)
         nxt = con.execute("SELECT game_no FROM ng_rounds WHERE lobby=50 AND id<>?", (rid,)).fetchall()
         self.assertIn((2,), nxt)                           # the next round is Game 2
         data = json.loads(con.execute("SELECT data FROM ng_rounds WHERE id=?", (rid,)).fetchone()[0])
-        self.assertEqual((data["poll"]["yes"], data["poll"]["no"]), (1, 1))
+        self.assertEqual((data["poll"]["yes"], data["poll"]["no"]), (2, 0))   # player 1's second tap did not count
         self.assertEqual(r["game_no"], 1)
 
     def test_game_number_is_unique_per_lobby_and_votes_are_checked(self):
@@ -1694,7 +1867,7 @@ class TelegramSide(Stage2Base):
             return asyncio.run(go())
 
     def test_all_handlers_are_registered(self):
-        for name in ("cmd_ngpoll", "cmd_ngstart", "cb_vote", "cb_panel", "cmd_ngresult", "cmd_ngstatus"):
+        for name in ("cmd_ngpoll", "cmd_ngstart", "cb_vote", "cb_panel", "cb_panel_old", "cmd_ngresult", "cmd_ngstatus"):
             self.assertIn(name, self.h)
 
     def test_only_the_admin_can_use_poll_and_start_commands(self):
@@ -1730,11 +1903,19 @@ class TelegramSide(Stage2Base):
         self.run_all(self.h["cb_vote"](cb))
         self.assertEqual(ng.rounds[50]["votes"][3], 1)
         self.assertIn("Yes", cb.toasts[0])
-        self.assertIn("Your vote", cb.message.edited[0][0])
-        cb2 = FakeCb(3, f"ngv:{self.rid}:0")                      # changes his mind
+        self.assertIn("final", cb.toasts[0])
+        shown = cb.message.edited[0][0]
+        self.assertIn("Your vote", shown)
+        self.assertIn("Yes 1 (100%)", shown)                      # the percentages appear after the tap
+        self.assertIn("No 0 (0%)", shown)
+        self.assertIsNone(cb.message.edited[0][1])                # buttons are gone
+        cb2 = FakeCb(3, f"ngv:{self.rid}:0")                      # tries the other button
         self.run_all(self.h["cb_vote"](cb2))
-        self.assertEqual(ng.rounds[50]["votes"][3], 0)
-        self.assertEqual(ng.poll_tally(ng.rounds[50])["yes"], 0)
+        self.assertEqual(ng.rounds[50]["votes"][3], 1)            # first tap is final
+        self.assertEqual(ng.poll_tally(ng.rounds[50])["yes"], 1)
+        self.assertEqual(ng.poll_tally(ng.rounds[50])["no"], 0)
+        self.assertEqual(len(cb2.alerts), 1)
+        self.assertIn("final", cb2.alerts[0])
 
     def test_a_stranger_and_bad_buttons_cannot_vote(self):
         self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
@@ -1749,40 +1930,80 @@ class TelegramSide(Stage2Base):
     def test_panel_buttons_refresh_confirm_and_start(self):
         self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
         self.run_all(self.h["cb_vote"](FakeCb(1, f"ngv:{self.rid}:1")))
-        refresh = FakeCb(ADMIN, "ngp:50:r")
+        rid = self.rid
+        refresh = FakeCb(ADMIN, f"ngq:{rid}:r")
         self.run_all(self.h["cb_panel"](refresh))
-        self.assertIn("Yes 1", refresh.message.edited[0][0])
-        ask = FakeCb(ADMIN, "ngp:50:s")
+        self.assertIn("Yes 1 (100%)", refresh.message.edited[0][0])
+        ask = FakeCb(ADMIN, f"ngq:{rid}:s")
         self.run_all(self.h["cb_panel"](ask))
         self.assertIn("cannot be undone", ask.message.edited[0][0])
         self.assertEqual(ng.rounds[50]["status"], "open")           # asking does NOT start the game
-        back = FakeCb(ADMIN, "ngp:50:n")
+        back = FakeCb(ADMIN, f"ngq:{rid}:n")
         self.run_all(self.h["cb_panel"](back))
         self.assertEqual(ng.rounds[50]["status"], "open")
-        go = FakeCb(ADMIN, "ngp:50:y")
+        go = FakeCb(ADMIN, f"ngq:{rid}:y")
         self.run_all(self.h["cb_panel"](go))
         self.assertEqual(ng.rounds[50]["status"], "countdown")
         self.assertIn("Started", go.message.edited[0][0])
-        again = FakeCb(ADMIN, "ngp:50:y")
+        again = FakeCb(ADMIN, f"ngq:{rid}:y")
         self.run_all(self.h["cb_panel"](again))
         self.assertEqual(len(again.alerts), 1)                      # second press: refused, not drawn twice
+
+    def test_panel_buttons_carry_the_game_id(self):
+        self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
+        m = FakeMsg(ADMIN)
+        self.run_all(self.h["cmd_ngpoll"](m, Cmd("50")))
+        data = [d for _, d in m.said[0][1][0]]
+        self.assertEqual(data, [f"ngq:{self.rid}:r", f"ngq:{self.rid}:s"])
 
     def test_nobody_but_the_admin_can_press_the_panel_buttons(self):
         self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
         for who in (1, 5, 999999):
             for act in ("y", "s", "r", "n"):
-                cb = FakeCb(who, f"ngp:50:{act}")
+                cb = FakeCb(who, f"ngq:{self.rid}:{act}")
                 self.run_all(self.h["cb_panel"](cb))
                 self.assertEqual(cb.message.edited, [])
+                self.assertEqual(cb.alerts, [])
         self.assertEqual(ng.rounds[50]["status"], "open")           # a crafted button did not start it
 
     def test_panel_after_the_round_started_is_refused(self):
         self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
         ng.admin_start(50)
-        cb = FakeCb(ADMIN, "ngp:50:s")
+        cb = FakeCb(ADMIN, f"ngq:{self.rid}:s")
         self.run_all(self.h["cb_panel"](cb))
         self.assertEqual(len(cb.alerts), 1)
         self.assertEqual(cb.message.edited, [])
+
+    def test_an_old_button_can_never_start_a_newer_game(self):
+        self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
+        old_rid = self.rid
+        ng.admin_start(50)                                          # game A starts ...
+        settle_now(50)                                              # ... and ends
+        fill_round(self.e, 50, count=60)                            # game B is open with 60 sold
+        new = ng.rounds[50]
+        self.assertNotEqual(new["id"], old_rid)
+        for act in ("y", "s", "r", "n"):                            # buttons of the old panel
+            cb = FakeCb(ADMIN, f"ngq:{old_rid}:{act}")
+            self.run_all(self.h["cb_panel"](cb))
+            self.assertEqual(len(cb.alerts), 1, act)
+            self.assertEqual(cb.message.edited, [])
+        self.assertEqual(new["status"], "open")                     # game B was NOT started
+        # the same for a panel opened for game B but without any poll
+        cb = FakeCb(ADMIN, f"ngq:{new['id']}:y")
+        self.run_all(self.h["cb_panel"](cb))
+        self.assertEqual(new["status"], "open")
+
+    def test_buttons_of_the_old_lobby_based_panel_do_nothing(self):
+        self.run_all(self.h["cmd_ngpoll"](FakeMsg(ADMIN), Cmd("50")))
+        for act in ("y", "s", "r", "n"):
+            cb = FakeCb(ADMIN, f"ngp:50:{act}")
+            self.run_all(self.h["cb_panel_old"](cb))
+            self.assertEqual(len(cb.alerts), 1)
+            self.assertEqual(cb.message.edited, [])
+        stranger = FakeCb(5, "ngp:50:y")
+        self.run_all(self.h["cb_panel_old"](stranger))
+        self.assertEqual(stranger.alerts, [])
+        self.assertEqual(ng.rounds[50]["status"], "open")
 
     def test_ngstart_command_starts_and_the_players_are_told(self):
         m = FakeMsg(ADMIN)
