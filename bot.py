@@ -13,7 +13,7 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            ReplyKeyboardMarkup, KeyboardButton,
                            ReplyKeyboardRemove, WebAppInfo, FSInputFile, BufferedInputFile)
 
-import numbergame as ng          # Number Game (stage 1)
+import numbergame as ng          # Number Game (stages 1-3: draw, poll, start, saved games)
 
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
@@ -146,7 +146,12 @@ BOT = None         # the Bot object, set in main()
 _q = None          # asyncio.Queue, created in main()
 
 
+_enq_n = [0]       # how many database writes were queued
+_done_n = [0]      # how many were really written (Number Game waits for this)
+
+
 def _enqueue(sql, *args):
+    _enq_n[0] += 1
     _q.put_nowait((sql, args))
 
 
@@ -243,6 +248,7 @@ async def db_writer():
                     async with conn.transaction():
                         for sql, args in batch:
                             await conn.execute(sql, *args)
+                _done_n[0] += len(batch)
                 break
             except CONN_ERRORS as e:                  # database down: never drop a write, keep retrying
                 print("db down, retrying:", repr(e))
@@ -253,6 +259,7 @@ async def db_writer():
                     try:
                         async with pool.acquire() as conn:
                             await conn.execute(sql, *args)
+                        _done_n[0] += 1
                     except Exception as e2:
                         print("SKIPPED bad write:", sql[:60], repr(e2))
                 break
@@ -1963,7 +1970,10 @@ async def cmd_admin(m: Message):
         "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
         "/lastsms\nLast SMS forwarded from your phone\n\n"
         "/ngstatus\nNumber Game: both lobbies (test)\n\n"
-        "/ngbuy <lobby> <number> <name>\nNumber Game: test purchase with your own wallet")
+        "/ngbuy <lobby> <number> <name>\nNumber Game: test purchase with your own wallet\n\n"
+        "/ngresult <lobby>\nNumber Game: latest finished round + proof hash\n\n"
+        "/ngtestfill <lobby> <how many>\nNumber Game TEST: fill with fake players (no money)\n\n"
+        "/ngtestfreeze <lobby>\nNumber Game TEST: early start of a fake round")
 
 
 @dp.message(Command("stats"))
@@ -2049,7 +2059,7 @@ async def cmd_online(m: Message):
 
 # ---------- /backup: send a backup file of all data (admin only) ----------
 BACKUP_TABLES = ("users", "pending", "games", "kv", "used_sms", "room_players", "bank_sms",
-                 "ng_rounds", "ng_numbers")
+                 "ng_rounds", "ng_numbers", "ng_prizes", "ng_votes")
 
 
 def build_backup_zip(dump):
@@ -2943,12 +2953,15 @@ async def main():
     asyncio.create_task(db_writer())
     ng.init(wallets=wallets, wagered=wagered, turnover_left=turnover_left, log=log,
             enqueue=_enqueue, save_counter=_save_counter, verify=verify, touch=touch,
-            phones=phones, banned=banned, admin_id=ADMIN_ID, ensure=ensure)
+            phones=phones, banned=banned, admin_id=ADMIN_ID, ensure=ensure, names=names,
+            send=lambda uid, text, **kw: BOT.send_message(uid, text, **kw),
+            db_mark=lambda: _enq_n[0], db_done=lambda: _done_n[0], pool=pool)
     await load_state()
     async with pool.acquire() as c:
         await ng.load_state(c)
     ready = True
     asyncio.create_task(game_loop())
+    asyncio.create_task(ng.ticker())          # Number Game: countdown, reveal and prize settlement
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
 
@@ -3018,6 +3031,9 @@ async def main():
                     BotCommand(command="unban", description="✅ Unblock a player"),
                     BotCommand(command="broadcast", description="📢 Message all players"),
                     BotCommand(command="lastsms", description="📩 Last forwarded SMS"),
+                    BotCommand(command="ngstatus", description="🎟 Number Game status"),
+                    BotCommand(command="ngpoll", description="🗳 Number Game: ask players to start"),
+                    BotCommand(command="ngstart", description="▶️ Number Game: start now"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
