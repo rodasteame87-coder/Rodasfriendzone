@@ -12,8 +12,11 @@ Stage 3 (server side): a game number that counts separately inside each lobby
          sees the Yes / No percentages, which refresh live; the admin buttons are
          tied to one specific game so an old button can never start a newer one.
 
-NOT built yet: the player screen and the lottery animation (stage 4). Keep
-NUMBER_GAME_ENABLED off (default) until those are done and the legal check is finished.
+Stage 4 (rooms): four rooms with fixed prizes (see ROOMS). The two 50-number rooms start
+         ONLY when all 50 numbers are sold. The two 100-number rooms may also be started early
+         by the admin (MIN_EARLY_START numbers or more). Players get only the
+         "game starts in 60 seconds" Telegram message; winners see results in the app.
+Keep NUMBER_GAME_ENABLED off (default) until the legal check is finished.
 
 How a round ends (all times come from saved timestamps, not from a browser):
   open -> FREEZE (100 sold, or admin early start with 50+ sold)
@@ -50,24 +53,34 @@ from collections import OrderedDict
 
 ENABLED = os.getenv("NUMBER_GAME_ENABLED", "0") == "1"   # off = only the admin can use it
 
-NUMBERS = 100            # numbers 1..100 in every lobby
-MAX_PER_PLAYER = 5       # per player, per lobby, per round
-PRICES = (50, 100)       # the lobby name is its price in birr
+NUMBERS = 100            # the biggest room has 100 numbers (the database allows 1..100)
+MAX_PER_PLAYER = 5       # per player, per room, per round
+# A room key is what the code, the database and the web screen call "lobby".
+# 50 and 100 are the original 100-number rooms (their saved games keep working).
+#   price   = birr per number          size = how many numbers the room has
+#   early   = the admin may start it before it is full
+#   prizes  = gold, silver, bronze when ALL numbers are sold (an early start scales them down)
+ROOMS = {
+    50:    {"price": 50,  "size": 100, "early": True,  "prizes": (3000, 1000, 500)},
+    100:   {"price": 100, "size": 100, "early": True,  "prizes": (7000, 1000, 500)},
+    5050:  {"price": 50,  "size": 50,  "early": False, "prizes": (1500, 500, 250)},
+    10050: {"price": 100, "size": 50,  "early": False, "prizes": (3000, 700, 300)},
+}
+PRICES = tuple(ROOMS)    # the list of room keys
 NAME_MAX = 20            # longest name a player can give a number
 IDEM_KEEP = 20000        # how many recent purchase keys are remembered in memory
 
 # ---- draw, timing and prizes (stage 2) ----
-MIN_EARLY_START = 50     # an early start needs at least this many numbers sold
+MIN_EARLY_START = 3      # TESTING value. An early start needs at least this many numbers sold
+                         # (3 is the lowest possible). Change to 50 later in this one place.
 MIN_DRAW = 3             # three different winners are needed
 COUNTDOWN_SECONDS = 60   # visible countdown after the round is frozen
 DRAW_INTRO = 8           # seconds of "machine mixing" before the first ball
 REVEAL_GAP = 12          # seconds between the three reveals
 REVEAL_ORDER = (0, 1, 2) # 0 gold, 1 silver, 2 bronze. (2, 1, 0) would reveal bronze first
 PLACES = ("gold", "silver", "bronze")
-# Prize = this many birr for EVERY number sold. With all 100 sold this gives exactly
-#   50 ETB lobby : 3000 / 500 / 300      100 ETB lobby : 7000 / 1000 / 500
-# and with fewer numbers sold the prizes shrink in the same proportion (whole birr).
-PER_NUMBER = {50: (30, 5, 3), 100: (70, 10, 5)}
+# Prizes are the fixed amounts in ROOMS when the room is full. With fewer numbers sold
+# (early start) every prize shrinks in the same proportion, rounded down to whole birr.
 HISTORY_KEEP = 50
 RESULTS_PAGE = 20        # past games sent to the screen at once (max 50)
 POLL_REFRESH = 5         # seconds between live updates of the players' poll messages
@@ -140,7 +153,6 @@ D = {}
 # ---- working copy in memory (the database is the permanent copy) ----
 rounds = {}                    # lobby price -> current round
 history = {p: [] for p in PRICES}   # lobby price -> finished rounds, newest first
-pending_notify = []            # prize messages waiting to be sent
 to_save = []                   # settled rounds waiting until their database writes are done
 _rng = random.SystemRandom()   # secure randomness (operating system)
 idem_seen = OrderedDict()      # "uid:key" -> {"lobby", "num", "result"}
@@ -149,6 +161,23 @@ game_counter = {p: 0 for p in PRICES}   # lobby price -> last REAL game number u
 start_notices = []             # frozen rounds whose players still get "game starts in 60 seconds"
 _tasks = set()                 # background tasks (keeps them alive until they finish)
 _refreshing = [False]          # True while the poll messages are being updated
+
+
+def price_of(lobby):
+    return ROOMS[lobby]["price"]
+
+
+def size_of(lobby):
+    return ROOMS[lobby]["size"]
+
+
+def early_ok(lobby):
+    return bool(ROOMS[lobby]["early"])
+
+
+def room_name(lobby):
+    """'በ 50ብር / 100 ቁጥሮች' : price and how many numbers the room has."""
+    return f"በ {price_of(lobby)}ብር / {size_of(lobby)} ቁጥሮች"
 
 
 def init(**deps):
@@ -239,8 +268,8 @@ def buy_number(uid, lobby, num, name, idem):
         return {"ok": False, "code": code, "error": msg}
 
     n = _int(num)
-    if n is None or not 1 <= n <= NUMBERS:
-        return fail("num", f"Choose a number from 1 to {NUMBERS}")
+    if n is None or not 1 <= n <= size_of(lobby):
+        return fail("num", f"Choose a number from 1 to {size_of(lobby)}")
     nm = clean_name(name)
     if nm is None:
         return fail("name", f"Give the number a name (1 to {NAME_MAX} characters)")
@@ -267,7 +296,7 @@ def buy_number(uid, lobby, num, name, idem):
     mine = r["by_uid"].get(uid, [])
     if len(mine) >= MAX_PER_PLAYER:
         return fail("limit", f"You can own at most {MAX_PER_PLAYER} numbers in this lobby")
-    price = lobby
+    price = price_of(lobby)
     wallets = D["wallets"]
     if wallets.get(uid, 0) < price:
         return fail("funds", "Not enough balance")
@@ -279,14 +308,14 @@ def buy_number(uid, lobby, num, name, idem):
     wallets[uid] = wallets.get(uid, 0) - price
     D["wagered"][uid] = D["wagered"].get(uid, 0) + used
     now = int(time.time())
-    D["log"](uid, "bet", -price, f"Number Game {price} · #{n} ({nm})")   # saves the wallet
+    D["log"](uid, "bet", -price, f"Number Game {room_name(lobby)} · #{n} ({nm})")   # saves the wallet
     r["owners"][n] = {"uid": uid, "name": nm, "t": now, "slot": slot, "used": used}
     r["by_uid"].setdefault(uid, []).append(n)
     D["enqueue"](
         "INSERT INTO ng_numbers(round_id, lobby, num, uid, name, price, used, slot, idem, t) "
         "VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         r["id"], lobby, n, uid, nm, price, used, slot, key, now)
-    full = len(r["owners"]) >= NUMBERS
+    full = len(r["owners"]) >= size_of(lobby)
     if full:                                       # 100 sold: freeze + draw in the SAME step
         r["full_at"] = now
         audit("round_full", None, lobby, r["id"], {"sold": len(r["owners"])})
@@ -302,8 +331,10 @@ def buy_number(uid, lobby, num, name, idem):
 
 # ---------- stage 2: draw, timing, prizes ----------
 def prizes_for(lobby, sold):
-    """Gold, silver, bronze in whole birr. Always an exact whole number."""
-    return [per * sold for per in PER_NUMBER[lobby]]
+    """Gold, silver, bronze in whole birr. A full room pays exactly the amounts in ROOMS;
+    fewer numbers sold shrink them in proportion (rounded down)."""
+    size = size_of(lobby)
+    return [p * sold // size for p in ROOMS[lobby]["prizes"]]
 
 
 def draw_winners(sold_numbers):
@@ -333,12 +364,15 @@ def freeze_round(lobby, early=False, min_sold=None):
         return {"ok": False, "error": "This round is not open"}
     sold = sorted(r["owners"])
     n = len(sold)
+    size = size_of(lobby)
     if early:
+        if not early_ok(lobby):
+            return {"ok": False, "error": f"This room starts only when all {size} numbers are sold ({n}/{size})"}
         need = max(MIN_EARLY_START if min_sold is None else min_sold, MIN_DRAW)
         if n < need:
             return {"ok": False, "error": f"At least {need} numbers must be sold (now {n})"}
-    elif n < NUMBERS:
-        return {"ok": False, "error": f"The round is not full ({n}/{NUMBERS})"}
+    elif n < size:
+        return {"ok": False, "error": f"The round is not full ({n}/{size})"}
     now = int(time.time())
     if not r["test"]:                      # a real game: its number is final from now on
         if r["game_no"] is None:
@@ -388,18 +422,13 @@ def settle_round(lobby, now=None):
         real = uid > 0 and not r["test"]
         if real:
             D["wallets"][uid] = D["wallets"].get(uid, 0) + amount
-            D["log"](uid, "win", amount, f"Number Game {lobby} · {PLACES[idx]} #{info['num']}")
+            D["log"](uid, "win", amount, f"Number Game {room_name(lobby)} · {PLACES[idx]} #{info['num']}")
         D["enqueue"](
             "INSERT INTO ng_prizes(round_id, place, num, uid, amount, status, notified, t) "
             "VALUES($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (round_id, place) DO NOTHING",
             r["id"], idx + 1, info["num"], uid, amount, "paid" if real else "test",
-            0 if real else 1, t)
+            1, t)             # 1 = no Telegram message is sent for prizes (the app shows them)
         r["paid"].add(idx)
-        if real:
-            pending_notify.append({"round_id": r["id"], "lobby": lobby, "place": idx + 1,
-                                   "game": r["game_no"], "num": info["num"],
-                                   "name": info["name"], "uid": uid,
-                                   "amount": amount, "round": r})
     r["status"] = "settled"
     r["settled_at"] = t
     D["enqueue"]("UPDATE ng_rounds SET status = 'settled', settled_at = $1 WHERE id = $2",
@@ -424,11 +453,12 @@ def result_view(r, now=None):
     one at their reveal time, the secret only after the round is settled."""
     now = time.time() if now is None else now
     d = r["draw"]
-    price = r["lobby"]
+    price = price_of(r["lobby"])
     settled = r["status"] == "settled"
     shown = [i for i in range(3) if settled or now >= reveal_time(r, i)]
     v = {
-        "round": r["id"], "game": r["game_no"], "lobby": price, "status": r["status"],
+        "round": r["id"], "game": r["game_no"], "lobby": r["lobby"], "price": price,
+        "size": size_of(r["lobby"]), "name": room_name(r["lobby"]), "status": r["status"],
         "test": bool(r["test"]), "poll": d.get("poll"),
         "early": bool(r["early"]), "sold": d["sold"], "total_sales": d["sold"] * price,
         "prize_total": sum(d["prizes"]), "prizes": d["prizes"],
@@ -460,16 +490,8 @@ def last_result(lobby, include_test=False):
 
 
 def game_label(lobby, game_no, rid=None):
-    """'50 ETB · Game 7'. A round without a game number (a test round) shows its round id."""
-    return f"{lobby} ETB · Game {game_no}" if game_no else f"{lobby} ETB · round #{rid}"
-
-
-def winner_text(item):
-    medal = {1: "🥇 Gold", 2: "🥈 Silver", 3: "🥉 Bronze"}[item["place"]]
-    return (f"🏆 እንኳን ደስ አለዎ! Congratulations!\n\n"
-            f"{medal} · Number Game {game_label(item['lobby'], item.get('game'), item['round_id'])}\n"
-            f"Your number #{item['num']} ({item['name']}) won.\n"
-            f"💰 {item['amount']} ETB was added to your wallet.")
+    """'በ 50ብር / 100 ቁጥሮች · Game 7'. A round without a game number (a test round) shows its round id."""
+    return f"{room_name(lobby)} · Game {game_no}" if game_no else f"{room_name(lobby)} · round #{rid}"
 
 
 def summary_text(r):
@@ -477,7 +499,7 @@ def summary_text(r):
     lines = [f"✅ Number Game {game_label(r['lobby'], r['game_no'], r['id'])} settled"
              + (" (TEST, no money moved)" if r["test"] else "")
              + (" · early start" if r["early"] else ""),
-             f"Sold {d['sold']}/{NUMBERS} · sales {d['sold'] * r['lobby']} ETB"]
+             f"Sold {d['sold']}/{size_of(r['lobby'])} · sales {d['sold'] * price_of(r['lobby'])} ETB"]
     for i in range(3):
         w = d["winners_info"][i]
         lines.append(f"{('🥇', '🥈', '🥉')[i]} #{w['num']} {w['name']} · {_pname(w['uid'])} · {d['prizes'][i]} ETB")
@@ -515,20 +537,13 @@ async def _edit(uid, mid, text, rows=None):
 
 
 async def after_settle():
-    """Announce results only after the database has really written them."""
+    """Mark a settled round as 'saved' once the database has really written it.
+    No Telegram message is sent for results or prizes: players see them in the app."""
     done = D["db_done"]()
     for r in list(to_save):
         if done >= r["save_mark"]:
             r["saved"] = True
             to_save.remove(r)
-            await _send(D.get("admin_id"), summary_text(r))
-    for item in list(pending_notify):
-        if item["round"]["saved"]:
-            pending_notify.remove(item)
-            await _send(item["uid"], winner_text(item))
-            D["enqueue"]("UPDATE ng_prizes SET notified = 1 WHERE round_id = $1 AND place = $2",
-                         item["round_id"], item["place"])
-            await asyncio.sleep(0.06)
 
 
 def tick(now=None):
@@ -566,7 +581,7 @@ def test_fill(lobby, count):
         D["enqueue"]("UPDATE ng_rounds SET test = 1, game_no = NULL WHERE id = $1", r["id"])
     now = int(time.time())
     added = 0
-    for n in range(1, NUMBERS + 1):
+    for n in range(1, size_of(lobby) + 1):
         if added >= count:
             break
         if n in r["owners"]:
@@ -577,10 +592,10 @@ def test_fill(lobby, count):
         D["enqueue"](
             "INSERT INTO ng_numbers(round_id, lobby, num, uid, name, price, used, slot, idem, t) "
             "VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
-            r["id"], lobby, n, uid, f"Test {n}", lobby, 0, 1, f"{uid}:test-{r['id']}-{n}", now)
+            r["id"], lobby, n, uid, f"Test {n}", price_of(lobby), 0, 1, f"{uid}:test-{r['id']}-{n}", now)
         added += 1
     out = {"ok": True, "added": added, "sold": len(r["owners"])}
-    if len(r["owners"]) >= NUMBERS:
+    if len(r["owners"]) >= size_of(lobby):
         freeze_round(lobby)
         out["frozen"] = True
     return out
@@ -642,6 +657,8 @@ def open_poll(lobby):
         return {"ok": False, "error": "This round is not open"}
     if r["test"]:
         return {"ok": False, "error": "This is a test round (fake players). Use /ngtestfreeze"}
+    if not early_ok(lobby):
+        return {"ok": False, "error": f"This room starts only when all {size_of(lobby)} numbers are sold"}
     sold = len(r["owners"])
     if sold < MIN_EARLY_START:
         return {"ok": False, "error": f"At least {MIN_EARLY_START} numbers must be sold (now {sold})"}
@@ -700,7 +717,7 @@ def poll_player_text(r):
     return (f"🗳 Number Game {game_label(r['lobby'], r['game_no'], r['id'])}\n\n"
             f"ጨዋታውን አሁን እንጀምር? ድምጽዎ ሚስጥራዊ ነው።\n"
             f"Start the game now? Your vote is anonymous.\n\n"
-            f"Sold now: {sold}/{NUMBERS}. If we start now the prizes are:\n"
+            f"Sold now: {sold}/{size_of(r['lobby'])}. If we start now the prizes are:\n"
             f"🥇 {g} · 🥈 {s_} · 🥉 {b} ETB\n"
             f"(If more numbers are sold first, the prizes grow.)")
 
@@ -710,7 +727,7 @@ def panel_text(r):
     sold = len(r["owners"])
     g, s_, b = prizes_for(r["lobby"], sold)
     return (f"🗳 Poll · {game_label(r['lobby'], r['game_no'], r['id'])}\n"
-            f"Sold {sold}/{NUMBERS} · players {t['players']}\n"
+            f"Sold {sold}/{size_of(r['lobby'])} · players {t['players']}\n"
             f"✅ Yes {t['yes']} ({t['yes_pct']}%) · ❌ No {t['no']} ({t['no_pct']}%) · "
             f"not voted {t['not_voted']}\n"
             f"If you start now: 🥇 {g} · 🥈 {s_} · 🥉 {b} ETB\n\n"
@@ -828,8 +845,7 @@ def _round_from_row(row, status=None):
 
 async def load_state(c):
     """c = an asyncpg connection. Rebuilds open / counting-down rounds, their numbers,
-    votes, paid prize places, recent history, game numbers and prize messages that
-    were never sent."""
+    votes, paid prize places, recent history and game numbers."""
     rows = await c.fetch(
         f"SELECT {ROUND_COLS} "
         "FROM ng_rounds WHERE status IN ('open', 'full', 'countdown') ORDER BY id")
@@ -899,22 +915,10 @@ async def load_state(c):
             r["saved"] = True
             if r["draw"]:
                 history[row["lobby"]].append(r)
-    for row in await c.fetch(
-            "SELECT p.round_id, p.place, p.num, p.uid, p.amount, r.lobby, r.game_no, r.data "
-            "FROM ng_prizes p JOIN ng_rounds r ON r.id = p.round_id "
-            "WHERE p.notified = 0 AND p.status = 'paid'"):
-        d = _loads(row["data"]) or {}
-        info = (d.get("winners_info") or [{}, {}, {}])[row["place"] - 1]
-        pseudo = {"saved": True}
-        pending_notify.append({"round_id": row["round_id"], "lobby": row["lobby"],
-                               "place": row["place"], "game": row.get("game_no"),
-                               "num": row["num"],
-                               "name": info.get("name", ""), "uid": row["uid"],
-                               "amount": row["amount"], "round": pseudo})
     for lobby, r in list(rounds.items()):          # repair anything left half way
         if r["status"] in ("open", "full"):
             r["status"] = "open"
-            if len(r["owners"]) >= NUMBERS:
+            if len(r["owners"]) >= size_of(lobby):
                 freeze_round(lobby)
         elif r["status"] == "countdown" and not r["draw"]:
             r["status"] = "open"                   # cannot happen normally; never lose the round
@@ -971,15 +975,18 @@ def state_for(uid, lobby):
             for n in sorted(r["by_uid"].get(uid, []))]
     return {
         "ok": True, "lobby": lobby, "round": r["id"], "game": r["game_no"],
-        "status": r["status"], "count": NUMBERS, "max": MAX_PER_PLAYER, "sold": len(r["owners"]),
+        "status": r["status"], "count": size_of(lobby), "max": MAX_PER_PLAYER, "sold": len(r["owners"]),
+        "price": price_of(lobby), "size": size_of(lobby), "name": room_name(lobby),
+        "early_ok": early_ok(lobby),
         "taken": sorted(r["owners"]),            # other players' names are not sent
         "mine": mine, "cash": D["wallets"].get(uid, 0),
-        "prize_full": [per * NUMBERS for per in PER_NUMBER[lobby]],
-        "per_number": list(PER_NUMBER[lobby]), "min_early": MIN_EARLY_START,
+        "prize_full": list(ROOMS[lobby]["prizes"]),
+        "prize_now": prizes_for(lobby, len(r["owners"])), "min_early": MIN_EARLY_START,
         "admin": bool(D.get("admin_id") and uid == D["admin_id"]), "min_force": MIN_DRAW,
         "draw": result_view(r) if r["status"] == "countdown" else None,
         "last": (result_view(last_result(lobby)) if last_result(lobby) else None),
-        "lobbies": [{"price": p, "round": rounds[p]["id"], "game": rounds[p]["game_no"],
+        "lobbies": [{"key": p, "price": price_of(p), "size": size_of(p), "name": room_name(p),
+                     "round": rounds[p]["id"], "game": rounds[p]["game_no"],
                      "status": rounds[p]["status"],
                      "sold": len(rounds[p]["owners"]),
                      "mine": len(rounds[p]["by_uid"].get(uid, []))} for p in PRICES],
@@ -1162,8 +1169,8 @@ def status_text():
             poll = f"\nPoll: ✅ {t['yes']} · ❌ {t['no']} · not voted {t['not_voted']}"
         lines.append(f"\n{game_label(p, r['game_no'], r['id'])} · round #{r['id']} · {phase_text(r)}"
                      + (" · TEST" if r["test"] else "") + "\n"
-                     f"Sold {sold}/{NUMBERS} · players {players}\n"
-                     f"Sales {sold * p} ETB" + poll)
+                     f"Sold {sold}/{size_of(p)} · players {players}\n"
+                     f"Sales {sold * price_of(p)} ETB" + poll)
     return "\n".join(lines)
 
 
@@ -1171,7 +1178,7 @@ def result_text(r):
     d = r["draw"]
     lines = [f"{game_label(r['lobby'], r['game_no'], r['id'])} · round #{r['id']}" + (" · TEST" if r["test"] else "")
              + (" · early start" if r["early"] else ""),
-             f"Sold {d['sold']} · sales {d['sold'] * r['lobby']} ETB · prizes {sum(d['prizes'])} ETB"]
+             f"Sold {d['sold']} · sales {d['sold'] * price_of(r['lobby'])} ETB · prizes {sum(d['prizes'])} ETB"]
     for i in range(3):
         w = d["winners_info"][i]
         lines.append(f"{PLACES[i].title()}: #{w['num']} {w['name']} ({_pname(w['uid'])}) {d['prizes'][i]} ETB")
@@ -1205,7 +1212,7 @@ def register(dp):
         parts = (command.args or "").split(maxsplit=2)
         lobby = _int(parts[0]) if parts else None
         if len(parts) < 3 or lobby not in PRICES:
-            await m.answer("Send:\n/ngbuy <lobby 50 or 100> <number 1-100> <name>\n\n"
+            await m.answer("Send:\n/ngbuy <room 50, 100, 5050 or 10050> <number 1-100> <name>\n\n"
                            "Example:\n/ngbuy 50 17 Abebe\n\n"
                            "⚠️ This spends real cash from YOUR wallet (test).")
             return
@@ -1230,7 +1237,7 @@ def register(dp):
             return
         lobby = _lobby_arg(command)
         if lobby is None:
-            await m.answer("Send: /ngpoll <lobby 50 or 100>\n\nAsks the players of that lobby "
+            await m.answer("Send: /ngpoll <room 50, 100, 5050 or 10050>\n\nAsks the players of that room "
                            f"(needs {MIN_EARLY_START}+ numbers sold) whether to start now. "
                            "You see only the totals, then you decide with the Start button.")
             return
@@ -1252,7 +1259,7 @@ def register(dp):
             return
         lobby = _lobby_arg(command)
         if lobby is None:
-            await m.answer("Send: /ngstart <lobby 50 or 100>\n\nStarts the game now "
+            await m.answer("Send: /ngstart <room 50, 100, 5050 or 10050>\n\nStarts the game now "
                            f"(needs {MIN_EARLY_START}+ numbers sold). Players get the 60-second message.")
             return
         res = admin_start(lobby)
@@ -1271,7 +1278,7 @@ def register(dp):
             return
         lobby = _lobby_arg(command)
         if lobby is None:
-            await m.answer("Send: /ngforce <lobby 50 or 100>\n\nStarts the game now with any "
+            await m.answer("Send: /ngforce <room 50, 100, 5050 or 10050>\n\nStarts the game now with any "
                            f"number of sold numbers from {MIN_DRAW} up. Prizes shrink in proportion.")
             return
         res = admin_start(lobby, force=True)
@@ -1376,7 +1383,7 @@ def register(dp):
         parts = (command.args or "").split()
         lobby, count = (_int(parts[0]), _int(parts[1])) if len(parts) == 2 else (None, None)
         if lobby not in PRICES or count is None or count < 1:
-            await m.answer("Send:\n/ngtestfill <lobby 50 or 100> <how many numbers>\n\n"
+            await m.answer("Send:\n/ngtestfill <room 50, 100, 5050 or 10050> <how many numbers>\n\n"
                            "Test only: fake players, no money. Works only while "
                            "NUMBER_GAME_ENABLED is off. 100 numbers starts the countdown.")
             return
@@ -1384,9 +1391,9 @@ def register(dp):
         if not res["ok"]:
             await m.answer("❌ " + res["error"])
             return
-        await m.answer(f"✅ Added {res['added']} fake numbers. Sold {res['sold']}/{NUMBERS}."
+        await m.answer(f"✅ Added {res['added']} fake numbers. Sold {res['sold']}/{size_of(lobby)}."
                        + ("\n⏱ Round is full: countdown started." if res.get("frozen") else
-                          "\nFor an early start (50+ sold) send /ngtestfreeze " + str(lobby)))
+                          "\nFor an early start send /ngtestfreeze " + str(lobby)))
 
     @dp.message(Command("ngtestfreeze"))
     async def cmd_ngtestfreeze(m: Message, command: CommandObject):
@@ -1395,7 +1402,7 @@ def register(dp):
             return
         lobby = _int((command.args or "").split()[0]) if (command.args or "").split() else None
         if lobby not in PRICES:
-            await m.answer("Send: /ngtestfreeze <lobby 50 or 100>")
+            await m.answer("Send: /ngtestfreeze <room 50, 100, 5050 or 10050>")
             return
         res = test_freeze(lobby)
         await m.answer(f"⏱ Countdown started ({COUNTDOWN_SECONDS}s)." if res["ok"] else "❌ " + res["error"])
