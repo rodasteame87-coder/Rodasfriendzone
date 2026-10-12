@@ -13,6 +13,8 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            ReplyKeyboardMarkup, KeyboardButton,
                            ReplyKeyboardRemove, WebAppInfo, FSInputFile, BufferedInputFile)
 
+import numbergame as ng          # Number Game (stage 1)
+
 TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.environ["WEBAPP_URL"]
 DATABASE_URL = os.environ["DATABASE_URL"]             # Render Postgres "Internal Database URL"
@@ -1959,7 +1961,9 @@ async def cmd_admin(m: Message):
         "/ban <phone>\nBlock a player\n\n"
         "/unban <phone>\nUnblock a player\n\n"
         "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
-        "/lastsms\nLast SMS forwarded from your phone")
+        "/lastsms\nLast SMS forwarded from your phone\n\n"
+        "/ngstatus\nNumber Game: both lobbies (test)\n\n"
+        "/ngbuy <lobby> <number> <name>\nNumber Game: test purchase with your own wallet")
 
 
 @dp.message(Command("stats"))
@@ -2044,7 +2048,8 @@ async def cmd_online(m: Message):
 
 
 # ---------- /backup: send a backup file of all data (admin only) ----------
-BACKUP_TABLES = ("users", "pending", "games", "kv", "used_sms", "room_players", "bank_sms")
+BACKUP_TABLES = ("users", "pending", "games", "kv", "used_sms", "room_players", "bank_sms",
+                 "ng_rounds", "ng_numbers")
 
 
 def build_backup_zip(dump):
@@ -2822,6 +2827,9 @@ async def bonusmany_buttons(cb: CallbackQuery):
         t.add_done_callback(bg_tasks.discard)
 
 
+ng.register(dp)                 # Number Game admin test commands
+
+
 @dp.callback_query()
 async def admin_buttons(cb: CallbackQuery):
     if cb.from_user.id != ADMIN_ID:
@@ -2917,6 +2925,7 @@ async def main():
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
         web.post("/api/sms-hook", api_sms_hook),
+        *ng.routes(),                     # Number Game API
     ])
     runner = web.AppRunner(app)
     await runner.setup()
@@ -2929,9 +2938,15 @@ async def main():
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=3)
     async with pool.acquire() as c:
         await c.execute(SCHEMA)
+        await c.execute(ng.SCHEMA)
     _q = asyncio.Queue()
     asyncio.create_task(db_writer())
+    ng.init(wallets=wallets, wagered=wagered, turnover_left=turnover_left, log=log,
+            enqueue=_enqueue, save_counter=_save_counter, verify=verify, touch=touch,
+            phones=phones, banned=banned, admin_id=ADMIN_ID, ensure=ensure)
     await load_state()
+    async with pool.acquire() as c:
+        await ng.load_state(c)
     ready = True
     asyncio.create_task(game_loop())
     asyncio.create_task(reaper())
