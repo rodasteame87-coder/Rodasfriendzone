@@ -221,11 +221,29 @@
   .ngsmall{color:#6b5a7c;font-size:12px;text-align:center;margin:8px 0 0}
 
   /* number game: draw stage (countdown, mixing, reveals) */
-  .stg{background:#1f2430;color:#fff;border-radius:16px;padding:14px 10px 16px;text-align:center;margin-bottom:10px}
+  .stg{position:relative;background:#1f2430;color:#fff;border-radius:16px;padding:14px 10px 16px;text-align:center;margin-bottom:10px}
   .stg-t{font-weight:700;font-size:15px;color:#e8d8f5;min-height:20px}
   .stg-c{font-size:58px;font-weight:800;line-height:1.1;color:#f7c32c;min-height:64px}
   .stg-n{font-size:13px;color:#b8b2c4;min-height:18px;margin:6px 0 12px}
-  .globe{display:block;width:250px;height:250px;margin:4px auto 0;max-width:100%}
+  .globe{display:block;width:100%;max-width:400px;height:auto;margin:0 auto}
+  .stgwrap{position:relative;max-width:400px;margin:0 auto}
+  .sfxb{position:absolute;top:8px;right:8px;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.15);font-size:18px;z-index:2}
+  .stg-res{position:absolute;inset:0;background:rgba(15,18,28,.93);border-radius:14px;padding:12px 10px;display:flex;flex-direction:column;justify-content:center;gap:8px;text-align:center}
+  .stg-res h3{margin:0 0 4px;font-size:20px;color:#fbbf24}
+  .rr{display:flex;align-items:center;gap:8px;background:#2b3142;border-radius:12px;padding:10px;text-align:left}
+  .rr.me{background:#1e3a2a;box-shadow:0 0 0 2px #4ade80 inset}
+  .rr .ri{font-size:26px;flex:none}
+  .rr .rn{flex:1;min-width:0;font-weight:700;font-size:14px;word-break:break-word}
+  .rr .rn small{display:block;color:#9ca3af;font-size:11px;font-weight:600}
+  .rr b{color:#fbbf24;font-size:16px;flex:none}
+  .res-me{background:#14532d;color:#d1fae5;border-radius:12px;padding:10px;font-weight:800;font-size:16px}
+  .res-me.no{background:#2b3142;color:#cbd5e1;font-weight:600;font-size:14px}
+  .res-c{color:#e8d8f5;font-size:15px;margin-top:4px}
+  .res-c b{color:#f7c32c;font-size:24px}
+  .res-b{background:#5b3a82;height:40px;margin-top:2px}
+  #ng.big{position:fixed;inset:0;z-index:7;background:#12151d;overflow-y:auto;padding:8px 10px 24px;max-width:520px;margin:0 auto}
+  #ng.big h1{display:none}
+  #ng.big .back{color:#e8d8f5}
   .drum{position:relative;width:132px;height:132px;margin:6px auto 4px;border-radius:50%;border:4px solid #5b3a82;background:radial-gradient(circle at 35% 30%,#3a2f55,#1b1630);overflow:hidden}
   .drum i{position:absolute;width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.75);animation:drumb var(--dur) ease-in-out infinite;animation-delay:var(--del);animation-play-state:paused}
   .drum.spin i{animation-play-state:running}
@@ -1127,6 +1145,7 @@ function ngDraw(){
   $("ngMine").hidden = !pick || !s.mine.length;
   $("ngStart").hidden = !(pick && s.admin && open && s.early_ok && s.sold>=s.min_force);   // only the admin ever sees this
   $("ngLive").hidden = pick;
+  $("ng").classList.toggle("big", !pick);              // the machine fills the whole screen
   $("ngNext").hidden = NG.mode!=="after";
   if(!pick){ ngLiveDraw(); $("ngLast").hidden = true; return; }
 
@@ -1157,27 +1176,102 @@ function ngDraw(){
   }
 }
 
-/* ----- the yellow glass globe: numbered balls tumble inside while the machine mixes.
-   It is only a picture. The winners were drawn and locked by the server before the countdown. ----- */
-function makeGlobe(cv){
-  const dpr = Math.min(2, window.devicePixelRatio||1), W = 300, H = 300;
+/* ----- sounds: all made inside the app (no sound files). They play only if the phone is not silent. ----- */
+const SFX = (()=>{
+  let ac = null, on = true, mixT = null;
+  try{ on = localStorage.getItem("ngsfx") !== "0"; }catch(e){}
+  const ctx = ()=>{
+    if(!ac){ try{ ac = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
+    if(ac.state==="suspended"){ try{ ac.resume(); }catch(e){} }
+    return ac;
+  };
+  const tone = (f, d, type, vol, when, f2)=>{
+    const a = ctx(); if(!a || !on) return;
+    try{
+      const t = a.currentTime+(when||0), o = a.createOscillator(), g = a.createGain();
+      o.type = type||"sine"; o.frequency.setValueAtTime(f, t);
+      if(f2) o.frequency.exponentialRampToValueAtTime(f2, t+d);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol||0.2, t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+d);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+d+0.05);
+    }catch(e){}
+  };
+  const noise = (d, f1, f2, vol)=>{
+    const a = ctx(); if(!a || !on) return;
+    try{
+      const n = Math.floor(a.sampleRate*d), buf = a.createBuffer(1, n, a.sampleRate), dat = buf.getChannelData(0);
+      for(let i=0;i<n;i++) dat[i] = Math.random()*2-1;
+      const s = a.createBufferSource(); s.buffer = buf;
+      const f = a.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.2;
+      const t = a.currentTime;
+      f.frequency.setValueAtTime(f1, t); f.frequency.exponentialRampToValueAtTime(f2, t+d);
+      const g = a.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+0.2); g.gain.exponentialRampToValueAtTime(0.0001, t+d);
+      s.connect(f); f.connect(g); g.connect(a.destination); s.start(t);
+    }catch(e){}
+  };
+  const S = {
+    isOn: ()=>on,
+    setOn: v=>{ on = !!v; try{ localStorage.setItem("ngsfx", on?"1":"0"); }catch(e){} if(!on) S.mixStop(); },
+    unlock: ()=>{ ctx(); },
+    mixStart: alive=>{                                   // rattle while the balls mix
+      if(mixT || !on) return;
+      mixT = setInterval(()=>{
+        if(!on || (alive && !alive())){ S.mixStop(); return; }
+        tone(250+Math.random()*700, 0.05, "square", 0.035);
+      }, 110);
+    },
+    mixStop: ()=>{ clearInterval(mixT); mixT = null; },
+    whoosh: ()=>noise(2.8, 250, 1900, 0.22),             // the ball rushes down the pipe
+    pop: ()=>tone(420, 0.16, "sine", 0.35, 0, 1100),     // the ball leaves the pipe
+    fanfare: ()=>{ [523,659,784,1047].forEach((f,i)=>tone(f, 0.3, "triangle", 0.25, i*0.11)); },
+    win: ()=>{ [523,659,784,1047,1319,1568].forEach((f,i)=>tone(f, 0.35, "triangle", 0.28, i*0.1)); tone(262, 0.9, "sine", 0.18, 0.5); },
+    done: ()=>{ tone(392, 0.25, "triangle", 0.2); tone(523, 0.4, "triangle", 0.2, 0.2); }
+  };
+  return S;
+})();
+document.addEventListener("pointerdown", ()=>SFX.unlock());   // phones allow sound only after a tap
+
+/* ----- the big machine: a glass drum with one ball for every SOLD number, and a pipe.
+   A winning ball goes into the pipe, rolls down and comes out. It is only a picture:
+   the winners were drawn and locked by the server before the countdown. ----- */
+function makeGlobe(cv, nums){
+  const dpr = Math.min(2, window.devicePixelRatio||1), W = 360, H = 540;
   cv.width = W*dpr; cv.height = H*dpr;
   const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
-  const cx = W/2, cy = 138, R = 122, BR = 13;
+  const cx = 180, cy = 165, R = 138;
+  const BR = Math.max(9, Math.min(15, Math.floor(Math.sqrt(0.40*R*R/Math.max(1, nums.length)))));   // smaller balls when more are sold
   const hues = [2,28,52,125,210,275,320,170,18,0];
   const colour = n => { const d = Math.floor(n/10)%10; return d===9 ? "hsl(0,0%,68%)" : d===8 ? "hsl(18,60%,42%)" : `hsl(${hues[d]},88%,${d===2?56:60}%)`; };
   const PCOL = ["#e29a10","#8d97a8","#b4672a"];
-  const g = { mode:"rest", balls:[], big:null };
-  g.fill = (count, size)=>{
-    const nums = []; for(let n=1;n<=size;n++) nums.push(n);
-    for(let i=nums.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [nums[i],nums[j]]=[nums[j],nums[i]]; }
-    g.balls = nums.slice(0,count).map((n,i)=>{
+  const PIPE = [[186,318],[70,322],[36,330],[24,348],[36,366],[70,378],[332,488]];   // centre line of the pipe
+  const PATH = [[186,300]].concat(PIPE);                                            // the ball enters from inside the drum
+  const seg = []; let total = 0;
+  for(let i=1;i<PATH.length;i++){ const l = Math.hypot(PATH[i][0]-PATH[i-1][0], PATH[i][1]-PATH[i-1][1]); seg.push(l); total += l; }
+  const at = s => {                                                                  // point at fraction s (0..1) of the path
+    let d = s*total;
+    for(let i=0;i<seg.length;i++){
+      if(d<=seg[i] || i===seg.length-1){ const u = Math.min(1, d/seg[i]); return [PATH[i][0]+(PATH[i+1][0]-PATH[i][0])*u, PATH[i][1]+(PATH[i+1][1]-PATH[i][1])*u]; }
+      d -= seg[i];
+    }
+  };
+  const T1 = 0.5, T2 = 3.0, T3 = 0.9, T4 = 2.2, T5 = 0.5;   // to the pipe / down the pipe / out and grow / hold / fade (seconds)
+  const g = { mode:"rest", balls:[], anims:[], BR };
+  g.fill = list => {
+    g.balls = list.map(n => {
       const a = Math.random()*6.283, d = Math.random()*(R-BR-4);
       return { n, x:cx+Math.cos(a)*d, y:cy+Math.sin(a)*d, vx:0, vy:0, a:Math.random()*6, c:colour(n) };
     });
   };
-  g.setMode = m=>{ g.mode = m; };
-  g.drop = (num, place)=>{ g.big = { n:num, p:place, t:performance.now() }; };
+  g.fill(nums);
+  g.setMode = m => { g.mode = m; };
+  g.removeBall = num => { g.balls = g.balls.filter(b => b.n!==num); };
+  g.launch = (num, place, cb) => {                       // the winning ball leaves the drum and goes into the pipe
+    const i = g.balls.findIndex(b => b.n===num);
+    const b = i>=0 ? g.balls.splice(i,1)[0] : { n:num, x:cx, y:cy+R-30, c:colour(num) };
+    g.anims.push({ n:num, p:place, x0:b.x, y0:b.y, c:b.c, t0:performance.now(), cb:cb||{}, exited:false, done:false });
+  };
   function step(){
     const B = g.balls, mix = g.mode==="mix", grav = mix ? 0.04 : 0.34, vmax = mix ? 9 : 12;
     for(const b of B){
@@ -1221,8 +1315,17 @@ function makeGlobe(cv){
   }
   function draw(){
     ctx.clearRect(0,0,W,H);
-    // stand
-    ctx.fillStyle="#7a5a12"; ctx.beginPath(); ctx.moveTo(cx-52,H-6); ctx.lineTo(cx-34,cy+R-6); ctx.lineTo(cx+34,cy+R-6); ctx.lineTo(cx+52,H-6); ctx.closePath(); ctx.fill();
+    // the feeding tube round the drum (decoration)
+    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,205,40,.45)";
+    ctx.beginPath(); ctx.arc(cx,cy,R+24,-1.45,1.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,R+12,-1.45,1.5); ctx.stroke();
+    // the pipe: a yellow wall with a hollow inside
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.beginPath(); PIPE.forEach((p,i)=> i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));
+    ctx.lineWidth = 34; ctx.strokeStyle = "rgba(255,205,40,.9)"; ctx.stroke();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.lineWidth = 27; ctx.strokeStyle = "#000"; ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
     // glass back
     const gr = ctx.createRadialGradient(cx-R*.35,cy-R*.35,R*.1,cx,cy,R);
     gr.addColorStop(0,"rgba(255,236,120,.55)"); gr.addColorStop(1,"rgba(255,185,0,.58)");
@@ -1233,62 +1336,116 @@ function makeGlobe(cv){
     ctx.beginPath(); ctx.arc(cx,cy,R-5,0,6.283); ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.stroke();
     ctx.beginPath(); ctx.arc(cx,cy,R-14,3.6,4.5); ctx.lineWidth=6; ctx.lineCap="round"; ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.stroke();
     ctx.beginPath(); ctx.arc(cx,cy,R-14,4.7,4.85); ctx.stroke(); ctx.lineCap="butt";
-    // the winning ball comes out of the globe and grows
-    if(g.big){
-      const t=(performance.now()-g.big.t)/1000, p=Math.min(1,t/1.1);
-      if(t>3.4) g.big=null;
+    // the winning balls: drum -> pipe -> out -> big
+    const nowT = performance.now(), pr = Math.min(BR, 12), E = PATH[PATH.length-1];
+    for(const a of g.anims){
+      const el = (nowT-a.t0)/1000;
+      let x, y, r = pr, alpha = 1, ang = el*7, big = false;
+      if(el < T1){ const e = el/T1; x = a.x0+(PATH[0][0]-a.x0)*e; y = a.y0+(PATH[0][1]-a.y0)*e; }
+      else if(el < T1+T2){ const s = (el-T1)/T2, e = 0.3*s+0.7*s*s; const p = at(e); x = p[0]; y = p[1]; }
       else{
-        const e=1-Math.pow(1-p,3), y=cy+(H-62-cy)*e, r=BR+(30-BR)*e;
-        ctx.globalAlpha = t>3 ? Math.max(0,(3.4-t)/.4) : 1;
-        ctx.beginPath(); ctx.arc(cx,y,r+5,0,6.283); ctx.fillStyle=PCOL[g.big.p]; ctx.fill();
-        ball(cx,y,r,g.big.n,colour(g.big.n),0); ctx.globalAlpha=1;
+        if(!a.exited){ a.exited = true; if(a.cb.exit) a.cb.exit(); }
+        const u = Math.min(1,(el-T1-T2)/T3), e = 1-Math.pow(1-u,3);
+        x = E[0]+(180-E[0])*e; y = E[1]+(440-E[1])*e; r = pr+(34-pr)*e; ang *= 0.2; big = true;
+        if(u>=1 && !a.done){ a.done = true; if(a.cb.done) a.cb.done(); }
+        if(el > T1+T2+T3+T4) alpha = Math.max(0, 1-(el-T1-T2-T3-T4)/T5);
       }
+      ctx.globalAlpha = alpha;
+      if(big){ ctx.beginPath(); ctx.arc(x,y,r+5,0,6.283); ctx.fillStyle = PCOL[a.p]; ctx.fill(); }
+      ball(x,y,r,a.n,a.c,ang);
+      ctx.globalAlpha = 1;
     }
+    g.anims = g.anims.filter(a => (nowT-a.t0)/1000 <= T1+T2+T3+T4+T5);
   }
-  (function frame(){ if(!cv.isConnected) return; step(); draw(); requestAnimationFrame(frame); })();
+  (function frame(){
+    if(!cv.isConnected) return;
+    if(cv.getClientRects().length){ step(); draw(); }    // nothing is drawn while the screen is hidden
+    requestAnimationFrame(frame);
+  })();
   return g;
 }
 
-/* ----- the draw stage: countdown -> mixing -> reveals -> results. One component, used live and for replays ----- */
-function makeStage(root){
-  root.innerHTML = `<div class="stg"><div class="stg-t"></div><div class="stg-c"></div>`+
-    `<canvas class="globe" width="300" height="300"></canvas><div class="stg-n"></div><div class="slots">`+
+/* ----- the draw stage: countdown -> mixing -> balls come out one by one -> winners -> back to the lobby.
+   One component, used live and for replays. ----- */
+const BACK_MS = 45000, RES_DELAY = 2500;                 // wait on the winners screen / pause before it appears
+function makeStage(root, nums){
+  root.innerHTML = `<div class="stg"><button class="sfxb" type="button"></button><div class="stg-t"></div><div class="stg-c"></div>`+
+    `<div class="stgwrap"><canvas class="globe" width="360" height="540"></canvas><div class="stg-res" hidden></div></div>`+
+    `<div class="stg-n"></div><div class="slots">`+
     [0,1,2].map(i=>`<div class="slot"><div class="sl-b">?</div><div class="sl-p">${PLI[i]} ${PLN[i]}</div>`+
                    `<div class="sl-z"></div><div class="sl-w"></div></div>`).join("")+
     `</div><div class="stg-win" hidden></div></div>`;
   const q = c => root.querySelector(c);
   const slots = [...root.querySelectorAll(".slot")];
-  const globe = makeGlobe(root.querySelector(".globe"));
-  const st2 = { shown:[false,false,false], onReveal:null, globe, filled:false };
+  const globe = makeGlobe(q(".globe"), nums||[]);
+  const st2 = { globe, start:[0,0,0], done:[false,false,false], instant:[false,false,false], painted:[false,false,false],
+                mine:new Set(), tl:null, doneAt:0, resShown:false, backed:false, onReveal:null, onBack:null };
+  const sb = q(".sfxb");
+  const paintSb = ()=>{ sb.textContent = SFX.isOn() ? "🔊" : "🔇"; };
+  paintSb();
+  sb.onclick = ()=>{ SFX.setOn(!SFX.isOn()); paintSb(); if(SFX.isOn()) SFX.pop(); };
+  const alive = ()=> root.isConnected && root.getClientRects().length>0;
+  const res = q(".stg-res");
+  res.onclick = e=>{
+    const b = e.target.closest(".res-b"); if(!b) return;
+    if(b.dataset.a==="back"){ if(!st2.backed){ st2.backed = true; if(st2.onBack) st2.onBack(); } }
+    else res.hidden = true;
+  };
   st2.update = (tl, now, quiet)=>{
-    const first = Math.min(...tl.reveal), last = Math.max(...tl.reveal);
-    const phase = now<tl.closeAt ? "count" : now<first ? "mix" : now>=last ? "done" : "reveal";
+    st2.tl = tl;
+    st2.mine = new Set(tl.mine);
+    const first = Math.min(...tl.reveal);
+    // start the run of every ball whose time has come (a ball seen very late just appears, no run)
+    for(let i=0;i<3;i++){
+      const w = tl.winners[i];
+      if(!w || now<tl.reveal[i] || st2.start[i]) continue;
+      st2.start[i] = now;
+      if(quiet || now-tl.reveal[i] > 7000){
+        st2.done[i] = true; st2.instant[i] = true; globe.removeBall(w.num);
+      } else {
+        SFX.whoosh();
+        globe.launch(w.num, i, {
+          exit: ()=>SFX.pop(),
+          done: ()=>{
+            st2.done[i] = true;
+            const me = st2.mine.has(w.num);
+            if(me) SFX.win(); else SFX.fanfare();
+            if(st2.onReveal) st2.onReveal(i, w, me);
+            st2.update(st2.tl, Date.now(), false);
+          }});
+      }
+    }
+    const allDone = st2.done.every(Boolean);
+    const phase = now<tl.closeAt ? "count" : now<first ? "mix" : !allDone ? "reveal" : "done";
     q(".stg-t").textContent = phase==="count" ? "⏱ ጨዋታው ይጀምራል · Game starts in" : phase==="mix" ? "🎰 Mixing the balls…"
-                            : phase==="reveal" ? "🎉 Revealing the winners" : "🏆 Results";
+                            : phase==="reveal" ? "🎉 The balls are coming out" : "🏆 Results";
     q(".stg-c").textContent = phase==="count" ? Math.max(0, Math.ceil((tl.closeAt-now)/1000)) : "";
-    if(!st2.filled){ st2.filled = true; globe.fill(Math.min(40, Math.max(14, tl.sold)), tl.size||100); }
-    globe.setMode(phase==="mix" || phase==="reveal" ? "mix" : "rest");
+    const mixing = phase==="mix" || phase==="reveal";
+    globe.setMode(mixing ? "mix" : "rest");
+    if(mixing && !quiet) SFX.mixStart(alive); else SFX.mixStop();
     let next = -1;
-    for(let i=0;i<3;i++) if(now<tl.reveal[i] && (next<0 || tl.reveal[i]<tl.reveal[next])) next = i;
-    q(".stg-n").textContent = phase==="count" ? tl.sold+" numbers in the game · winners are already locked 🔒"
+    for(let i=0;i<3;i++) if(!st2.start[i] && now<tl.reveal[i] && (next<0 || tl.reveal[i]<tl.reveal[next])) next = i;
+    q(".stg-n").textContent = phase==="count" ? tl.sold+" numbers in the machine · winners are already locked 🔒"
       : next>=0 ? "Next: "+PLI[next]+" "+PLN[next]+" in "+Math.max(0, Math.ceil((tl.reveal[next]-now)/1000))+"s" : "";
-    const mine = new Set(tl.mine), won = [];
+    const mine = st2.mine, won = [];
     for(let i=0;i<3;i++){
       const el = slots[i], b = el.querySelector(".sl-b"), w = tl.winners[i];
-      const revealed = now>=tl.reveal[i];
       el.querySelector(".sl-z").textContent = tl.prizes[i]+" birr";
-      if(revealed && w){
-        b.textContent = w.num; b.className = "sl-b on p"+i;
-        el.querySelector(".sl-w").innerHTML = esc(w.name)+(w.player?`<small>${esc(w.player)}</small>`:"");
+      if(st2.done[i] && w){
+        if(!st2.painted[i]){
+          st2.painted[i] = true;
+          b.textContent = w.num; b.className = "sl-b on p"+i;
+          el.querySelector(".sl-w").innerHTML = esc(w.name)+(w.player?`<small>${esc(w.player)}</small>`:"");
+          if(!quiet && !st2.instant[i]){ void b.offsetWidth; b.classList.add("pop"); }
+        }
         const me = mine.has(w.num);
         el.classList.toggle("me", me);
         if(me) won.push({i, w});
-        if(!st2.shown[i]){
-          st2.shown[i] = true;
-          if(!quiet){ void b.offsetWidth; b.classList.add("pop"); globe.drop(w.num, i); if(st2.onReveal) st2.onReveal(i, w, me); }
-        }
-      } else if(revealed){ b.textContent = "…"; b.className = "sl-b next"; }
-      else { b.textContent = "?"; b.className = "sl-b"+(i===next && phase!=="count" ? " next" : ""); el.querySelector(".sl-w").textContent = ""; el.classList.remove("me"); }
+      } else if(st2.start[i] || now>=tl.reveal[i]){
+        b.textContent = "…"; b.className = "sl-b next"; el.querySelector(".sl-w").textContent = ""; el.classList.remove("me");
+      } else {
+        b.textContent = "?"; b.className = "sl-b"+(i===next && phase!=="count" ? " next" : ""); el.querySelector(".sl-w").textContent = ""; el.classList.remove("me");
+      }
     }
     const wb = q(".stg-win");
     if(won.length){
@@ -1298,6 +1455,31 @@ function makeStage(root){
     } else if(phase==="done" && mine.size){
       wb.hidden = false; wb.className = "stg-win no"; wb.textContent = "Not this time. Better luck in the next game! 🍀";
     } else wb.hidden = true;
+
+    // the winners screen, then (live only) the 45-second wait before the lobby
+    if(phase==="done" && !quiet){
+      if(!st2.doneAt) st2.doneAt = now;
+      const resAt = st2.doneAt+RES_DELAY;
+      if(now >= resAt){
+        if(!st2.resShown){
+          st2.resShown = true;
+          const rows = tl.winners.map((w,i)=> w ? `<div class="rr${mine.has(w.num)?" me":""}"><span class="ri">${PLI[i]}</span>`+
+            `<span class="rn">#${w.num} · ${esc(w.name)}${w.player?`<small>${esc(w.player)}</small>`:""}</span><b>${tl.prizes[i]} birr</b></div>` : "").join("");
+          const tot = won.reduce((s,x)=>s+tl.prizes[x.i], 0);
+          res.innerHTML = `<h3>🏆 WINNERS</h3>`+rows+
+            (tot ? `<div class="res-me">🎉 You won ${tot} birr!</div>` : (mine.size ? `<div class="res-me no">Not this time. Good luck next game! 🍀</div>` : ""))+
+            (tl.back ? `<div class="res-c">Back to the lobby in <b>${Math.round(BACK_MS/1000)}</b>s</div><button class="res-b" data-a="back" type="button">← Lobby now</button>`
+                     : `<button class="res-b" data-a="close" type="button">Close</button>`);
+          res.hidden = false;
+          SFX.done();
+        }
+        if(tl.back){
+          const left = Math.max(0, Math.ceil((resAt+BACK_MS-now)/1000));
+          const cb = res.querySelector(".res-c b"); if(cb) cb.textContent = left;
+          if(left<=0 && !st2.backed){ st2.backed = true; if(st2.onBack) st2.onBack(); }
+        }
+      }
+    }
   };
   return st2;
 }
@@ -1305,7 +1487,10 @@ function makeStage(root){
 function ngLiveDraw(){
   const w = NG.watch, v = w.view;
   if(!NG.stage || NG.stageRound!==w.round){
-    NG.stage = makeStage($("ngStage")); NG.stageRound = w.round;
+    const nums = (NG.s && NG.s.status!=="open" && NG.s.taken.length) ? NG.s.taken.slice()
+               : (v.board && v.board.length) ? v.board.slice() : Array.from({length:v.sold}, (_,i)=>i+1);
+    NG.stage = makeStage($("ngStage"), nums); NG.stageRound = w.round;
+    NG.stage.onBack = ()=>{ if(NG.watch) NG.watch.closed = true; NG.mode = "pick"; show("lobby"); ngSync(); };   // after the 45 seconds
     NG.stage.onReveal = (i, x, me)=>{
       if(me){ try{ tg.HapticFeedback.notificationOccurred("success"); }catch(e){} toast("🎉 You won "+x.prize+" birr!"); }
     };
@@ -1332,7 +1517,7 @@ function stageTick(){
   if(screen!=="ng" || NG.mode==="pick" || !w || !w.view || !NG.stage) return;
   const v = w.view, off = w.off||0, L = t=>t*1000-off, now = Date.now();
   const tl = { closeAt:L(v.draw_at), reveal:v.reveal_at.map(L), settleAt:L(v.settle_at), sold:v.sold, size:v.size, prizes:v.prizes,
-               winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:w.mine.map(m=>m.num) };
+               winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:w.mine.map(m=>m.num), back:true };
   NG.stage.update(tl, now, false);
   if(NG.mode==="live"){                                  // a reveal time passed but the server answer has not arrived yet: ask now
     const missing = tl.winners.some((x,i)=>!x && now>=tl.reveal[i]);
@@ -1499,7 +1684,7 @@ function ngdStage(play){
   rp.order.forEach((idx,k)=>{ reveal[idx] = start + (rp.intro + k*rp.gap)*1000; });
   const tl = { closeAt:start, reveal, settleAt:start+(rp.intro+3*rp.gap)*1000, sold:v.sold, size:v.size, prizes:v.prizes,
                winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:v.mine.map(m=>m.num) };
-  const stage = makeStage($("ngdStage"));
+  const stage = makeStage($("ngdStage"), v.board || []);
   stage.update(tl, Date.now(), !play);
   if(play){
     $("ngdReplay").disabled = true;
