@@ -2022,6 +2022,50 @@ class TelegramSide(Stage2Base):
         self.assertIn("❌", m.said[0][0])
         self.assertEqual(ng.rounds[100]["status"], "open")
 
+class AdminForceStart(unittest.TestCase):
+    """Admin-only start with fewer than 50 numbers (minimum 3 for three different winners)."""
+    def setUp(self):
+        self.e = make_env()
+        self.e.fund(1, 1000)
+        for n in (7, 8, 9):
+            assert buy(1, 50, n)["ok"]
+
+    def test_normal_start_still_needs_50(self):
+        res = ng.admin_start(50)
+        self.assertFalse(res["ok"])
+        self.assertIn("50", res["error"])
+
+    def test_force_start_works_with_3(self):
+        res = ng.admin_start(50, force=True)
+        self.assertTrue(res["ok"])
+        r = ng.rounds[50]
+        self.assertEqual(r["status"], "countdown")
+        self.assertEqual(r["draw"]["prizes"], [90, 15, 9])       # 3 sold: 30/5/3 per number
+
+    def test_force_needs_at_least_3(self):
+        ng.rounds[50]["owners"].pop(9)
+        res = ng.admin_start(50, force=True)
+        self.assertFalse(res["ok"])
+        self.assertIn("3", res["error"])
+
+    def test_api_admin_only_and_round_checked(self):
+        rid = ng.rounds[50]["id"]
+        run = lambda body: asyncio.run(ng.handle_start(body))
+        self.e.fund(2, 100)
+        self.assertEqual(run({"initData": "u2", "lobby": 50, "round": rid})["error"], "Admin only")
+        self.assertEqual(ng.rounds[50]["status"], "open")
+        self.assertFalse(run({"initData": "", "lobby": 50, "round": rid})["ok"])
+        bad = run({"initData": f"u{ADMIN}", "lobby": 50, "round": rid + 99})
+        self.assertFalse(bad["ok"])
+        self.assertEqual(ng.rounds[50]["status"], "open")
+        ok = run({"initData": f"u{ADMIN}", "lobby": 50, "round": rid})
+        self.assertTrue(ok["ok"])
+        self.assertEqual(ng.rounds[50]["status"], "countdown")
+
+    def test_state_tells_only_the_admin(self):
+        self.assertTrue(ng.state_for(ADMIN, 50)["admin"])
+        self.assertFalse(ng.state_for(1, 50)["admin"])
+
 
 if __name__ == "__main__":
     unittest.main()
