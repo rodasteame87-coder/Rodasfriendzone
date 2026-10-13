@@ -3068,7 +3068,7 @@ async def main():
     # note: /sound is no longer a command; the Sound ON/OFF button is in the start menu
     public_commands = [
         BotCommand(command="start", description="Start the bot"),
-        BotCommand(command="play", description="🎮 Play Bingo"),
+        BotCommand(command="play", description="🎮 Open Rodas Friend Zone"),
         BotCommand(command="winning_patterns", description="🏆 Winning Patterns"),
         BotCommand(command="instructions", description="📝 Game Instructions"),
         BotCommand(command="balance", description="💰 Check Balance"),
