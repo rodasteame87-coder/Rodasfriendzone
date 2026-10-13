@@ -25,10 +25,10 @@ SUPPORT = os.getenv("SUPPORT_USERNAME", "@your_support")
 PORT = int(os.getenv("PORT", 8080))
 
 # ---------- PAYMENT DETAILS (set these ONLY in environment variables, never in code) ----------
-CBE_ACCOUNT = os.getenv("CBE_ACCOUNT", "")
-CBE_NAME = os.getenv("CBE_NAME", "")
-TELEBIRR_PHONE = os.getenv("TELEBIRR_PHONE", "")
-TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "")
+CBE_ACCOUNT = os.getenv("CBE_ACCOUNT", "1000613735775")
+CBE_NAME = os.getenv("CBE_NAME", "Rodas Teame")
+TELEBIRR_PHONE = os.getenv("TELEBIRR_PHONE", "0904131471")
+TELEBIRR_NAME = os.getenv("TELEBIRR_NAME", "Metasbiya werku")
 CBEBIRR_PHONE = os.getenv("CBEBIRR_PHONE", "")
 CBEBIRR_NAME = os.getenv("CBEBIRR_NAME", "")
 DEPOSIT_SUPPORT = os.getenv("DEPOSIT_SUPPORT", "@Rodasfriendzonesupport")
@@ -2917,6 +2917,92 @@ async def set_player_menus(bot, commands):
     print(f"player menus set: {ok} ok, {fail} failed")
 
 
+# ---------- app deposit page (index.html: Deposit button -> payment details -> I've Paid) ----------
+DEP_MAX = 10000          # biggest deposit from the app
+DEP_MINUTES = 30         # how long the payment page counts down
+
+
+def _dep_methods():
+    """Payment methods shown in the app. Set the env vars to change the details."""
+    return {
+        "cbe": {"label": "Commercial Bank of Ethiopia", "short": "CBE", "account": CBE_ACCOUNT,
+                "name": CBE_NAME, "qr": False, "on": bool(CBE_ACCOUNT)},
+        "telebirr": {"label": "Telebirr", "short": "Telebirr", "account": TELEBIRR_PHONE,
+                     "name": TELEBIRR_NAME, "qr": True, "on": bool(TELEBIRR_PHONE)},
+    }
+
+
+async def api_dep_info(req):
+    user = verify(req.query.get("initData", ""))
+    if not user:
+        return web.json_response({"error": "auth"})
+    uid = touch(user)
+    if uid in banned:
+        return web.json_response({"error": "blocked"})
+    return web.json_response({"ok": True, "methods": _dep_methods(), "min": MIN_DEPOSIT, "max": DEP_MAX,
+                              "minutes": DEP_MINUTES, "support": DEPOSIT_SUPPORT})
+
+
+async def api_dep_create(req):
+    """The player pressed I've Paid. Same as /deposit: a pending request goes to the admin
+    (Approve / Reject). If the SMS from your phone arrives, it is approved automatically."""
+    import time as _t
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    user = verify(body.get("initData", ""))
+    if not user:
+        return web.json_response({"ok": False, "error": "auth"})
+    uid = touch(user)
+    if uid in banned:
+        return web.json_response({"ok": False, "error": "Your account is blocked. Contact support"})
+    if uid not in phones:
+        return web.json_response({"ok": False, "needPhone": True, "error": "Share your phone number first"})
+    method = body.get("method")
+    m = _dep_methods().get(method) if isinstance(method, str) else None
+    if not m or not m["on"]:
+        return web.json_response({"ok": False, "error": "This payment method is not available"})
+    raw = body.get("amount")
+    try:
+        amount = None if isinstance(raw, bool) else int(raw)
+    except (TypeError, ValueError):
+        amount = None
+    if amount is None or not MIN_DEPOSIT <= amount <= DEP_MAX:
+        return web.json_response({"ok": False, "error": f"Amount must be {MIN_DEPOSIT} to {DEP_MAX} birr"})
+    now = int(_t.time())
+    for rid0, r0 in pending.items():          # the same tap sent twice: same request
+        if (r0.get("web") and r0["uid"] == uid and r0["amount"] == amount
+                and r0.get("method") == method and now - r0.get("t", 0) < 180):
+            return web.json_response({"ok": True, "rid": rid0, "dup": True})
+    if pending_deposits(uid) >= MAX_PENDING_DEPOSITS:
+        return web.json_response({"ok": False, "error": f"You already have {MAX_PENDING_DEPOSITS} deposit requests waiting"})
+    if not ADMIN_ID or BOT is None:
+        return web.json_response({"ok": False, "error": f"Deposits are handled by support: {DEPOSIT_SUPPORT}"})
+    req_counter[0] += 1
+    rid = req_counter[0]
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount, "method": method, "web": True, "t": now}
+    save_pending(rid)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
+        InlineKeyboardButton(text="❌ Reject", callback_data=f"no:{rid}")]])
+    try:
+        await BOT.send_message(
+            ADMIN_ID,
+            f"💵 Deposit request #{rid} (from the app)\nUser: {names.get(uid, 'Player')} ({uid})\n"
+            f"Amount: {amount} birr\nMethod: {m['short']}\n"
+            "Check your phone's SMS before approving. If the SMS arrives it is approved automatically.",
+            reply_markup=kb)
+    except Exception as e:
+        pending.pop(rid, None)
+        save_pending(rid)
+        print("app deposit: could not notify admin:", repr(e))
+        return web.json_response({"ok": False, "error": "Could not send the request. Try again"})
+    return web.json_response({"ok": True, "rid": rid})
+
+
 # ---------- main ----------
 async def main():
     global pool, lock_conn, ready, _q, BOT
@@ -2937,6 +3023,8 @@ async def main():
         web.post("/api/bingo", api_bingo),
         web.post("/api/leave", api_leave),
         web.post("/api/sms-hook", api_sms_hook),
+        web.get("/api/dep/info", api_dep_info),
+        web.post("/api/dep/create", api_dep_create),
         *ng.routes(),                     # Number Game API
     ])
     runner = web.AppRunner(app)
