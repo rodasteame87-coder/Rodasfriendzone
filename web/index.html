@@ -302,6 +302,7 @@
   .tb-menu{background:#111;color:#fff;border-radius:10px;padding:10px 12px;margin:-6px 0 12px;font-size:13px;line-height:1.7}
   #lobby[data-mode="ng"] #bingoBox,#lobby[data-mode="ng"] .practice{display:none!important}
   #lobby[data-mode="bingo"] #ngBox{display:none!important}
+  .stg-n.stg-fair{font-size:12px;margin:12px 4px 0;line-height:1.45}
   .hm-title{font-size:22px;margin:6px 0 12px}
   .hm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
   .hm-card{background:#fff;border-radius:14px;box-shadow:var(--shadow);padding:10px;display:flex;flex-direction:column;gap:8px}
@@ -415,8 +416,8 @@
       <ul class="hm-rules">
         <li>Choose a room: 50 or 100 birr per number.</li>
         <li>You can own up to 5 numbers in a room.</li>
-        <li>3 winners are drawn: gold, silver and bronze.</li>
-        <li>The draw hash is published before the countdown.</li>
+        <li>3 winners (gold, silver, bronze) are drawn and locked before the countdown.</li>
+        <li>Anyone can check the draw with the published hash.</li>
         <li>Prizes go to your balance automatically.</li>
       </ul>
     </section>
@@ -1421,7 +1422,7 @@ function makeGlobe(cv, nums){
   const cx = 180, cy = 165, R = 138;
   const BR = Math.max(9, Math.min(15, Math.floor(Math.sqrt(0.40*R*R/Math.max(1, nums.length)))));   // smaller balls when more are sold
   const hues = [2,28,52,125,210,275,320,170,18,0];
-  const colour = n => { const d = Math.floor(n/10)%10; return d===9 ? "hsl(0,0%,68%)" : d===8 ? "hsl(18,60%,42%)" : `hsl(${hues[d]},88%,${d===2?56:60}%)`; };
+  const colour = n => "#ffd21f";                         // every ball is yellow, numbers are black
   const PCOL = ["#e29a10","#8d97a8","#b4672a"];
   const PIPE = [[186,318],[70,322],[36,330],[24,348],[36,366],[70,378],[332,488]];   // centre line of the pipe
   const PATH = [[186,300]].concat(PIPE);                                            // the ball enters from inside the drum
@@ -1486,7 +1487,7 @@ function makeGlobe(cv, nums){
   function ball(x,y,r,n,c,ang){
     ctx.save(); ctx.translate(x,y); ctx.rotate(ang||0);
     ctx.beginPath(); ctx.arc(0,0,r,0,6.283); ctx.fillStyle=c; ctx.fill();
-    ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.8)"; ctx.stroke();
+    ctx.lineWidth=1.3; ctx.strokeStyle="rgba(70,45,0,.8)"; ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-r*.8,r*.22); ctx.lineTo(r*.8,r*.22); ctx.lineWidth=1; ctx.strokeStyle="rgba(0,0,0,.35)"; ctx.stroke();
     ctx.fillStyle="#111"; ctx.font="bold "+Math.round(r*.95)+"px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
     ctx.fillText(n,0,-r*.12); ctx.restore();
@@ -1494,23 +1495,23 @@ function makeGlobe(cv, nums){
   function draw(){
     ctx.clearRect(0,0,W,H);
     // the feeding tube round the drum (decoration)
-    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,205,40,.45)";
+    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(200,225,240,.45)";
     ctx.beginPath(); ctx.arc(cx,cy,R+24,-1.45,1.5); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx,cy,R+12,-1.45,1.5); ctx.stroke();
     // the pipe: a yellow wall with a hollow inside
     ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.beginPath(); PIPE.forEach((p,i)=> i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));
-    ctx.lineWidth = 34; ctx.strokeStyle = "rgba(255,205,40,.9)"; ctx.stroke();
+    ctx.lineWidth = 34; ctx.strokeStyle = "rgba(190,220,238,.55)"; ctx.stroke();
     ctx.globalCompositeOperation = "destination-out";
     ctx.lineWidth = 27; ctx.strokeStyle = "#000"; ctx.stroke();
     ctx.globalCompositeOperation = "source-over";
     // glass back
     const gr = ctx.createRadialGradient(cx-R*.35,cy-R*.35,R*.1,cx,cy,R);
-    gr.addColorStop(0,"rgba(255,236,120,.55)"); gr.addColorStop(1,"rgba(255,185,0,.58)");
+    gr.addColorStop(0,"rgba(235,247,255,.10)"); gr.addColorStop(.75,"rgba(200,228,245,.14)"); gr.addColorStop(1,"rgba(150,200,225,.34)");
     ctx.beginPath(); ctx.arc(cx,cy,R,0,6.283); ctx.fillStyle=gr; ctx.fill();
     for(const b of g.balls) ball(b.x,b.y,BR,b.n,b.c,b.a);
     // glass front: rim and shine
-    ctx.beginPath(); ctx.arc(cx,cy,R,0,6.283); ctx.lineWidth=5; ctx.strokeStyle="rgba(255,205,40,.95)"; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,6.283); ctx.lineWidth=4; ctx.strokeStyle="rgba(205,230,245,.75)"; ctx.stroke();
     ctx.beginPath(); ctx.arc(cx,cy,R-5,0,6.283); ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.stroke();
     ctx.beginPath(); ctx.arc(cx,cy,R-14,3.6,4.5); ctx.lineWidth=6; ctx.lineCap="round"; ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.stroke();
     ctx.beginPath(); ctx.arc(cx,cy,R-14,4.7,4.85); ctx.stroke(); ctx.lineCap="butt";
@@ -1552,7 +1553,7 @@ function makeStage(root, nums){
     `<div class="stg-n"></div><div class="slots">`+
     [0,1,2].map(i=>`<div class="slot"><div class="sl-b">?</div><div class="sl-p">${PLI[i]} ${PLN[i]}</div>`+
                    `<div class="sl-z"></div><div class="sl-w"></div></div>`).join("")+
-    `</div><div class="stg-win" hidden></div></div>`;
+    `</div><div class="stg-n stg-fair">🔒 The server draws the winners and locks them before the countdown. This machine only reveals them. You can check the hash in the game results.</div><div class="stg-win" hidden></div></div>`;
   const q = c => root.querySelector(c);
   const slots = [...root.querySelectorAll(".slot")];
   const globe = makeGlobe(q(".globe"), nums||[]);
@@ -1595,15 +1596,15 @@ function makeStage(root, nums){
     }
     const allDone = st2.done.every(Boolean);
     const phase = now<tl.closeAt ? "count" : now<first ? "mix" : !allDone ? "reveal" : "done";
-    q(".stg-t").textContent = phase==="count" ? "⏱ ጨዋታው ይጀምራል · Game starts in" : phase==="mix" ? "🎰 Mixing the balls…"
-                            : phase==="reveal" ? "🎉 The balls are coming out" : "🏆 Results";
+    q(".stg-t").textContent = phase==="count" ? "⏱ ጨዋታው ይጀምራል · Game starts in" : phase==="mix" ? "🔒 The winners are locked. Revealing soon…"
+                            : phase==="reveal" ? "🎉 Revealing the locked winners" : "🏆 Results";
     q(".stg-c").textContent = phase==="count" ? Math.max(0, Math.ceil((tl.closeAt-now)/1000)) : "";
     const mixing = phase==="mix" || phase==="reveal";
     globe.setMode(mixing ? "mix" : "rest");
     if(mixing && !quiet) SFX.mixStart(alive); else SFX.mixStop();
     let next = -1;
     for(let i=0;i<3;i++) if(!st2.start[i] && now<tl.reveal[i] && (next<0 || tl.reveal[i]<tl.reveal[next])) next = i;
-    q(".stg-n").textContent = phase==="count" ? tl.sold+" numbers in the machine · winners are already locked 🔒"
+    q(".stg-n").textContent = phase==="count" ? tl.sold+" numbers · winners were drawn by the server and are locked 🔒"
       : next>=0 ? "Next: "+PLI[next]+" "+PLN[next]+" in "+Math.max(0, Math.ceil((tl.reveal[next]-now)/1000))+"s" : "";
     const mine = st2.mine, won = [];
     for(let i=0;i<3;i++){
