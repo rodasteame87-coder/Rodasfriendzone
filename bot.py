@@ -1341,7 +1341,7 @@ def ensure(u):
 
 def play_kb():
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🎱 Play Bingo",
+        InlineKeyboardButton(text="🎱 Open Rodas Friend Zone",
                              web_app=WebAppInfo(url=WEBAPP_URL))]])
 
 
