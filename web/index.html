@@ -300,6 +300,8 @@
   .tb-sep{width:1px;height:22px;background:#2c2c32}
   button.tb-dep{width:auto;height:36px;padding:0 16px;background:#2fe892;color:#04301c;font-size:14px}
   .tb-menu{background:#111;color:#fff;border-radius:10px;padding:10px 12px;margin:-6px 0 12px;font-size:13px;line-height:1.7}
+  #lobby[data-mode="ng"] #bingoBox,#lobby[data-mode="ng"] .practice{display:none!important}
+  #lobby[data-mode="bingo"] #ngBox{display:none!important}
   .hm-title{font-size:22px;margin:6px 0 12px}
   .hm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
   .hm-card{background:#fff;border-radius:14px;box-shadow:var(--shadow);padding:10px;display:flex;flex-direction:column;gap:8px}
@@ -465,16 +467,18 @@
   </div>
 </div>
 
-<div id="lobby" hidden>
-  <div class="bar"><span class="homeBack" id="toHome">‹ Home</span>Rodas Friend Zone Bingo</div>
+<div id="lobby" hidden data-mode="bingo">
+  <div class="bar"><span class="homeBack" id="toHome">‹ Home</span><span id="lobTitle">Bingo</span></div>
   <div id="tab-game">
     <div class="top">
       <div class="live"><span class="dot"></span>Live</div>
       <div class="bal" style="text-align:right">💳 Balance: <b id="bal">0.00</b><br><small id="wdl" style="font-weight:600;color:#6b5a7c">Withdrawable: 0.00</small></div>
     </div>
+    <div id="bingoBox">
     <div class="gt">🎯 BINGO GAMES</div>
     <div class="colhead"><span>BET</span><span>POSSIBLE WIN · STATUS</span></div>
     <div id="roomList"></div>
+    </div>
     <div id="ngBox" hidden>
       <div class="gt">🎟 NUMBER GAME</div>
       <div class="colhead"><span>PRICE</span><span>TOP PRIZE · SOLD</span></div>
@@ -1265,7 +1269,7 @@ async function ngSync(){
   if(d.error){
     if(d.error==="closed" || d.error==="auth" || d.error==="blocked"){
       NG.avail=false; $("ngBox").hidden=true;
-      if(screen==="ng") show("lobby");
+      if(screen==="ng") show("home");
     }
     return;
   }
@@ -1902,11 +1906,11 @@ const etb = n => Number(n).toLocaleString("en-US");
   $("hmCartela").innerHTML = h;
 })();
 function toGameTab(){ const t=document.querySelector('.nav div[data-t="game"]'); if(t) t.click(); }
-$("hmBingo").onclick = () => { show("lobby"); toGameTab(); };
+$("hmBingo").onclick = () => { $("lobby").dataset.mode = "bingo"; $("lobTitle").textContent = "Bingo"; show("lobby"); toGameTab(); };
 $("hmNum").onclick = () => {
   const b=$("ngBox");
   if(!b || b.hidden) return toast("Number Game is not open yet");
-  show("lobby"); toGameTab(); b.scrollIntoView({behavior:"smooth", block:"start"});
+  $("lobby").dataset.mode = "ng"; $("lobTitle").textContent = "Choosing Number"; show("lobby"); toGameTab();
 };
 $("toHome").onclick = () => show("home");
 
