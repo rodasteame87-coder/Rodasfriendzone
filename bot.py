@@ -1601,9 +1601,28 @@ async def cmd_deposit(m: Message, command: CommandObject):
         await m.answer(f"Deposits are handled by support: {SUPPORT}")
         return
     ref = args[1] if len(args) > 1 else "(none)"
+    tokens = sms_tokens(ref) if len(args) > 1 else set()
+    if any(("tok:" + t) in used_sms for t in tokens):
+        await m.answer("ይህ ክፍያ ቀደም ብሎ ተመዝግቧል። / This payment was already credited.")
+        return
+    # 1) Automatic: the SMS from YOUR phone already arrived
+    rec = find_bank_sms(amount, tokens)
+    if rec:
+        claim_bank(rec)
+        await approve_deposit(m.bot, uid, rec["amount"])
+        if ADMIN_ID:
+            try:
+                await m.bot.send_message(
+                    ADMIN_ID, f"✅ Deposit checked automatically.\n"
+                              f"User: {names[uid]} ({uid})\nAmount: {rec['amount']} birr")
+            except Exception:
+                pass
+        return
+    # 2) Not found yet: keep the tokens so a later forwarded SMS approves it automatically
     req_counter[0] += 1
     rid = req_counter[0]
-    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount}
+    pending[rid] = {"type": "deposit", "uid": uid, "amount": amount,
+                    "tokens": sorted(tokens)}
     save_pending(rid)
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Approve", callback_data=f"ok:{rid}"),
