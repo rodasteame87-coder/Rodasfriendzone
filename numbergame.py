@@ -1365,7 +1365,33 @@ def _refund_rows(r, uid):
     """Buttons for /ngrefund: one button per number the player owns (4 per row)."""
     nums = sorted(r["by_uid"].get(uid, []))
     btns = [(f"❌ #{x}", f"ngr:{r['id']}:{uid}:{x}") for x in nums]
-    return [btns[i:i + 4] for i in range(0, len(btns), 4)]
+    rows = [btns[i:i + 4] for i in range(0, len(btns), 4)]
+    rows.append([("⬅️ All players", f"ngl:{r['lobby']}")])
+    return rows
+
+
+def _room_rows():
+    ks = sorted(PRICES)
+    btns = [(room_name(k), f"ngl:{k}") for k in ks]
+    return [btns[i:i + 2] for i in range(0, len(btns), 2)]
+
+
+def _players_view(lobby):
+    """(text, button rows): every real player who owns numbers in this room, as buttons."""
+    r = rounds.get(lobby)
+    head = game_label(lobby, r["game_no"], r["id"]) if r else room_name(lobby)
+    if r is None or r["status"] != "open":
+        return f"{head}: the game has started, numbers can no longer be cancelled.", [[("⬅️ Rooms", "ngl:0")]]
+    people = [(u, ns) for u, ns in r["by_uid"].items() if u > 0 and ns]
+    if not people:
+        return f"{head}: no Telegram player owns a number yet.", [[("⬅️ Rooms", "ngl:0")]]
+    people.sort(key=lambda t: str(_pname(t[0])).lower())
+    shown = people[:80]
+    btns = [(f"{_pname(u)} ({len(ns)})", f"ngu:{r['id']}:{u}") for u, ns in shown]
+    rows = [btns[i:i + 2] for i in range(0, len(btns), 2)]
+    rows.append([("⬅️ Rooms", "ngl:0")])
+    more = f"\n(+{len(people) - len(shown)} more: use /ngrefund <phone> {lobby})" if len(people) > len(shown) else ""
+    return f"{head}: {len(people)} players. Tap a player.{more}", rows
 
 
 def _refund_done_text(uid, res):
@@ -1538,10 +1564,17 @@ def register(dp):
         if not is_admin(m):
             return
         parts = (command.args or "").split()
+        if not parts:                                          # just /ngrefund -> choose a room
+            await m.answer("Which room?", reply_markup=_kb(_room_rows()))
+            return
+        if len(parts) == 1 and _int(parts[0]) in PRICES:       # /ngrefund 5050 -> list players
+            text, rows = _players_view(_int(parts[0]))
+            await m.answer(text, reply_markup=_kb(rows) if rows else None)
+            return
         uid = find_uid_by_phone(parts[0]) if parts else None
         lobby = _int(parts[1]) if len(parts) >= 2 else None
         if len(parts) < 2 or lobby not in PRICES:
-            await m.answer("Send:\n/ngrefund <phone> <room 50, 100, 5050 or 10050> <number>\n\n"
+            await m.answer("Easiest: send /ngrefund and tap the buttons.\n\nOr send:\n/ngrefund <phone> <room 50, 100, 5050 or 10050> <number>\n\n"
                            "Cancels that player's number and returns his money, so he can choose "
                            "another one. Works only before the game has started.\n\n"
                            "Example:\n/ngrefund 0912345678 50 17\n\n"
@@ -1567,6 +1600,45 @@ def register(dp):
             return
         await m.answer(_refund_done_text(uid, res))
         await _refund_tell_player(uid, res)
+
+    @dp.callback_query(F.data.startswith("ngl:"))
+    async def cb_refund_players(cb: CallbackQuery):
+        """ngl:<room> -> players of that room; ngl:0 -> choose a room."""
+        if not (D.get("admin_id") and cb.from_user.id == D["admin_id"]):
+            await cb.answer()
+            return
+        lobby = _int((cb.data or "").split(":")[1]) if (cb.data or "").count(":") == 1 else None
+        await cb.answer()
+        if lobby in PRICES:
+            text, rows = _players_view(lobby)
+        else:
+            text, rows = "Which room?", _room_rows()
+        try:
+            await cb.message.edit_text(text, reply_markup=_kb(rows))
+        except Exception:
+            pass
+
+    @dp.callback_query(F.data.startswith("ngu:"))
+    async def cb_refund_numbers(cb: CallbackQuery):
+        """ngu:<round id>:<player id> -> that player's numbers as buttons."""
+        if not (D.get("admin_id") and cb.from_user.id == D["admin_id"]):
+            await cb.answer()
+            return
+        parts = (cb.data or "").split(":")
+        rid = _int(parts[1]) if len(parts) == 3 else None
+        uid = _int(parts[2]) if len(parts) == 3 else None
+        r = next((x for x in rounds.values() if x["id"] == rid), None) if rid is not None else None
+        if r is None or uid is None or r["status"] != "open" or not r["by_uid"].get(uid):
+            await cb.answer("This list is out of date. Send /ngrefund again.", show_alert=True)
+            return
+        await cb.answer()
+        try:
+            await cb.message.edit_text(
+                f"{_pname(uid)} owns in {game_label(r['lobby'], r['game_no'], r['id'])}:\n"
+                f"Tap a number to cancel it and refund {price_of(r['lobby'])} ETB.",
+                reply_markup=_kb(_refund_rows(r, uid)))
+        except Exception:
+            pass
 
     @dp.callback_query(F.data.startswith("ngr:"))
     async def cb_refund(cb: CallbackQuery):
