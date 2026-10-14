@@ -67,6 +67,7 @@ ROOMS = {
     10050: {"price": 100, "size": 50,  "early": False, "prizes": (3000, 700, 300)},
 }
 PRICES = tuple(ROOMS)    # the list of room keys
+ADM_UID_BASE = 1_000_000_000   # numbers added by the admin get the fake id -(ADM_UID_BASE + number)
 NAME_MAX = 20            # longest name a player can give a number
 IDEM_KEEP = 20000        # how many recent purchase keys are remembered in memory
 
@@ -158,6 +159,7 @@ _rng = random.SystemRandom()   # secure randomness (operating system)
 idem_seen = OrderedDict()      # "uid:key" -> {"lobby", "num", "result"}
 ng_counter = [0]               # last round id used
 game_counter = {p: 0 for p in PRICES}   # lobby price -> last REAL game number used (test rounds never use one)
+adm_notices = []               # prizes won by numbers the admin added (the admin is told to pay them)
 start_notices = []             # frozen rounds whose players still get "game starts in 60 seconds"
 _tasks = set()                 # background tasks (keeps them alive until they finish)
 _refreshing = [False]          # True while the poll messages are being updated
@@ -397,7 +399,8 @@ def freeze_round(lobby, early=False, min_sold=None):
         "secret": secret, "verify": verify,
         "hash": hashlib.sha256(verify.encode()).hexdigest(),
         "winners": winners, "sold": n, "prizes": prizes, "frozen_at": now,
-        "winners_info": [{"num": w, "name": r["owners"][w]["name"], "uid": r["owners"][w]["uid"]}
+        "winners_info": [{"num": w, "name": r["owners"][w]["name"], "uid": r["owners"][w]["uid"],
+                          "adm": bool(r["owners"][w].get("adm"))}
                          for w in winners],
         "poll": poll_tally(r) if r["poll_at"] is not None else None}
     r["status"] = "countdown"
@@ -431,13 +434,23 @@ def settle_round(lobby, now=None):
         info = d["winners_info"][idx]
         uid, amount = info["uid"], d["prizes"][idx]
         real = uid > 0 and not r["test"]
+        adm = bool(info.get("adm")) and not r["test"] and bool(D.get("admin_id"))
+        if adm:                                # number added by the admin: prize goes to the admin wallet
+            a = D["admin_id"]
+            D["wallets"][a] = D["wallets"].get(a, 0) + amount
+            D["log"](a, "win", amount, f"Number Game {room_name(lobby)} · {PLACES[idx]} #{info['num']} "
+                                       f"({info['name']}) · PAY THIS PLAYER")
+            adm_notices.append(f"💰 Number Game {game_label(lobby, r['game_no'], r['id'])}\n"
+                               f"{PLACES[idx].title()} #{info['num']} ({info['name']}) won {amount} ETB.\n"
+                               f"This number was added by you. The prize is already in YOUR wallet: "
+                               f"please pay {info['name']}.")
         if real:
             D["wallets"][uid] = D["wallets"].get(uid, 0) + amount
             D["log"](uid, "win", amount, f"Number Game {room_name(lobby)} · {PLACES[idx]} #{info['num']}")
         D["enqueue"](
             "INSERT INTO ng_prizes(round_id, place, num, uid, amount, status, notified, t) "
             "VALUES($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (round_id, place) DO NOTHING",
-            r["id"], idx + 1, info["num"], uid, amount, "paid" if real else "test",
+            r["id"], idx + 1, info["num"], uid, amount, "paid" if real else ("admin" if adm else "test"),
             1, t)             # 1 = no Telegram message is sent for prizes (the app shows them)
         r["paid"].add(idx)
     r["status"] = "settled"
@@ -571,6 +584,8 @@ async def ticker():
             await after_settle()
             if start_notices:
                 _spawn(send_start_notices())
+            if adm_notices and D.get("admin_id"):
+                _spawn(send_adm_notices())
             if any(r["poll_msgs"] for r in rounds.values()) and not _refreshing[0]:
                 _spawn(poll_refresh())
         except Exception as e:
@@ -585,7 +600,7 @@ def test_fill(lobby, count):
         return {"ok": False, "error": "Test mode works only while NUMBER_GAME_ENABLED is off"}
     if r is None or r["status"] != "open":
         return {"ok": False, "error": "This round is not open"}
-    if any(o["uid"] > 0 for o in r["owners"].values()):
+    if any(o["uid"] > 0 or o.get("adm") for o in r["owners"].values()):
         return {"ok": False, "error": "This round already has real purchases"}
     if not r["test"]:
         r["test"], r["game_no"] = True, None          # test rounds never take a game number
@@ -780,6 +795,94 @@ def refund_number(uid, lobby, num):
             "balance": D["wallets"][uid], "left": len(r["by_uid"].get(uid, [])), "round": r["id"]}
 
 
+def admin_add_numbers(lobby, nums, name):
+    """ADMIN: mark numbers as sold to a person who has no Telegram. No wallet is charged (the
+    admin took the cash). If such a number wins, the prize goes to the ADMIN wallet and the
+    admin is told to pay the person. No "await" may ever be added inside this function."""
+    r = rounds.get(lobby) if isinstance(lobby, int) and not isinstance(lobby, bool) else None
+    if r is None:
+        return {"ok": False, "error": "Unknown room"}
+    if r["status"] != "open":
+        return {"ok": False, "error": "This round has already started. Numbers can no longer be added."}
+    if r["test"]:
+        return {"ok": False, "error": "This is a test round (fake players)"}
+    nm = clean_name(name)
+    if nm is None:
+        return {"ok": False, "error": f"Give a name (1 to {NAME_MAX} characters)"}
+    size = size_of(lobby)
+    want, seen_n = [], set()
+    for x in nums:
+        n = _int(x)
+        if n is not None and n in seen_n:
+            continue
+        if n is not None:
+            seen_n.add(n)
+        want.append((x, n))
+    if not want:
+        return {"ok": False, "error": "No numbers given"}
+    added, skipped = [], []
+    now = int(time.time())
+    price = price_of(lobby)
+    full = False
+    for x, n in want:
+        if full:
+            skipped.append((x, "the room became full"))
+            continue
+        if n is None or not 1 <= n <= size:
+            skipped.append((x, f"not a number from 1 to {size}"))
+            continue
+        if n in r["owners"]:
+            skipped.append((n, "already taken"))
+            continue
+        uid = -(ADM_UID_BASE + n)
+        r["owners"][n] = {"uid": uid, "name": nm, "t": now, "slot": 1, "used": 0, "adm": True}
+        r["by_uid"].setdefault(uid, []).append(n)
+        D["enqueue"](
+            "INSERT INTO ng_numbers(round_id, lobby, num, uid, name, price, used, slot, idem, t) "
+            "VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            r["id"], lobby, n, uid, nm, price, 0, 1, f"adm:{r['id']}:{n}", now)
+        audit("admin_add", D.get("admin_id"), lobby, r["id"], {"num": n, "name": nm})
+        added.append(n)
+        if len(r["owners"]) >= size:           # the room is full: freeze + draw in the SAME step
+            r["full_at"] = now
+            audit("round_full", None, lobby, r["id"], {"sold": len(r["owners"])})
+            freeze_round(lobby)
+            full = True
+    return {"ok": True, "added": added, "skipped": skipped, "name": nm, "round": r["id"],
+            "sold": len(r["owners"]), "size": size, "full": full, "price": price}
+
+
+def admin_remove_number(lobby, num):
+    """ADMIN: take back a number that was added with /ngadd (no money moves: no wallet was charged)."""
+    r = rounds.get(lobby) if isinstance(lobby, int) and not isinstance(lobby, bool) else None
+    if r is None:
+        return {"ok": False, "error": "Unknown room"}
+    if r["status"] != "open":
+        return {"ok": False, "error": "This round has already started. A number can no longer be removed."}
+    n = _int(num)
+    o = r["owners"].get(n) if n is not None else None
+    if o is None or not o.get("adm"):
+        return {"ok": False, "error": f"#{num} is not a number added by the admin in {room_name(lobby)}"}
+    uid = o["uid"]
+    del r["owners"][n]
+    r["by_uid"][uid].remove(n)
+    if not r["by_uid"][uid]:
+        del r["by_uid"][uid]
+    D["enqueue"]("DELETE FROM ng_numbers WHERE round_id = $1 AND num = $2 AND uid = $3", r["id"], n, uid)
+    audit("admin_unadd", D.get("admin_id"), lobby, r["id"], {"num": n, "name": o["name"]})
+    return {"ok": True, "num": n, "name": o["name"]}
+
+
+async def send_adm_notices():
+    batch = list(adm_notices)
+    adm_notices.clear()
+    for text in batch:
+        try:
+            await D["send"](D["admin_id"], text)
+        except Exception as e:
+            print("could not tell the admin about a prize:", repr(e))
+
+
 def poll_player_text(r):
     sold = len(r["owners"])
     return (f"🗳 Number Game {game_label(r['lobby'], r['game_no'], r['id'])}\n\n"
@@ -959,7 +1062,8 @@ async def load_state(c):
                 "FROM ng_numbers WHERE round_id = ANY($1::bigint[])", ids):
             r = by_id[row["round_id"]]
             r["owners"][row["num"]] = {"uid": row["uid"], "name": row["name"], "t": row["t"],
-                                       "slot": row["slot"], "used": row["used"]}
+                                       "slot": row["slot"], "used": row["used"],
+                                       "adm": str(row["idem"]).startswith("adm:")}
             r["by_uid"].setdefault(row["uid"], []).append(row["num"])
             idem_seen[row["idem"]] = {
                 "lobby": row["lobby"], "num": row["num"],
@@ -1355,6 +1459,55 @@ def register(dp):
         r = rounds[lobby]
         await m.answer(f"▶️ {game_label(lobby, r['game_no'], r['id'])} started with {res['sold']} numbers. "
                        f"Countdown {COUNTDOWN_SECONDS}s.\nHash: {r['draw']['hash']}")
+
+    @dp.message(Command("ngadd"))
+    async def cmd_ngadd(m: Message, command: CommandObject):
+        """/ngadd 50 17,18 Abebe : mark numbers 17 and 18 in room 50 as sold to Abebe (no Telegram)."""
+        if not is_admin(m):
+            return
+        parts = (command.args or "").split(None, 2)
+        lobby = _int(parts[0]) if parts else None
+        if len(parts) < 3 or lobby not in PRICES:
+            await m.answer("Send:\n/ngadd <room 50, 100, 5050 or 10050> <numbers> <name>\n\n"
+                           "For a player without Telegram who paid you cash. The number is shown as sold "
+                           "with that name. No wallet is charged. If it wins, the prize is added to YOUR "
+                           "wallet and the bot tells you to pay him.\n\n"
+                           "Examples:\n/ngadd 50 17 Abebe\n/ngadd 5050 3,8,21 Abebe Kebede\n\n"
+                           "To take one back: /ngunadd <room> <number>")
+            return
+        nums = [x for x in re.split(r"[,\s]+", parts[1]) if x]
+        res = admin_add_numbers(lobby, nums, parts[2])
+        if not res["ok"]:
+            await m.answer("❌ " + res["error"])
+            return
+        lines = []
+        if res["added"]:
+            lines.append(f"✅ Added to {room_name(lobby)}: " + ", ".join(f"#{x}" for x in res["added"])
+                         + f" → {res['name']}")
+        for x, why in res["skipped"]:
+            lines.append(f"⚠️ #{x}: {why}")
+        lines.append(f"Sold {res['sold']}/{res['size']}"
+                     + (f" · money to collect: {len(res['added']) * res['price']} ETB (you took it as cash)"
+                        if res["added"] else ""))
+        if res["full"]:
+            lines.append(f"🎉 The room is full. The draw has started (countdown {COUNTDOWN_SECONDS}s).")
+        await m.answer("\n".join(lines))
+
+    @dp.message(Command("ngunadd"))
+    async def cmd_ngunadd(m: Message, command: CommandObject):
+        """/ngunadd 50 17 : take back a number added with /ngadd (no money moves)."""
+        if not is_admin(m):
+            return
+        parts = (command.args or "").split()
+        lobby = _int(parts[0]) if parts else None
+        if len(parts) != 2 or lobby not in PRICES:
+            await m.answer("Send:\n/ngunadd <room 50, 100, 5050 or 10050> <number>\n\n"
+                           "Takes back a number you added with /ngadd. Works only before the game starts. "
+                           "No wallet changes.")
+            return
+        res = admin_remove_number(lobby, parts[1])
+        await m.answer(("✅ " + f"Number #{res['num']} ({res['name']}) is free again.") if res["ok"]
+                       else "❌ " + res["error"])
 
     @dp.message(Command("ngrefund"))
     async def cmd_ngrefund(m: Message, command: CommandObject):
