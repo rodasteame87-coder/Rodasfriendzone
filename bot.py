@@ -1992,6 +1992,7 @@ async def cmd_admin(m: Message):
         "/ngbuy <lobby> <number> <name>\nNumber Game: test purchase with your own wallet\n\n"
         "/ngpoll <lobby>\nNumber Game: ask the players (anonymous) if the game should start now\n\n"
         "/ngstart <lobby>\nNumber Game: start the game now (50+ numbers sold)\n\n"
+        "/ngrefund <phone> <room> <number>\nNumber Game: cancel one player's number and refund him\n\n"
         "/ngresult <lobby>\nNumber Game: latest finished round + proof hash\n\n"
         "/ngtestfill <lobby> <how many>\nNumber Game TEST: fill with fake players (no money)\n\n"
         "/ngtestfreeze <lobby>\nNumber Game TEST: early start of a fake round")
@@ -3144,6 +3145,7 @@ async def main():
                     BotCommand(command="ngstatus", description="🎟 Number Game status"),
                     BotCommand(command="ngpoll", description="🗳 Number Game: ask players to start"),
                     BotCommand(command="ngstart", description="▶️ Number Game: start now"),
+                    BotCommand(command="ngrefund", description="↩️ Number Game: refund a number"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
