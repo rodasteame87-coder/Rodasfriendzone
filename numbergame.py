@@ -1361,6 +1361,28 @@ def result_text(r):
     return "\n".join(lines)
 
 
+def _refund_rows(r, uid):
+    """Buttons for /ngrefund: one button per number the player owns (4 per row)."""
+    nums = sorted(r["by_uid"].get(uid, []))
+    btns = [(f"❌ #{x}", f"ngr:{r['id']}:{uid}:{x}") for x in nums]
+    return [btns[i:i + 4] for i in range(0, len(btns), 4)]
+
+
+def _refund_done_text(uid, res):
+    return (f"✅ Number #{res['num']} ({res['name']}) cancelled.\n"
+            f"Player: {_pname(uid)}\n"
+            f"Refunded: {res['amount']} ETB · new balance {res['balance']} ETB\n"
+            f"He still owns {res['left']}/{MAX_PER_PLAYER} numbers in this room "
+            f"and can choose another one.")
+
+
+async def _refund_tell_player(uid, res):
+    await _send(uid, f"↩️ ቁጥር #{res['num']} ተሰርዟል፤ {res['amount']} ብር ወደ ሂሳብዎ ተመልሷል። "
+                     f"ሌላ ቁጥር መምረጥ ይችላሉ።\n"
+                     f"Number #{res['num']} was cancelled and {res['amount']} birr was returned "
+                     f"to your balance. You can choose another number.")
+
+
 def register(dp):
     """bot.py calls ng.register(dp) once."""
     from aiogram import F
@@ -1535,23 +1557,73 @@ def register(dp):
             if not nums:
                 await m.answer(f"{_pname(uid)} owns no numbers in {game_label(lobby, r['game_no'], r['id'])}.")
                 return
-            lst = ", ".join(f"#{x} ({r['owners'][x]['name']})" for x in nums)
-            await m.answer(f"{_pname(uid)} owns in {game_label(lobby, r['game_no'], r['id'])}:\n{lst}\n\n"
-                           f"To cancel one: /ngrefund {parts[0]} {lobby} <number>")
+            await m.answer(f"{_pname(uid)} owns in {game_label(lobby, r['game_no'], r['id'])}:\n"
+                           f"Tap a number to cancel it and refund {price_of(lobby)} ETB.",
+                           reply_markup=_kb(_refund_rows(r, uid)))
             return
         res = refund_number(uid, lobby, parts[2])
         if not res["ok"]:
             await m.answer("❌ " + res["error"])
             return
-        await m.answer(f"✅ Number #{res['num']} ({res['name']}) cancelled.\n"
-                       f"Player: {_pname(uid)}\n"
-                       f"Refunded: {res['amount']} ETB · new balance {res['balance']} ETB\n"
-                       f"He still owns {res['left']}/{MAX_PER_PLAYER} numbers in this room "
-                       f"and can choose another one.")
-        await _send(uid, f"↩️ ቁጥር #{res['num']} ተሰርዟል፤ {res['amount']} ብር ወደ ሂሳብዎ ተመልሷል። "
-                         f"ሌላ ቁጥር መምረጥ ይችላሉ።\n"
-                         f"Number #{res['num']} was cancelled and {res['amount']} birr was returned "
-                         f"to your balance. You can choose another number.")
+        await m.answer(_refund_done_text(uid, res))
+        await _refund_tell_player(uid, res)
+
+    @dp.callback_query(F.data.startswith("ngr:"))
+    async def cb_refund(cb: CallbackQuery):
+        """Admin buttons from /ngrefund <phone> <room>: tap number -> confirm -> cancel + refund.
+        data = ngr:<round id>:<player id>:<number>[:y]   (a button can only act on ONE game)"""
+        if not (D.get("admin_id") and cb.from_user.id == D["admin_id"]):
+            await cb.answer()
+            return
+        parts = (cb.data or "").split(":")
+        rid = _int(parts[1]) if len(parts) >= 4 else None
+        uid = _int(parts[2]) if len(parts) >= 4 else None
+        n = _int(parts[3]) if len(parts) >= 4 else None
+        r = next((x for x in rounds.values() if x["id"] == rid), None) if rid is not None else None
+        if r is None or uid is None or n is None or r["status"] != "open":
+            await cb.answer("This list is out of date (the game has started or changed)", show_alert=True)
+            return
+        lobby = r["lobby"]
+        o = r["owners"].get(n)
+        if parts[-1] == "b":                                   # back to the list
+            await cb.answer()
+            nums = sorted(r["by_uid"].get(uid, []))
+            try:
+                await cb.message.edit_text(
+                    f"{_pname(uid)} owns in {game_label(lobby, r['game_no'], r['id'])}:\n"
+                    f"Tap a number to cancel it and refund {price_of(lobby)} ETB.",
+                    reply_markup=_kb(_refund_rows(r, uid)))
+            except Exception:
+                pass
+            return
+        if o is None or o["uid"] != uid:
+            await cb.answer("That number is no longer owned by this player", show_alert=True)
+            return
+        if parts[-1] == "y":                                   # confirmed
+            res = refund_number(uid, lobby, n)
+            if not res["ok"]:
+                await cb.answer(res["error"], show_alert=True)
+                return
+            await cb.answer("Cancelled")
+            left = sorted(r["by_uid"].get(uid, []))
+            text = _refund_done_text(uid, res)
+            try:
+                await cb.message.edit_text(
+                    text + ("\n\nHis other numbers (tap to cancel):" if left else ""),
+                    reply_markup=_kb(_refund_rows(r, uid)) if left else None)
+            except Exception:
+                pass
+            await _refund_tell_player(uid, res)
+            return
+        await cb.answer()                                      # first tap: ask to confirm
+        try:
+            await cb.message.edit_text(
+                f"⚠️ Cancel #{n} for {_pname(uid)} in {game_label(lobby, r['game_no'], r['id'])} "
+                f"and refund {price_of(lobby)} ETB?",
+                reply_markup=_kb([[("✅ Yes, refund", f"ngr:{rid}:{uid}:{n}:y"),
+                                   ("⬅️ Back", f"ngr:{rid}:{uid}:{n}:b")]]))
+        except Exception:
+            pass
 
     @dp.callback_query(F.data.startswith("ngv:"))
     async def cb_vote(cb: CallbackQuery):
