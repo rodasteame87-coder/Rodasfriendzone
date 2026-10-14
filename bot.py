@@ -13,6 +13,7 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            ReplyKeyboardMarkup, KeyboardButton,
                            ReplyKeyboardRemove, WebAppInfo, FSInputFile, BufferedInputFile)
 
+import solitaire as sol        # Solitaire (1 player, win x2)
 import numbergame as ng          # Number Game (stages 1-3: draw, poll, start, saved games)
 
 TOKEN = os.environ["BOT_TOKEN"]
@@ -1989,6 +1990,7 @@ async def cmd_admin(m: Message):
         "/broadcast <message>\nSend a message to all players (you confirm first)\n\n"
         "/lastsms\nLast SMS forwarded from your phone\n\n"
         "/ngstatus\nNumber Game: both lobbies (test)\n\n"
+        "/solstatus\nSolitaire: open games, bets, payouts and your profit\n\n"
         "/ngbuy <lobby> <number> <name>\nNumber Game: test purchase with your own wallet\n\n"
         "/ngpoll <lobby>\nNumber Game: ask the players (anonymous) if the game should start now\n\n"
         "/ngstart <lobby>\nNumber Game: start the game now (50+ numbers sold)\n\n"
@@ -2862,6 +2864,7 @@ async def bonusmany_buttons(cb: CallbackQuery):
 
 
 ng.register(dp)                 # Number Game admin test commands
+sol.register(dp)                # Solitaire admin command (/solstatus)
 
 
 @dp.callback_query()
@@ -3048,6 +3051,7 @@ async def main():
         web.get("/api/dep/info", api_dep_info),
         web.post("/api/dep/create", api_dep_create),
         *ng.routes(),                     # Number Game API
+        *sol.routes(),                    # Solitaire API
     ])
     runner = web.AppRunner(app)
     await runner.setup()
@@ -3061,6 +3065,7 @@ async def main():
     async with pool.acquire() as c:
         await c.execute(SCHEMA)
         await c.execute(ng.SCHEMA)
+        await c.execute(sol.SCHEMA)
     _q = asyncio.Queue()
     asyncio.create_task(db_writer())
     ng.init(wallets=wallets, wagered=wagered, turnover_left=turnover_left, log=log,
@@ -3069,9 +3074,11 @@ async def main():
             send=lambda uid, text, **kw: BOT.send_message(uid, text, **kw),
             edit=lambda uid, mid, text, **kw: BOT.edit_message_text(text, chat_id=uid, message_id=mid, **kw),
             db_mark=lambda: _enq_n[0], db_done=lambda: _done_n[0], pool=pool)
+    sol.init(**ng.D)                          # Solitaire uses the same wallet, login and database as the Number Game
     await load_state()
     async with pool.acquire() as c:
         await ng.load_state(c)
+        await sol.load_state(c)
     ready = True
     asyncio.create_task(game_loop())
     asyncio.create_task(ng.ticker())          # Number Game: countdown, reveal and prize settlement
@@ -3150,6 +3157,7 @@ async def main():
                     BotCommand(command="ngrefund", description="↩️ Number Game: refund a number"),
                     BotCommand(command="ngadd", description="➕ Number Game: add a player (no Telegram)"),
                     BotCommand(command="ngunadd", description="➖ Number Game: remove an added player"),
+                    BotCommand(command="solstatus", description="🃏 Solitaire status"),
                 ],
                 scope=BotCommandScopeChat(chat_id=ADMIN_ID))
         except Exception as e:
