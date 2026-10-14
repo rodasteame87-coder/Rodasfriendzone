@@ -416,7 +416,7 @@
       <ul class="hm-rules">
         <li>Choose a room: 50 or 100 birr per number.</li>
         <li>You can own up to 5 numbers in a room.</li>
-        <li>3 winners (gold, silver, bronze) are drawn and locked before the countdown.</li>
+        <li>The winners (gold and silver, and bronze in some rooms) are drawn and locked before the countdown.</li>
         <li>Anyone can check the draw with the published hash.</li>
         <li>Prizes go to your balance automatically.</li>
       </ul>
@@ -1335,10 +1335,10 @@ function ngDraw(){
   $("ngPrice").textContent = s.price;
   $("ngMsg").textContent = s.mine.length>=s.max ? "✅ You own "+s.max+"/"+s.max+" numbers · good luck!"
                          : s.mine.length ? "Choose another number ("+s.mine.length+"/"+s.max+")" : "Choose your number";
-  const [g,sv,b] = s.prize_now;
+  const pf = a=>a.map((p,i)=>PLI[i]+" "+p).join(" · ");
   $("ngPrizes").innerHTML =
-    `<div style="${s.early_ok?"":"grid-column:1/3"}"><small>FULL GAME (${s.count} sold)</small>🥇 ${s.prize_full[0]} · 🥈 ${s.prize_full[1]} · 🥉 ${s.prize_full[2]}</div>`+
-    (s.early_ok ? `<div><small>IF IT STARTS NOW</small>🥇 ${g} · 🥈 ${sv} · 🥉 ${b}</div>` : "");
+    `<div style="${s.early_ok?"":"grid-column:1/3"}"><small>FULL GAME (${s.count} sold)</small>${pf(s.prize_full)}</div>`+
+    (s.early_ok ? `<div><small>IF IT STARTS NOW</small>${pf(s.prize_now)}</div>` : "");
   let h = "";
   for(let n=1;n<=s.count;n++){
     const c = mineSet.has(n) ? " mine" : s.taken.includes(n) ? " taken" : "";
@@ -1573,9 +1573,12 @@ function makeStage(root, nums){
   st2.update = (tl, now, quiet)=>{
     st2.tl = tl;
     st2.mine = new Set(tl.mine);
+    const np = tl.prizes.length;                       // 3 places, or 2 (gold + silver) in the 50-number 50 birr room
+    slots.forEach((el,i)=>{ el.style.display = i<np ? "" : "none"; });
+    q(".slots").style.gridTemplateColumns = "repeat("+np+",1fr)";
     const first = Math.min(...tl.reveal);
     // start the run of every ball whose time has come (a ball seen very late just appears, no run)
-    for(let i=0;i<3;i++){
+    for(let i=0;i<np;i++){
       const w = tl.winners[i];
       if(!w || now<tl.reveal[i] || st2.start[i]) continue;
       st2.start[i] = now;
@@ -1594,7 +1597,7 @@ function makeStage(root, nums){
           }});
       }
     }
-    const allDone = st2.done.every(Boolean);
+    const allDone = st2.done.slice(0,np).every(Boolean);
     const phase = now<tl.closeAt ? "count" : now<first ? "mix" : !allDone ? "reveal" : "done";
     q(".stg-t").textContent = phase==="count" ? "⏱ ጨዋታው ይጀምራል · Game starts in" : phase==="mix" ? "🔒 The winners are locked. Revealing soon…"
                             : phase==="reveal" ? "🎉 Revealing the locked winners" : "🏆 Results";
@@ -1603,11 +1606,11 @@ function makeStage(root, nums){
     globe.setMode(mixing ? "mix" : "rest");
     if(mixing && !quiet) SFX.mixStart(alive); else SFX.mixStop();
     let next = -1;
-    for(let i=0;i<3;i++) if(!st2.start[i] && now<tl.reveal[i] && (next<0 || tl.reveal[i]<tl.reveal[next])) next = i;
+    for(let i=0;i<np;i++) if(!st2.start[i] && now<tl.reveal[i] && (next<0 || tl.reveal[i]<tl.reveal[next])) next = i;
     q(".stg-n").textContent = phase==="count" ? tl.sold+" numbers · winners were drawn by the server and are locked 🔒"
       : next>=0 ? "Next: "+PLI[next]+" "+PLN[next]+" in "+Math.max(0, Math.ceil((tl.reveal[next]-now)/1000))+"s" : "";
     const mine = st2.mine, won = [];
-    for(let i=0;i<3;i++){
+    for(let i=0;i<np;i++){
       const el = slots[i], b = el.querySelector(".sl-b"), w = tl.winners[i];
       el.querySelector(".sl-z").textContent = tl.prizes[i]+" birr";
       if(st2.done[i] && w){
@@ -1696,7 +1699,7 @@ function stageTick(){
   if(screen!=="ng" || NG.mode==="pick" || !w || !w.view || !NG.stage) return;
   const v = w.view, off = w.off||0, L = t=>t*1000-off, now = Date.now();
   const tl = { closeAt:L(v.draw_at), reveal:v.reveal_at.map(L), settleAt:L(v.settle_at), sold:v.sold, size:v.size, prizes:v.prizes,
-               winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:w.mine.map(m=>m.num), back:true };
+               winners:PL.slice(0,v.prizes.length).map(p=>v.winners.find(x=>x.place===p)||null), mine:w.mine.map(m=>m.num), back:true };
   NG.stage.update(tl, now, false);
   if(NG.mode==="live"){                                  // a reveal time passed but the server answer has not arrived yet: ask now
     const missing = tl.winners.some((x,i)=>!x && now>=tl.reveal[i]);
@@ -1761,8 +1764,7 @@ $("ngRooms").onclick = e=>{
 $("ngBack").onclick = ()=>{ if(NG.watch && NG.mode==="after") NG.watch.closed = true; show("lobby"); };
 $("ngStart").onclick = async ()=>{
   const s = NG.s; if(!s || !s.admin || s.status!=="open") return;
-  const [g,sv,b] = s.prize_now;
-  const ok = await askConfirm("Start "+s.name+" "+ngGame(s)+" now with "+s.sold+" numbers sold?\n\nPrizes: 🥇 "+g+" · 🥈 "+sv+" · 🥉 "+b+" birr.\nThis cannot be undone.");
+  const ok = await askConfirm("Start "+s.name+" "+ngGame(s)+" now with "+s.sold+" numbers sold?\n\nPrizes: "+s.prize_now.map((p,i)=>PLI[i]+" "+p).join(" · ")+" birr.\nThis cannot be undone.");
   if(!ok) return;
   $("ngStart").disabled = true;
   let r;
@@ -1859,10 +1861,10 @@ async function openNgGame(lobby, game){
 function ngdStage(play){
   const v = NG.gd; if(!v) return;
   clearInterval(NG.rpT);
-  const rp = v.replay, start = play ? Date.now() : Date.now()-1e9, reveal = [0,0,0];
+  const rp = v.replay, start = play ? Date.now() : Date.now()-1e9, reveal = rp.order.map(()=>0);
   rp.order.forEach((idx,k)=>{ reveal[idx] = start + (rp.intro + k*rp.gap)*1000; });
-  const tl = { closeAt:start, reveal, settleAt:start+(rp.intro+3*rp.gap)*1000, sold:v.sold, size:v.size, prizes:v.prizes,
-               winners:PL.map(p=>v.winners.find(x=>x.place===p)||null), mine:v.mine.map(m=>m.num) };
+  const tl = { closeAt:start, reveal, settleAt:start+(rp.intro+rp.order.length*rp.gap)*1000, sold:v.sold, size:v.size, prizes:v.prizes,
+               winners:PL.slice(0,v.prizes.length).map(p=>v.winners.find(x=>x.place===p)||null), mine:v.mine.map(m=>m.num) };
   const stage = makeStage($("ngdStage"), v.board || []);
   stage.update(tl, Date.now(), !play);
   if(play){
