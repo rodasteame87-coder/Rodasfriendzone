@@ -1617,7 +1617,7 @@ function makeStage(root, nums){
         if(!st2.painted[i]){
           st2.painted[i] = true;
           b.textContent = w.num; b.className = "sl-b on p"+i;
-          el.querySelector(".sl-w").innerHTML = esc(w.name)+(w.player?`<small>${esc(w.player)}</small>`:"");
+          el.querySelector(".sl-w").innerHTML = esc(w.name);
           if(!quiet && !st2.instant[i]){ void b.offsetWidth; b.classList.add("pop"); }
         }
         const me = mine.has(w.num);
@@ -1646,7 +1646,7 @@ function makeStage(root, nums){
         if(!st2.resShown){
           st2.resShown = true;
           const rows = tl.winners.map((w,i)=> w ? `<div class="rr${mine.has(w.num)?" me":""}"><span class="ri">${PLI[i]}</span>`+
-            `<span class="rn">#${w.num} · ${esc(w.name)}${w.player?`<small>${esc(w.player)}</small>`:""}</span><b>${tl.prizes[i]} birr</b></div>` : "").join("");
+            `<span class="rn">#${w.num} · ${esc(w.name)}</span><b>${tl.prizes[i]} birr</b></div>` : "").join("");
           const tot = won.reduce((s,x)=>s+tl.prizes[x.i], 0);
           res.innerHTML = `<h3>🏆 WINNERS</h3>`+rows+
             (tot ? `<div class="res-me">🎉 You won ${tot} birr!</div>` : (mine.size ? `<div class="res-me no">Not this time. Good luck next game! 🍀</div>` : ""))+
