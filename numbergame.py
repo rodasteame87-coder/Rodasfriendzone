@@ -63,7 +63,7 @@ MAX_PER_PLAYER = 5       # per player, per room, per round
 ROOMS = {
     50:    {"price": 50,  "size": 100, "early": True,  "prizes": (3000, 1000, 500)},
     100:   {"price": 100, "size": 100, "early": True,  "prizes": (7000, 1000, 500)},
-    5050:  {"price": 50,  "size": 50,  "early": False, "prizes": (1500, 500, 250)},
+    5050:  {"price": 50,  "size": 50,  "early": False, "prizes": (1500, 500)},   # gold + silver only (no bronze)
     10050: {"price": 100, "size": 50,  "early": False, "prizes": (3000, 700, 300)},
 }
 PRICES = tuple(ROOMS)    # the list of room keys
@@ -337,10 +337,20 @@ def prizes_for(lobby, sold):
     return [p * sold // size for p in ROOMS[lobby]["prizes"]]
 
 
-def draw_winners(sold_numbers):
-    """3 different winners from the sold numbers, secure randomness, no replacement.
-    Who owns a number, its name and the buying time play NO part in this."""
-    return _rng.sample(sorted(sold_numbers), 3)
+def draw_winners(sold_numbers, k=3):
+    """k different winners (one per prize place) from the sold numbers, secure randomness,
+    no replacement. Who owns a number, its name and the buying time play NO part in this."""
+    return _rng.sample(sorted(sold_numbers), k)
+
+
+def places_of(d):
+    """How many prize places a saved draw has (3 normally, 2 in the 50-number 50 birr room)."""
+    return len(d["prizes"])
+
+
+def prize_line(lobby, sold):
+    """Prize text for the Telegram messages: only the places this room really pays."""
+    return " · ".join(f"{('🥇', '🥈', '🥉')[i]} {p}" for i, p in enumerate(prizes_for(lobby, sold))) + " ETB"
 
 
 def _verify_text(secret, rid, lobby, sold, winners):
@@ -353,7 +363,8 @@ def reveal_time(r, idx):
 
 
 def settle_time(r):
-    return r["close_at"] + DRAW_INTRO + 3 * REVEAL_GAP
+    n = places_of(r["draw"]) if r.get("draw") else 3
+    return r["close_at"] + DRAW_INTRO + n * REVEAL_GAP
 
 
 def freeze_round(lobby, early=False, min_sold=None):
@@ -378,7 +389,7 @@ def freeze_round(lobby, early=False, min_sold=None):
         if r["game_no"] is None:
             r["game_no"] = game_counter[lobby] + 1
         game_counter[lobby] = max(game_counter[lobby], r["game_no"])
-    winners = draw_winners(sold)
+    winners = draw_winners(sold, len(ROOMS[lobby]["prizes"]))
     secret = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20))
     verify = _verify_text(secret, r["id"], lobby, sold, winners)
     prizes = prizes_for(lobby, n)
@@ -414,7 +425,7 @@ def settle_round(lobby, now=None):
         return None
     d = r["draw"]
     t = int(now)
-    for idx in range(3):
+    for idx in range(places_of(d)):
         if idx in r["paid"]:
             continue
         info = d["winners_info"][idx]
@@ -455,7 +466,7 @@ def result_view(r, now=None):
     d = r["draw"]
     price = price_of(r["lobby"])
     settled = r["status"] == "settled"
-    shown = [i for i in range(3) if settled or now >= reveal_time(r, i)]
+    shown = [i for i in range(places_of(d)) if settled or now >= reveal_time(r, i)]
     v = {
         "round": r["id"], "game": r["game_no"], "lobby": r["lobby"], "price": price,
         "size": size_of(r["lobby"]), "name": room_name(r["lobby"]), "status": r["status"],
@@ -465,7 +476,7 @@ def result_view(r, now=None):
         "frozen_at": d["frozen_at"], "draw_at": r["close_at"], "settled_at": r["settled_at"],
         "settlement": ("paid" if r["saved"] else "settling") if settled else "pending",
         "hash": d["hash"], "server_now": int(now),
-        "reveal_at": [reveal_time(r, i) for i in range(3)], "settle_at": settle_time(r),
+        "reveal_at": [reveal_time(r, i) for i in range(places_of(d))], "settle_at": settle_time(r),
         "winners": [{"place": PLACES[i], "num": d["winners_info"][i]["num"],
                      "name": d["winners_info"][i]["name"],
                      "player": _pname(d["winners_info"][i]["uid"]), "prize": d["prizes"][i]}
@@ -500,7 +511,7 @@ def summary_text(r):
              + (" (TEST, no money moved)" if r["test"] else "")
              + (" · early start" if r["early"] else ""),
              f"Sold {d['sold']}/{size_of(r['lobby'])} · sales {d['sold'] * price_of(r['lobby'])} ETB"]
-    for i in range(3):
+    for i in range(places_of(d)):
         w = d["winners_info"][i]
         lines.append(f"{('🥇', '🥈', '🥉')[i]} #{w['num']} {w['name']} · {_pname(w['uid'])} · {d['prizes'][i]} ETB")
     lines.append(f"Hash: {d['hash']}")
@@ -771,24 +782,22 @@ def refund_number(uid, lobby, num):
 
 def poll_player_text(r):
     sold = len(r["owners"])
-    g, s_, b = prizes_for(r["lobby"], sold)
     return (f"🗳 Number Game {game_label(r['lobby'], r['game_no'], r['id'])}\n\n"
             f"ጨዋታውን አሁን እንጀምር? ድምጽዎ ሚስጥራዊ ነው።\n"
             f"Start the game now? Your vote is anonymous.\n\n"
             f"Sold now: {sold}/{size_of(r['lobby'])}. If we start now the prizes are:\n"
-            f"🥇 {g} · 🥈 {s_} · 🥉 {b} ETB\n"
+            f"{prize_line(r['lobby'], sold)}\n"
             f"(If more numbers are sold first, the prizes grow.)")
 
 
 def panel_text(r):
     t = poll_tally(r)
     sold = len(r["owners"])
-    g, s_, b = prizes_for(r["lobby"], sold)
     return (f"🗳 Poll · {game_label(r['lobby'], r['game_no'], r['id'])}\n"
             f"Sold {sold}/{size_of(r['lobby'])} · players {t['players']}\n"
             f"✅ Yes {t['yes']} ({t['yes_pct']}%) · ❌ No {t['no']} ({t['no_pct']}%) · "
             f"not voted {t['not_voted']}\n"
-            f"If you start now: 🥇 {g} · 🥈 {s_} · 🥉 {b} ETB\n\n"
+            f"If you start now: {prize_line(r['lobby'], sold)}\n\n"
             f"Votes are anonymous and only advise you. Nothing starts until you press Start.")
 
 
@@ -1022,7 +1031,7 @@ def game_view(r, sold_rows, uid):
     v = result_view(r)
     v["board"] = [n for n, _, _ in sold_rows]
     v["mine"] = [{"num": n, "name": nm} for n, u, nm in sold_rows if u == uid]
-    v["replay"] = {"intro": DRAW_INTRO, "gap": REVEAL_GAP, "order": list(REVEAL_ORDER)}
+    v["replay"] = {"intro": DRAW_INTRO, "gap": REVEAL_GAP, "order": [i for i in REVEAL_ORDER if i < places_of(r["draw"])]}
     return v
 
 
@@ -1237,7 +1246,7 @@ def result_text(r):
     lines = [f"{game_label(r['lobby'], r['game_no'], r['id'])} · round #{r['id']}" + (" · TEST" if r["test"] else "")
              + (" · early start" if r["early"] else ""),
              f"Sold {d['sold']} · sales {d['sold'] * price_of(r['lobby'])} ETB · prizes {sum(d['prizes'])} ETB"]
-    for i in range(3):
+    for i in range(places_of(d)):
         w = d["winners_info"][i]
         lines.append(f"{PLACES[i].title()}: #{w['num']} {w['name']} ({_pname(w['uid'])}) {d['prizes'][i]} ETB")
     lines.append(f"Hash: {d['hash']}")
