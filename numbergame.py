@@ -711,6 +711,64 @@ def admin_start(lobby, force=False):
     return res
 
 
+def find_uid_by_phone(text):
+    """Find a player by phone number (0912345678 and +251912345678 both work)."""
+    digits = "".join(ch for ch in str(text) if ch.isdigit())
+    if len(digits) < 9:
+        return None
+    last9 = digits[-9:]
+    for uid, ph in D["phones"].items():
+        if str(ph).endswith(last9):
+            return uid
+    return None
+
+
+def refund_number(uid, lobby, num):
+    """ADMIN: take ONE number away from ONE player and give him his money back, so he can
+    choose another number. Only while the round is still open (before the draw).
+    IMPORTANT: no "await" may ever be added inside this function (see top of file):
+    the number, the wallet, the play-through and the database delete all change in one step."""
+    r = rounds.get(lobby)
+    if r is None:
+        return {"ok": False, "error": "Unknown room"}
+    if r["status"] != "open":
+        return {"ok": False, "error": "This round has already started (winners are drawn). "
+                                      "A number can no longer be taken back."}
+    if r["test"]:
+        return {"ok": False, "error": "This is a test round (fake players)"}
+    n = _int(num)
+    o = r["owners"].get(n) if n is not None else None
+    if o is None or o["uid"] != uid:
+        return {"ok": False, "error": f"#{num} is not owned by this player in {room_name(lobby)}"}
+
+    price = price_of(lobby)
+    # 1) the number is free again, and the player's slot too
+    del r["owners"][n]
+    r["by_uid"][uid].remove(n)
+    if not r["by_uid"][uid]:
+        del r["by_uid"][uid]
+    # 2) the money goes back (cash) and the play-through this number added is undone
+    D["wallets"][uid] = D["wallets"].get(uid, 0) + price
+    D["wagered"][uid] = max(0, D["wagered"].get(uid, 0) - o["used"])
+    D["log"](uid, "refund", price, f"Number Game {room_name(lobby)} · #{n} cancelled by admin")  # saves the wallet
+    # 3) the database forgets the number (this also frees its purchase key)
+    D["enqueue"]("DELETE FROM ng_numbers WHERE round_id = $1 AND num = $2 AND uid = $3",
+                 r["id"], n, uid)
+    # 4) a retry of the old purchase request must not confirm the cancelled number again
+    for k in [k for k, v in idem_seen.items()
+              if k.startswith(f"{uid}:") and v["lobby"] == lobby and v["num"] == n]:
+        del idem_seen[k]
+    # 5) no number left = he is no longer a player of this round: his poll vote is removed too
+    if uid not in r["by_uid"] and uid in r["votes"]:
+        del r["votes"][uid]
+        r["poll_dirty"] = True
+        D["enqueue"]("DELETE FROM ng_votes WHERE round_id = $1 AND uid = $2", r["id"], uid)
+    audit("admin_refund", D.get("admin_id"), lobby, r["id"],
+          {"uid": uid, "num": n, "name": o["name"], "amount": price, "used": o["used"]})
+    return {"ok": True, "num": n, "name": o["name"], "amount": price,
+            "balance": D["wallets"][uid], "left": len(r["by_uid"].get(uid, [])), "round": r["id"]}
+
+
 def poll_player_text(r):
     sold = len(r["owners"])
     g, s_, b = prizes_for(r["lobby"], sold)
@@ -1288,6 +1346,50 @@ def register(dp):
         r = rounds[lobby]
         await m.answer(f"▶️ {game_label(lobby, r['game_no'], r['id'])} started with {res['sold']} numbers. "
                        f"Countdown {COUNTDOWN_SECONDS}s.\nHash: {r['draw']['hash']}")
+
+    @dp.message(Command("ngrefund"))
+    async def cmd_ngrefund(m: Message, command: CommandObject):
+        """/ngrefund 0912345678 50 17 : cancel that player's number #17 in room 50 and refund him.
+        /ngrefund 0912345678 50       : show the numbers he owns in room 50."""
+        if not is_admin(m):
+            return
+        parts = (command.args or "").split()
+        uid = find_uid_by_phone(parts[0]) if parts else None
+        lobby = _int(parts[1]) if len(parts) >= 2 else None
+        if len(parts) < 2 or lobby not in PRICES:
+            await m.answer("Send:\n/ngrefund <phone> <room 50, 100, 5050 or 10050> <number>\n\n"
+                           "Cancels that player's number and returns his money, so he can choose "
+                           "another one. Works only before the game has started.\n\n"
+                           "Example:\n/ngrefund 0912345678 50 17\n\n"
+                           "Without the number it shows his numbers in that room:\n"
+                           "/ngrefund 0912345678 50")
+            return
+        if uid is None:
+            await m.answer("No player found with that phone number.")
+            return
+        r = rounds[lobby]
+        if len(parts) == 2:
+            nums = sorted(r["by_uid"].get(uid, []))
+            if not nums:
+                await m.answer(f"{_pname(uid)} owns no numbers in {game_label(lobby, r['game_no'], r['id'])}.")
+                return
+            lst = ", ".join(f"#{x} ({r['owners'][x]['name']})" for x in nums)
+            await m.answer(f"{_pname(uid)} owns in {game_label(lobby, r['game_no'], r['id'])}:\n{lst}\n\n"
+                           f"To cancel one: /ngrefund {parts[0]} {lobby} <number>")
+            return
+        res = refund_number(uid, lobby, parts[2])
+        if not res["ok"]:
+            await m.answer("❌ " + res["error"])
+            return
+        await m.answer(f"✅ Number #{res['num']} ({res['name']}) cancelled.\n"
+                       f"Player: {_pname(uid)}\n"
+                       f"Refunded: {res['amount']} ETB · new balance {res['balance']} ETB\n"
+                       f"He still owns {res['left']}/{MAX_PER_PLAYER} numbers in this room "
+                       f"and can choose another one.")
+        await _send(uid, f"↩️ ቁጥር #{res['num']} ተሰርዟል፤ {res['amount']} ብር ወደ ሂሳብዎ ተመልሷል። "
+                         f"ሌላ ቁጥር መምረጥ ይችላሉ።\n"
+                         f"Number #{res['num']} was cancelled and {res['amount']} birr was returned "
+                         f"to your balance. You can choose another number.")
 
     @dp.callback_query(F.data.startswith("ngv:"))
     async def cb_vote(cb: CallbackQuery):
