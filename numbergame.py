@@ -479,7 +479,7 @@ def result_view(r, now=None):
         "reveal_at": [reveal_time(r, i) for i in range(places_of(d))], "settle_at": settle_time(r),
         "winners": [{"place": PLACES[i], "num": d["winners_info"][i]["num"],
                      "name": d["winners_info"][i]["name"],
-                     "player": _pname(d["winners_info"][i]["uid"]), "prize": d["prizes"][i]}
+                     "prize": d["prizes"][i]}
                     for i in shown],
     }
     if now < r["close_at"]:
