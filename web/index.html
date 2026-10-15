@@ -120,6 +120,15 @@
 
   /* picker: 10 per row */
   .pickTitle{background:var(--cream);border-radius:12px;text-align:center;color:var(--title);font-size:17px;font-weight:700;padding:10px 6px;margin-bottom:10px;box-shadow:var(--shadow)}
+  .ngrows{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .nr{display:flex;align-items:stretch;border-radius:8px;overflow:hidden;border:1.5px solid #1f9d4a;background:#e9f9ee;min-height:40px;cursor:pointer}
+  .nr i{font-style:normal;flex:0 0 34px;display:grid;place-items:center;background:#1f9d4a;color:#fff;font-weight:800;font-size:13px}
+  .nr span{flex:1;min-width:0;padding:0 8px;display:flex;align-items:center;font-size:12px;font-weight:700;color:#1a7a3a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .nr.taken{border-color:#d12b2b;background:#fdeaea;pointer-events:none}.nr.taken i{background:#d12b2b}.nr.taken span{color:#8c1515}
+  .nr.mine{border-color:#d12b2b;background:#fdeaea;box-shadow:0 0 0 2px #f7c32c;pointer-events:none}.nr.mine i{background:#d12b2b}.nr.mine span{color:#8c1515}
+  .nr.mine span::after{content:"YOU";margin-left:auto;padding-left:6px;font-size:10px;color:#b07a00}
+  .nlg{display:flex;gap:14px;justify-content:center;font-size:12px;font-weight:700;margin:6px 0 8px;color:var(--title)}
+  .nlg b{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
   .pgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
   .num{background:#fff;border:1.5px solid #b98bd0;border-radius:7px;color:var(--title);font-weight:700;font-size:12px;
        height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none}
@@ -706,7 +715,8 @@
   </div>
   <div class="pickTitle" id="ngMsg">Choose your number</div>
   <div class="ngprize" id="ngPrizes"></div>
-  <div class="pgrid" id="ngGrid"></div>
+  <div class="nlg" id="ngLg"><span><b style="background:#1f9d4a"></b>Free</span><span><b style="background:#d12b2b"></b>Taken</span></div>
+  <div class="ngrows" id="ngGrid"></div>
   <div class="panel" id="ngMine" hidden><h3>🎟 My numbers</h3><div id="ngMineList"></div></div>
   <button class="winb" id="ngStart" hidden style="margin-top:12px">▶ START GAME NOW (admin only)</button>
   <div class="panel" id="ngLast" hidden></div>
@@ -1406,7 +1416,7 @@ function ngDraw(){
   const after = !live && !!w && w.lobby===s.lobby && w.round!==s.round && !w.closed;
   NG.mode = live ? "live" : after ? "after" : "pick";
   const pick = NG.mode==="pick";
-  ["ngMsg","ngPrizes","ngGrid"].forEach(i=>{ $(i).hidden = !pick; });
+  ["ngMsg","ngPrizes","ngGrid","ngLg"].forEach(i=>{ $(i).hidden = !pick; });
   $("ngStats").hidden = !pick;
   $("ngMine").hidden = !pick || !s.mine.length;
   $("ngStart").hidden = !(pick && s.admin && open && s.early_ok && s.sold>=s.min_force);   // only the admin ever sees this
@@ -1427,9 +1437,11 @@ function ngDraw(){
     `<div style="${s.early_ok?"":"grid-column:1/3"}"><small>FULL GAME (${s.count} sold)</small>${pf(s.prize_full)}</div>`+
     (s.early_ok ? `<div><small>IF IT STARTS NOW</small>${pf(s.prize_now)}</div>` : "");
   let h = "";
+  const nm = s.names || {}, mineName = {}; s.mine.forEach(m=>{ mineName[m.num]=m.name; });
   for(let n=1;n<=s.count;n++){
-    const c = mineSet.has(n) ? " mine" : s.taken.includes(n) ? " taken" : "";
-    h += `<div class="num${c}" data-n="${n}">${n}</div>`;
+    const isMine = mineSet.has(n), isTaken = isMine || s.taken.includes(n);
+    const label = isTaken ? esc(mineName[n] || nm[n] || nm[String(n)] || "Taken") : "Free · tap to pick";
+    h += `<div class="nr${isMine?" mine":isTaken?" taken":""}" data-n="${n}"><i>${n}</i><span>${label}</span></div>`;
   }
   $("ngGrid").innerHTML = h;
   $("ngMineList").innerHTML = s.mine.map(m=>`<span>#${m.num} · ${esc(m.name)}</span>`).join("");
@@ -1864,7 +1876,7 @@ $("ngStart").onclick = async ()=>{
 $("ngNext").onclick = ()=>{ if(NG.watch) NG.watch.closed = true; ngSync(); if(NG.s) ngDraw(); };
 $("ngLiveInfo").onclick = e=>{ const b=e.target.closest(".cp"); if(b) copyText($(b.dataset.c).textContent); };
 $("ngLast").onclick = ()=>{ const g=+$("ngLast").dataset.g; if(g) openNgGame(NG.lobby, g); };
-$("ngGrid").onclick = e=>{ const el=e.target.closest(".num"); if(el) ngOpenBuy(+el.dataset.n); };
+$("ngGrid").onclick = e=>{ const el=e.target.closest(".nr"); if(el) ngOpenBuy(+el.dataset.n); };
 $("ngmCancel").onclick = ()=>{ $("ngModal").hidden = true; };
 $("ngmOk").onclick = ngBuy;
 $("ngName").onkeydown = e=>{ if(e.key==="Enter") ngBuy(); };
