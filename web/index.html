@@ -331,7 +331,16 @@
   /* solitaire */
   #sol{padding-bottom:10px}
   #sol .top2{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;color:var(--title);font-weight:700}
-  #solBoard{background:radial-gradient(circle at 50% 30%,#1f7a4d,#0f4a2e);border-radius:14px;padding:8px 6px 14px;min-height:330px}
+  #solStage{position:relative;background:radial-gradient(ellipse at 50% 0,#7a2fa0,#2b0d40 65%,#180624);border-radius:14px;padding:8px 8px 10px;overflow:hidden}
+  #solSign{margin:2px auto 8px;width:max-content;max-width:90%;padding:6px 20px;border-radius:14px;background:linear-gradient(#d4366f,#8e1646);border:3px dotted #ffd86b;box-shadow:0 0 14px #ff9ec1}
+  #solSign b{font-size:22px;letter-spacing:2px;color:#ffe08a;text-shadow:0 2px 0 #5a2a00}
+  #solHelp{position:absolute;right:10px;top:10px;width:32px;height:32px;border-radius:50%;padding:0;background:#e8264f;color:#fff;font-size:18px;font-weight:800;border:2px solid #fff}
+  #solNet{text-align:center;font-size:12px;font-weight:700;color:#ffe08a;margin:4px 0}
+  #solRules{position:absolute;inset:0;z-index:20;background:rgba(10,0,20,.78);padding:46px 14px 14px}
+  #solRules .sc{background:linear-gradient(#fbf0d2,#ecd9a8);color:#4a1d55;border-radius:16px;padding:14px;height:100%;overflow:auto;font-size:13px;line-height:1.35;box-shadow:inset 0 0 18px rgba(120,70,20,.35)}
+  #solRules h3{text-align:center;margin:0 0 6px;color:#4a1560}#solRules h4{margin:8px 0 2px}#solRules p{margin:3px 0}
+  #solX{position:absolute;right:12px;top:8px;width:34px;height:34px;padding:0;border-radius:8px;background:#e8264f;color:#fff;font-size:18px}
+  #solBoard{background:repeating-linear-gradient(90deg,#b8562f 0 38px,#a94b28 38px 40px),#b8562f;border-radius:14px;padding:8px 6px 14px;min-height:330px;box-shadow:inset 0 0 40px rgba(60,15,5,.55)}
   #solBoard .sr{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:10px;align-items:start}
   #solBoard .col{display:flex;flex-direction:column;min-height:40px}
   .cd,.sl{aspect-ratio:5/7;border-radius:5px;font-weight:800;font-size:12px;line-height:1.05;position:relative;width:100%}
@@ -346,15 +355,18 @@
   .sol-ghost{position:fixed;z-index:9999;pointer-events:none;will-change:transform;filter:drop-shadow(0 8px 8px rgba(0,0,0,.5))}
   .sol-ghost .cd{position:absolute;left:0;margin:0}
   .col .cd+.cd{margin-top:-105%}.col .cd.bk+.cd{margin-top:-125%}
-  .sl{border:2px dashed rgba(255,255,255,.35);display:grid;place-items:center;color:rgba(255,255,255,.35);font-size:18px}
-  #solBar{display:flex;justify-content:space-between;align-items:center;margin:8px 2px;font-weight:700;color:var(--title);font-size:13px}
+  .sl{border:2px solid rgba(90,25,10,.35);background:rgba(110,35,15,.35);display:grid;place-items:center;color:rgba(70,18,8,.55);font-size:22px;font-weight:800}
+  .cd.bk{background:repeating-linear-gradient(45deg,#2a2a8a,#2a2a8a 4px,#3b3bb0 4px,#3b3bb0 8px)!important;border:2px solid #cfd2ff!important}
+  @keyframes solp{50%{opacity:.5}}.cd.bk.wt{animation:solp .6s infinite}
+  #solBar{display:flex;justify-content:space-between;align-items:center;margin:8px 2px 0;font-weight:700;color:#ffe9b0;font-size:13px}
   #solBar button{width:auto;padding:0 14px;height:34px;background:#e8212f}
-  #solBet{margin-top:10px;background:#fff;border-radius:12px;box-shadow:var(--shadow);padding:10px}
+  #solBet{margin-top:10px;background:linear-gradient(#8a2f16,#561808);border:3px solid #d99a3a;border-radius:16px;padding:10px}
   #solBet .q{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
-  #solBet .q button{height:34px;background:#1565d8;font-size:13px}
+  #solBet .q button{height:34px;background:linear-gradient(#5fa0ee,#1c5fc8);font-size:13px;border:2px solid #cfe0ff;color:#fff}
   #solBet .go{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  #solBet input{height:42px;border:2px solid var(--purple);border-radius:10px;text-align:center;font-size:18px;font-weight:700;width:100%}
-  #solMsg{text-align:center;font-weight:800;font-size:16px;margin:8px 0;color:var(--title)}
+  #solBet input{height:48px;border:0;border-radius:10px;background:#3a0d05;color:#fff;text-align:center;font-size:18px;font-weight:700;width:100%}
+  #solBet .hm-play{background:linear-gradient(#7be34a,#2e9e19);border:3px solid #e8b887;border-radius:14px;font-size:20px;color:#fff}
+  #solMsg{text-align:center;font-weight:800;font-size:15px;margin:6px 8px;padding:6px;background:linear-gradient(#f7ecc6,#e6d39b);color:#4a1560;border-radius:4px}
 
   #dep,#pay{background:#000;color:#fff;margin:-8px -10px -76px;min-height:100vh;padding-bottom:200px;font-size:15px}
   .dk-head{display:flex;align-items:center;gap:10px;padding:18px 14px;border-bottom:1px solid #1d1d21}
@@ -478,12 +490,22 @@
 <div id="sol" hidden>
   <div class="bar"><span class="homeBack" id="solHome">‹ Home</span><span>Solitaire</span></div>
   <div class="top2"><span>💰 <span id="solWallet">0</span> ETB</span><span id="solInfo"></span></div>
-  <div id="solMsg" hidden></div>
-  <div id="solBoard"></div>
-  <div id="solBar" hidden><span id="solT">10:00</span><span id="solWin"></span><button id="solQuit">Quit</button></div>
-  <div id="solBet">
-    <div class="q"><button data-q="min">MIN</button><button data-q="x2">X2</button><button data-q="half">X/2</button><button data-q="max">MAX</button></div>
-    <div class="go"><input id="solAmt" type="text" inputmode="numeric" value="10"><button class="hm-play" id="solPlay">▶ Play</button></div>
+  <div id="solStage">
+    <button id="solHelp">?</button>
+    <div id="solSign"><b>SOLITAIRE</b></div>
+    <div id="solMsg" hidden></div>
+    <div id="solBoard"></div>
+    <div id="solNet" hidden></div>
+    <div id="solBar" hidden><span id="solT">10:00</span><span id="solWin"></span><button id="solQuit">Give up</button></div>
+    <div id="solBet">
+      <div class="q"><button data-q="min">MIN</button><button data-q="x2">X2</button><button data-q="half">X/2</button><button data-q="max">MAX</button></div>
+      <div class="go"><input id="solAmt" type="text" inputmode="numeric" value="30"><button class="hm-play" id="solPlay">▶ Play</button></div>
+    </div>
+    <div id="solRules" hidden><button id="solX">✕</button><div class="sc">
+      <h3>RULES</h3><h4>HOW TO WIN</h4><p>Move all 52 cards onto the 4 piles (by suit) from Ace to King.</p>
+      <h4>GETTING STARTED</h4><p>1. Choose your bet (minimum 30 ETB) and press ▶.</p><p>2. Cards are dealt face down in 7 columns (1 to 7 cards); the top card of each is face up. The rest is the deck (draw 3).</p>
+      <h4>HOW TO PLAY</h4><p>1. Build the 4 piles in ascending order, Ace to King, same suit.</p><p>2. In the columns build downward with alternating colors (a red 7 on a black 8).</p><p>3. Drag one card or a group to another column.</p><p>4. Only a King (or a group starting with a King) can go on an empty column.</p><p>5. If you cannot move any more, press "Give up".</p><p>6. Win = your bet x2.</p><p>7. Playing on two tables at once is not allowed.</p>
+      <p><i>A game must be finished within 10 minutes, otherwise the bet is lost. Problems? Contact support within 3 days.</i></p></div></div>
   </div>
 </div>
 
@@ -1982,23 +2004,23 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("keydown", e => { if((e.key==="Enter"||e.key===" ") && e.target.classList && e.target.classList.contains("hm-tgl")){ e.preventDefault(); e.target.click(); } });
 // ---------- Solitaire ----------
-const SOL={s:null,sel:null,busy:false,cfg:{min:10,max:1000},left:0};
+const SOL={s:null,sel:null,busy:false,cfg:{min:30,max:1000},left:0,seq:0};
 const SSUIT="♠♣♦♥", SRANK=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 function solCd(c,p,k,sel){ return '<div class="cd'+(c>=26?' rd':'')+(sel?' sel':'')+'" data-pile="'+p+'"'+(k!=null?' data-k="'+k+'"':'')+'>'+SRANK[c%13]+'<i>'+SSUIT[Math.floor(c/13)]+'</i></div>'; }
 function solRender(s){
   SOL.s=s; const sel=SOL.sel, act=s.status==="active";
-  let h='<div class="sr"><div data-pile="s">'+(s.stock?'<div class="cd bk" data-pile="s"></div>':'<div class="sl" data-pile="s">↻</div>')+'</div>';
+  let h='<div class="sr"><div data-pile="s">'+(s.stock?'<div class="cd bk'+(SOL.busy?' wt':'')+'" data-pile="s"></div>':'<div class="sl" data-pile="s">↻</div>')+'</div>';
   const w=s.waste.length?s.waste[s.waste.length-1]:null;
   h+='<div data-pile="w">'+(w!=null?solCd(w,"w",null,sel&&sel.src==="w"):'<div class="sl"></div>')+'</div><div></div>';
-  for(let i=0;i<4;i++){ const n=s.found[i]; h+='<div data-pile="f'+i+'">'+(n?solCd(i*13+n-1,"f"+i,null,sel&&sel.src==="f"+i):'<div class="sl" data-pile="f'+i+'">'+SSUIT[i]+'</div>')+'</div>'; }
+  for(let i=0;i<4;i++){ const n=s.found[i]; h+='<div data-pile="f'+i+'">'+(n?solCd(i*13+n-1,"f"+i,null,sel&&sel.src==="f"+i):'<div class="sl" data-pile="f'+i+'">A</div>')+'</div>'; }
   h+='</div><div class="sr">';
-  s.tab.forEach((col,i)=>{ h+='<div class="col" data-pile="t'+i+'">'+(col.length?col.map(([c,up],k)=>up?solCd(c,"t"+i,k,sel&&sel.src==="t"+i&&k>=col.length-sel.n):'<div class="cd bk" data-pile="t'+i+'" data-k="'+k+'"></div>').join(""):'<div class="sl" data-pile="t'+i+'">'+(act?"":"K")+'</div>')+'</div>'; });
+  s.tab.forEach((col,i)=>{ h+='<div class="col" data-pile="t'+i+'">'+(col.length?col.map(([c,up],k)=>up?solCd(c,"t"+i,k,sel&&sel.src==="t"+i&&k>=col.length-sel.n):'<div class="cd bk" data-pile="t'+i+'" data-k="'+k+'"></div>').join(""):'<div class="sl" data-pile="t'+i+'">'+"K"+'</div>')+'</div>'; });
   $("solBoard").innerHTML=h+'</div>';
   $("solWallet").textContent=s.balance!=null?s.balance:$("solWallet").textContent;
   $("solBar").hidden=!act; $("solBet").hidden=act;
   if(act){ SOL.left=s.left; $("solWin").textContent="Bet "+s.bet+" → Win "+s.win_amount; solTick(); }
 }
-function solIdle(){ solRender({status:"idle",stock:1,waste:[],found:[0,0,0,0],tab:[[],[],[],[],[],[],[]]}); }
+function solIdle(){ if($("solMsg").hidden) solMsg("Please place your bet / ውርርድዎን ያስቀምጡ"); solRender({status:"idle",stock:1,waste:[],found:[0,0,0,0],tab:[[],[],[],[],[],[],[]]}); }
 function solTick(){ const m=Math.max(0,SOL.left); $("solT").textContent="⏱ "+Math.floor(m/60)+":"+String(m%60).padStart(2,"0"); }
 setInterval(()=>{ if(screen!=="sol"||!SOL.s||SOL.s.status!=="active") return; SOL.left--; solTick(); if(SOL.left<=-2){ SOL.left=99; solAct({action:"draw"}); } },1000);
 function solMsg(t){ const m=$("solMsg"); m.textContent=t; m.hidden=!t; }
@@ -2009,16 +2031,65 @@ function solEnd(r){
   $("solBar").hidden=true; $("solBet").hidden=false;
   if(r.balance!=null) $("solWallet").textContent=r.balance;
 }
+// ---- fast play: moves show instantly, the server is told in the background (safe retries) ----
+const SQ={q:[],run:false,gen:0};
+const sRk=c=>c%13, sSt=c=>Math.floor(c/13), sRd=c=>c>=26;
+function solNet(t){ const e=$("solNet"); e.textContent=t||""; e.hidden=!t; }
+function solSrv(r){ SOL.seq=r.moves||0; solRender(r); }
+function solReset(){ SQ.q=[]; SQ.gen++; SOL.busy=false; solNet(""); }
+function solLocal(s,b){      // same rules as the server; returns true if the move was done on the phone
+  const src=b.src, dst=b.dst, n=b.n||1; let cards;
+  if(!src||!dst) return false;
+  if(src==="w"){ if(!s.waste.length||n!==1) return false; cards=[s.waste[s.waste.length-1]]; }
+  else if(src[0]==="f"){ const j=+src[1]; if(!s.found[j]||n!==1) return false; cards=[j*13+s.found[j]-1]; }
+  else { const col=s.tab[+src[1]]; if(n<1||n>col.length) return false; const part=col.slice(col.length-n); if(part.some(x=>!x[1]||x[0]<0)) return false; cards=part.map(x=>x[0]); }
+  const top=cards[0];
+  if(dst[0]==="f"){ if(cards.length!==1) return false; const j=dst.length>1?+dst[1]:sSt(top); if(sSt(top)!==j||sRk(top)!==s.found[j]) return false; }
+  else { if(src===dst) return false; const d=s.tab[+dst[1]];
+    if(d.length){ const t=d[d.length-1]; if(!t[1]||t[0]<0||sRk(t[0])!==sRk(top)+1||sRd(t[0])===sRd(top)) return false; }
+    else if(sRk(top)!==12) return false; }
+  if(src==="w") s.waste.pop(); else if(src[0]==="f") s.found[+src[1]]--; else s.tab[+src[1]].splice(s.tab[+src[1]].length-n,n);
+  if(dst[0]==="f") s.found[dst.length>1?+dst[1]:sSt(top)]++; else cards.forEach(c=>s.tab[+dst[1]].push([c,1]));
+  return true;
+}
+async function solSend(path,b){      // keeps trying on a slow / broken connection; the server ignores repeats
+  let wait=800;
+  for(;;){
+    try{
+      const r=await post(path,b);
+      if(!r.ok&&!r.tab&&!r.none&&!r.ended&&!r.needPhone&&(r.error==="Server error"||/^http/.test(r.error||""))) throw 0;
+      return r;
+    }catch(e){ solNet("📶 Slow connection… retrying"); await new Promise(z=>setTimeout(z,wait)); wait=Math.min(wait*1.6,4000); }
+  }
+}
+async function solRun(){
+  if(SQ.run) return; SQ.run=true;
+  while(SQ.q.length){
+    const it=SQ.q[0], gen=SQ.gen;
+    solNet(SQ.q.length>1||it.b.action==="draw"?"⏳ Syncing…":"");
+    const r=await solSend("/sol/move",{...it.b,seq:it.seq});
+    if(gen!==SQ.gen) continue;
+    SQ.q.shift();
+    if(r.ok&&r.status==="active"){ if(!SQ.q.length){ SOL.sel=null; solReset(); solSrv(r); } }
+    else if(r.ok||r.ended){ solReset(); solEnd(r); }
+    else if(r.none){ solReset(); solIdle(); solMsg("Game finished / ጨዋታው አልቋል"); try{ const t=await get("/sol/state"); if(t.balance!=null) $("solWallet").textContent=t.balance; }catch(e){} }
+    else { solReset(); SOL.sel=null; if(!r.sync) toast(r.error||"Error"); if(r.tab) solSrv(r); }
+  }
+  SQ.run=false; if(!SQ.q.length) solNet("");
+}
 async function solAct(b){
-  if(SOL.busy) return false; SOL.busy=true; let good=false;
-  try{
-    const r=await post("/sol/move",b);
-    if(r.ok&&r.status==="active"){ SOL.sel=null; solRender(r); good=true; }
-    else if(r.ok||r.ended){ solEnd(r); good=!!r.ok; }
-    else if(r.none){ solIdle(); solMsg(""); }
-    else { SOL.sel=null; toast(r.error||"Error"); if(r.tab) solRender(r); }
-  }catch(e){ toast("Network problem, try again"); }
-  SOL.busy=false; return good;
+  const s=SOL.s; if(!s||s.status!=="active") return false;
+  if(b.action==="quit"){ solReset(); solNet("⏳ …"); const r=await solSend("/sol/move",{action:"quit"}); solNet(""); if(r.ok||r.ended) solEnd(r); else if(r.none) solIdle(); else toast(r.error||"Error"); return !!r.ok; }
+  if(b.action==="draw"){
+    if(SOL.busy) return false;
+    SOL.busy=true; SOL.sel=null; s.left=SOL.left; solRender(s);
+    SQ.q.push({b:{action:"draw"},seq:++SOL.seq}); solRun(); return true;
+  }
+  if(SOL.busy) return false;
+  const snap=JSON.stringify(s);
+  if(!solLocal(s,b)){ SOL.s=JSON.parse(snap); return false; }
+  s.left=SOL.left; SOL.sel=null; solRender(s);
+  SQ.q.push({b:{action:"move",src:b.src,dst:b.dst,n:b.n},seq:++SOL.seq}); solRun(); return true;
 }
 function solSrc(p,k){
   const s=SOL.s;
@@ -2117,20 +2188,21 @@ $("solBet").querySelector(".q").onclick=e=>{
 $("solPlay").onclick=async()=>{
   if(SOL.busy) return; SOL.busy=true; solMsg("");
   try{
-    const r=await post("/sol/start",{bet:parseInt($("solAmt").value)});
-    if(r.ok){ SOL.sel=null; solRender(r); } else toast(r.error||"Error");
+    solNet("⏳ …"); const r=await solSend("/sol/start",{bet:parseInt($("solAmt").value)}); solNet("");
+    if(r.ok){ SOL.sel=null; solReset(); solSrv(r); } else toast(r.error||"Error");
   }catch(e){ toast("Network problem, try again"); }
   SOL.busy=false;
 };
-$("solQuit").onclick=()=>{ if(confirm("Quit? Your bet will be lost.")) solAct({action:"quit"}); };
+$("solHelp").onclick=()=>{$("solRules").hidden=false;}; $("solX").onclick=()=>{$("solRules").hidden=true;};
+$("solQuit").onclick=()=>{ if(confirm("Give up? Your bet will be lost.")) solAct({action:"quit"}); };
 $("solHome").onclick=()=>show("home");
 async function solOpen(){
   const r=await get("/sol/state");
   if(!r.ok) return toast(r.msg||("Solitaire is not available now ("+(r.error||"no reply")+")"));
-  SOL.cfg=r; SOL.sel=null; solMsg(""); $("solWallet").textContent=r.balance;
+  SOL.cfg=r; SOL.sel=null; solReset(); solMsg(""); $("solRules").hidden=true; $("solWallet").textContent=r.balance;
   $("solInfo").textContent="Bet "+r.min+"–"+r.max+" · "+r.minutes+" min";
   $("solAmt").value=Math.max(r.min,Math.min(r.max,parseInt($("solAmt").value)||r.min));
-  show("sol"); r.active?solRender(r):solIdle();
+  show("sol"); r.active?solSrv(r):solIdle();
 }
 $("hmSol").onclick=solOpen;
 $("hmBingo").onclick = () => { $("lobby").dataset.mode = "bingo"; $("lobTitle").textContent = "Bingo"; show("lobby"); toGameTab(); };
