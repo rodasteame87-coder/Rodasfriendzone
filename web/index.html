@@ -340,6 +340,11 @@
   .cd i{font-style:normal;display:block;font-size:15px}
   .cd.bk{background:repeating-linear-gradient(45deg,#5b1070,#5b1070 4px,#7b0a82 4px,#7b0a82 8px);border:2px solid #fff}
   .cd.sel{outline:3px solid #f7c32c;z-index:2}
+  #solBoard .cd:not(.bk){touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;cursor:grab}
+  #solBoard .cd.dragging{opacity:0}
+  #solBoard .dt{outline:3px solid #f7c32c;outline-offset:-2px;border-radius:6px}
+  .sol-ghost{position:fixed;z-index:9999;pointer-events:none;will-change:transform;filter:drop-shadow(0 8px 8px rgba(0,0,0,.5))}
+  .sol-ghost .cd{position:absolute;left:0;margin:0}
   .col .cd+.cd{margin-top:-105%}.col .cd.bk+.cd{margin-top:-125%}
   .sl{border:2px dashed rgba(255,255,255,.35);display:grid;place-items:center;color:rgba(255,255,255,.35);font-size:18px}
   #solBar{display:flex;justify-content:space-between;align-items:center;margin:8px 2px;font-weight:700;color:var(--title);font-size:13px}
@@ -820,7 +825,9 @@ async function post(p,b){
   const {j} = await fetchT(API+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...b,initData:initData()})}, POST_MS);
   return j || {ok:false, error:"Server error"};
 }
-function show(n){ screen=n; ["home","lobby","pick","game","ng","sol","dep","pay"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); if(n==="home") updTop(); }
+var SWIPE_LOCK=false;
+function show(n){ screen=n;
+  try{ const lk=(n==="sol"); if(tg&&lk!==SWIPE_LOCK){ SWIPE_LOCK=lk; if(lk){ tg.disableVerticalSwipes&&tg.disableVerticalSwipes(); } else { tg.enableVerticalSwipes&&tg.enableVerticalSwipes(); } } }catch(e){} ["home","lobby","pick","game","ng","sol","dep","pay"].forEach(s=>$(s).hidden = s!==n); window.scrollTo(0,0); if(n==="home") updTop(); }
 const letter = n => COLS[Math.floor((n-1)/15)];
 const label = n => letter(n)+"-"+n;      // e.g. B-1, O-71
 const CALL_COLORS = ["var(--cB)","var(--cI)","var(--cN)","var(--cG)","var(--cO)"];   // B blue, I red, N green, G orange, O violet
@@ -2003,15 +2010,15 @@ function solEnd(r){
   if(r.balance!=null) $("solWallet").textContent=r.balance;
 }
 async function solAct(b){
-  if(SOL.busy) return; SOL.busy=true;
+  if(SOL.busy) return false; SOL.busy=true; let good=false;
   try{
     const r=await post("/sol/move",b);
-    if(r.ok&&r.status==="active"){ SOL.sel=null; solRender(r); }
-    else if(r.ok||r.ended){ solEnd(r); }
+    if(r.ok&&r.status==="active"){ SOL.sel=null; solRender(r); good=true; }
+    else if(r.ok||r.ended){ solEnd(r); good=!!r.ok; }
     else if(r.none){ solIdle(); solMsg(""); }
     else { SOL.sel=null; toast(r.error||"Error"); if(r.tab) solRender(r); }
   }catch(e){ toast("Network problem, try again"); }
-  SOL.busy=false;
+  SOL.busy=false; return good;
 }
 function solSrc(p,k){
   const s=SOL.s;
@@ -2020,6 +2027,7 @@ function solSrc(p,k){
   const col=s.tab[+p[1]]; return k!=null&&col[k]&&col[k][1]?{src:p,n:col.length-k}:null;
 }
 $("solBoard").onclick=e=>{
+  if(Date.now()<(SOL.noClick||0)) return;
   const t=e.target.closest("[data-pile]"), s=SOL.s; if(!t||!s||s.status!=="active"||SOL.busy) return;
   const p=t.dataset.pile, k=t.dataset.k!=null?+t.dataset.k:null, sel=SOL.sel;
   if(p==="s"){ SOL.sel=null; return solAct({action:"draw"}); }
@@ -2029,6 +2037,77 @@ $("solBoard").onclick=e=>{
   }
   SOL.sel=solSrc(p,k); solRender(s);
 };
+// ---- drag and drop (tap-to-move above stays as a backup) ----
+const DRAG={id:null,src:null,t:null,x0:0,y0:0,on:false,els:[],ghost:null,tgt:null};
+function solPiles(){
+  const b=$("solBoard"), out=[];
+  b.querySelectorAll('.col[data-pile]').forEach(el=>out.push({p:el.dataset.pile,el:el,col:true}));
+  b.querySelectorAll('.sr > div[data-pile^="f"]').forEach(el=>out.push({p:el.dataset.pile,el:el,col:false}));
+  return out;
+}
+function solDrop(x,y){
+  const bb=$("solBoard").getBoundingClientRect();
+  for(const o of solPiles()){
+    const r=o.el.getBoundingClientRect(), bottom=o.col?Math.max(r.bottom,bb.bottom):r.bottom;
+    if(x>=r.left-2&&x<=r.right+2&&y>=r.top-2&&y<=bottom+2) return o.p;
+  }
+  return null;
+}
+function solClearDt(){ $("solBoard").querySelectorAll(".dt").forEach(el=>el.classList.remove("dt")); }
+function solDragStart(){
+  const p=DRAG.src.src; let els=[DRAG.t];
+  if(p[0]==="t"){
+    const k=+DRAG.t.dataset.k;
+    els=[...$("solBoard").querySelectorAll('.cd[data-pile="'+p+'"]')].filter(el=>el.dataset.k!=null&&+el.dataset.k>=k);
+  }
+  const r0=els[0].getBoundingClientRect(), g=document.createElement("div");
+  g.className="sol-ghost";
+  g.style.left=r0.left+"px"; g.style.top=r0.top+"px"; g.style.width=r0.width+"px";
+  els.forEach(el=>{
+    const r=el.getBoundingClientRect(), c=el.cloneNode(true);
+    c.classList.remove("sel","dragging"); c.removeAttribute("data-pile"); c.removeAttribute("data-k");
+    c.style.top=(r.top-r0.top)+"px"; c.style.width=r.width+"px"; c.style.height=r.height+"px";
+    g.appendChild(c);
+  });
+  g.style.height=(els[els.length-1].getBoundingClientRect().bottom-r0.top)+"px";
+  document.body.appendChild(g);
+  els.forEach(el=>el.classList.add("dragging"));
+  DRAG.els=els; DRAG.ghost=g; DRAG.tgt=null; SOL.sel=null;
+}
+function solDragMove(x,y){
+  DRAG.ghost.style.transform="translate("+(x-DRAG.x0)+"px,"+(y-DRAG.y0)+"px)";
+  let t=solDrop(x,y); if(t===DRAG.src.src||t==="s"||t==="w") t=null;
+  if(t!==DRAG.tgt){
+    solClearDt(); DRAG.tgt=t;
+    if(t){ const o=solPiles().find(o=>o.p===t); if(o) o.el.classList.add("dt"); }
+  }
+}
+async function solDragEnd(cancel){
+  const g=DRAG.ghost, els=DRAG.els, src=DRAG.src, tgt=cancel?null:DRAG.tgt;
+  DRAG.id=null; DRAG.src=null; DRAG.t=null; DRAG.on=false; DRAG.ghost=null; DRAG.tgt=null;
+  solClearDt(); SOL.noClick=Date.now()+400;
+  let good=false;
+  if(tgt) good=await solAct({action:"move",src:src.src,dst:(tgt[0]==="f"?"f":tgt),n:src.n});
+  if(good){ g.remove(); return; }
+  g.style.transition="transform .18s ease"; g.style.transform="translate(0px,0px)";   // wrong move: cards slide back
+  setTimeout(()=>{ els.forEach(el=>el.classList.remove("dragging")); g.remove(); },200);
+}
+function solDragReset(){ DRAG.id=null; DRAG.src=null; DRAG.t=null; DRAG.on=false; }
+$("solBoard").addEventListener("pointerdown",e=>{
+  const s=SOL.s; if(!s||s.status!=="active"||SOL.busy||DRAG.id!==null) return;
+  if(e.pointerType==="mouse"&&e.button!==0) return;
+  const t=e.target.closest(".cd:not(.bk)"); if(!t||!t.dataset.pile) return;
+  const src=solSrc(t.dataset.pile, t.dataset.k!=null?+t.dataset.k:null); if(!src) return;
+  DRAG.id=e.pointerId; DRAG.src=src; DRAG.t=t; DRAG.x0=e.clientX; DRAG.y0=e.clientY; DRAG.on=false;
+});
+document.addEventListener("pointermove",e=>{
+  if(DRAG.id!==e.pointerId||!DRAG.src) return;
+  if(!DRAG.on){ if(Math.hypot(e.clientX-DRAG.x0,e.clientY-DRAG.y0)<8) return; DRAG.on=true; solDragStart(); }
+  e.preventDefault(); solDragMove(e.clientX,e.clientY);
+},{passive:false});
+document.addEventListener("pointerup",e=>{ if(DRAG.id!==e.pointerId) return; if(DRAG.on) solDragEnd(false); else solDragReset(); });
+document.addEventListener("pointercancel",e=>{ if(DRAG.id!==e.pointerId) return; if(DRAG.on) solDragEnd(true); else solDragReset(); });
+$("solBoard").addEventListener("contextmenu",e=>e.preventDefault());
 $("solBet").querySelector(".q").onclick=e=>{
   const q=e.target.dataset.q; if(!q) return;
   const c=SOL.cfg, bal=Math.floor(+$("solWallet").textContent)||0; let v=parseInt($("solAmt").value)||c.min;
