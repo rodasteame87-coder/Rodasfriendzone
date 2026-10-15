@@ -29,7 +29,7 @@ import secrets
 import time
 
 ENABLED = os.getenv("SOLITAIRE_ENABLED", "0") == "1"      # off = only the admin can play
-MIN_BET = int(os.getenv("SOLITAIRE_MIN_BET", "10"))
+MIN_BET = int(os.getenv("SOLITAIRE_MIN_BET", "30"))
 MAX_BET = int(os.getenv("SOLITAIRE_MAX_BET", "1000"))
 PAYOUT_MULT = 2                                            # a win pays bet x 2 (stake included)
 DRAW = int(os.getenv("SOLITAIRE_DRAW", "3"))               # 1 = easier, 3 = harder
@@ -250,7 +250,7 @@ def move(g, src, dst, n):
     return None
 
 
-def act(uid, action, src=None, dst=None, n=1):
+def act(uid, action, src=None, dst=None, n=1, seq=None):
     g = games.get(uid)
     if g is None:
         return {"ok": False, "error": "No open game", "none": True}
@@ -260,6 +260,12 @@ def act(uid, action, src=None, dst=None, n=1):
     if action == "quit":
         _finish(g, False)
         return {"ok": True, "ended": True, "status": "lost", "balance": D["wallets"].get(uid, 0)}
+    if action in ("draw", "move") and seq is not None:      # retry-safe: a repeated request never acts twice
+        sq, cur = _int(seq), g["s"]["moves"]
+        if sq == cur:                                        # that move was already done (answer got lost)
+            return {"ok": True, "dup": True, **view(g)}
+        if sq != cur + 1:
+            return {"ok": False, "sync": True, "error": "Board refreshed", **view(g)}
     if action == "draw":
         err = draw(g)
     elif action == "move":
@@ -332,7 +338,7 @@ async def handle_move(body):
     uid, err = await _gate(body)
     if err:
         return err
-    return act(uid, body.get("action"), body.get("src"), body.get("dst"), body.get("n", 1))
+    return act(uid, body.get("action"), body.get("src"), body.get("dst"), body.get("n", 1), body.get("seq"))
 
 
 def routes():
