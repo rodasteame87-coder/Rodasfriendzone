@@ -2047,7 +2047,7 @@ $("solQuit").onclick=()=>{ if(confirm("Quit? Your bet will be lost.")) solAct({a
 $("solHome").onclick=()=>show("home");
 async function solOpen(){
   const r=await get("/api/sol/state");
-  if(!r.ok) return toast(r.msg||"Solitaire is not available now");
+  if(!r.ok) return toast(r.msg||("Solitaire is not available now ("+(r.error||"no reply")+")"));
   SOL.cfg=r; SOL.sel=null; solMsg(""); $("solWallet").textContent=r.balance;
   $("solInfo").textContent="Bet "+r.min+"–"+r.max+" · "+r.minutes+" min";
   $("solAmt").value=Math.max(r.min,Math.min(r.max,parseInt($("solAmt").value)||r.min));
