@@ -94,6 +94,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;heigh
   </ul>
   <button class="btn" id="find">Find match</button>
   <div class="sub" id="lobbyMsg"></div>
+  <button class="btn alt" id="home">← Lobby</button>
 </div>
 
 <div id="wait" class="ov">
@@ -107,9 +108,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;heigh
 <div id="end" class="ov">
   <h1 id="endH">Match over</h1>
   <div class="sub" id="endSub"></div>
+  <div class="sub" id="endMe" style="font-weight:700;color:var(--gold)"></div>
   <div class="rank" id="rank"></div>
   <div class="pill">FREE DEMO · scores have no money value</div>
   <button class="btn" id="again">Play again</button>
+  <button class="btn alt" id="home2">← Lobby</button>
 </div>
 
 <script>
@@ -373,14 +376,16 @@ function refreshUI() {
   }
   if (ph === "finished" || ph === "aborted") {
     const r = S.result;
-    if (ph === "aborted" || !r) { $("endH").textContent = "Match closed"; $("endSub").textContent = "Everyone left the match."; $("rank").innerHTML = ""; }
+    if (ph === "aborted" || !r) { $("endH").textContent = "Match closed"; $("endSub").textContent = "Everyone left the match."; $("endMe").textContent = ""; $("rank").innerHTML = ""; }
     else {
-      $("endH").textContent = (r.winner === S.you ? "You win! 🏆" : r.players[0].name + " wins!");
+      const w = r.players[0], me = r.players.findIndex(x => x.seat === S.you), ord = ["1st", "2nd", "3rd", "4th"];
+      $("endH").textContent = (r.winner === S.you ? "You win! 🏆" : "🏆 " + w.name + " wins!");
+      $("endMe").textContent = "Winner: " + w.name + " with " + w.score + " point" + (w.score === 1 ? "" : "s") + (me >= 0 ? " · You finished " + ord[me] + " with " + r.players[me].score + " pts" : "");
       $("endSub").textContent = r.tiebreak ? (r.tiebreak.coin ? "Tie broken by sudden death and a fair random draw" : "Tie broken by sudden death (" + r.tiebreak.rounds + " round" + (r.tiebreak.rounds > 1 ? "s" : "") + ")") : "Final scores";
       $("rank").innerHTML = ""; r.players.forEach((p, i) => { const d = document.createElement("div"); d.className = "rk" + (i === 0 ? " w" : "");
         const a = document.createElement("div"); a.className = "n"; a.textContent = i + 1; const b = document.createElement("div"); b.className = "nm"; b.textContent = p.name + (p.seat === S.you ? " (you)" : "");
         const sm = document.createElement("small"); sm.textContent = "balls " + p.pocketed + " · fouls " + p.fouls; b.appendChild(sm);
-        const c = document.createElement("div"); c.className = "s"; c.textContent = p.score; d.append(a, b, c); $("rank").appendChild(d); });
+        const c = document.createElement("div"); c.className = "s"; c.textContent = p.score + " pts"; d.append(a, b, c); $("rank").appendChild(d); });
     }
   }
   const mt = myTurn(), cs = canShoot();
@@ -402,6 +407,7 @@ setInterval(tickUI, 250);
 $("find").onclick = () => { wantMatch = true; $("lobbyMsg").textContent = "Connecting..."; if (!send({ t: "join" })) $("lobbyMsg").textContent = "Connecting..."; };
 $("leave").onclick = () => { wantMatch = false; send({ t: "leave" }); };
 $("bots").onclick = () => send({ t: "bots" });
+$("home").onclick = $("home2").onclick = () => { location.href = "/"; };
 $("again").onclick = () => { S = { phase: "none", seats: [], balls: {}, you: -1, turn: 0, seq: 0 }; refreshUI(); wantMatch = true; send({ t: "join" }); };
 
 // ---------- loop ----------
