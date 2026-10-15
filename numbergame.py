@@ -1149,7 +1149,8 @@ def state_for(uid, lobby):
         "status": r["status"], "count": size_of(lobby), "max": MAX_PER_PLAYER, "sold": len(r["owners"]),
         "price": price_of(lobby), "size": size_of(lobby), "name": room_name(lobby),
         "early_ok": early_ok(lobby),
-        "taken": sorted(r["owners"]),            # other players' names are not sent
+        "taken": sorted(r["owners"]),
+        "names": {str(n): o["name"] for n, o in r["owners"].items()},   # shown to everyone on the board
         "mine": mine, "cash": D["wallets"].get(uid, 0),
         "prize_full": list(ROOMS[lobby]["prizes"]),
         "prize_now": prizes_for(lobby, len(r["owners"])), "min_early": MIN_EARLY_START,
