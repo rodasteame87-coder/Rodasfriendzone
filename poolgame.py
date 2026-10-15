@@ -947,7 +947,11 @@ def register(dp):
         if not allowed(m.from_user.id):
             await m.answer("🎱 Pool is not open yet.")
             return
-        url = str(D.get("webapp_url", "")).rstrip("/") + "/pool"
+        from urllib.parse import urlsplit
+        u = urlsplit(str(D.get("webapp_url", "")).strip())
+        # domain only: anything after it in WEBAPP_URL (path, ?query, #hash) is ignored
+        url = (f"{u.scheme}://{u.netloc}" if u.scheme and u.netloc else str(D.get("webapp_url", "")).rstrip("/")) + "/pool"
+        print("pool button url:", url)
         await m.answer("🎱 Rodas Friend Zone Pool - free demo, 4 players, no money.",
                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                            InlineKeyboardButton(text="🎱 Play Pool (free)", web_app=WebAppInfo(url=url))]]))
