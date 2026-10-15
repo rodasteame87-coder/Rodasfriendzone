@@ -2005,7 +2005,7 @@ function solEnd(r){
 async function solAct(b){
   if(SOL.busy) return; SOL.busy=true;
   try{
-    const r=await post("/api/sol/move",b);
+    const r=await post("/sol/move",b);
     if(r.ok&&r.status==="active"){ SOL.sel=null; solRender(r); }
     else if(r.ok||r.ended){ solEnd(r); }
     else if(r.none){ solIdle(); solMsg(""); }
@@ -2038,7 +2038,7 @@ $("solBet").querySelector(".q").onclick=e=>{
 $("solPlay").onclick=async()=>{
   if(SOL.busy) return; SOL.busy=true; solMsg("");
   try{
-    const r=await post("/api/sol/start",{bet:parseInt($("solAmt").value)});
+    const r=await post("/sol/start",{bet:parseInt($("solAmt").value)});
     if(r.ok){ SOL.sel=null; solRender(r); } else toast(r.error||"Error");
   }catch(e){ toast("Network problem, try again"); }
   SOL.busy=false;
@@ -2046,7 +2046,7 @@ $("solPlay").onclick=async()=>{
 $("solQuit").onclick=()=>{ if(confirm("Quit? Your bet will be lost.")) solAct({action:"quit"}); };
 $("solHome").onclick=()=>show("home");
 async function solOpen(){
-  const r=await get("/api/sol/state");
+  const r=await get("/sol/state");
   if(!r.ok) return toast(r.msg||("Solitaire is not available now ("+(r.error||"no reply")+")"));
   SOL.cfg=r; SOL.sel=null; solMsg(""); $("solWallet").textContent=r.balance;
   $("solInfo").textContent="Bet "+r.min+"–"+r.max+" · "+r.minutes+" min";
