@@ -14,6 +14,7 @@ from aiogram.types import (Message, CallbackQuery, BotCommand, BotCommandScopeCh
                            ReplyKeyboardRemove, WebAppInfo, FSInputFile, BufferedInputFile)
 
 import solitaire as sol        # Solitaire (1 player, win x2)
+import solitaire_mp as qm      # Quick Match (4 players, Solitaire race, the winner takes the prize)
 import poolgame as pg           # Pool (4 players, FREE DEMO, no money)
 import numbergame as ng          # Number Game (stages 1-3: draw, poll, start, saved games)
 
@@ -2866,6 +2867,7 @@ async def bonusmany_buttons(cb: CallbackQuery):
 
 ng.register(dp)                 # Number Game admin test commands
 sol.register(dp)                # Solitaire admin command (/solstatus)
+qm.register(dp)                 # Quick Match admin command (/qmstatus)
 pg.register(dp)                 # Pool: /pool and /poolstatus
 
 
@@ -3054,6 +3056,7 @@ async def main():
         web.post("/api/dep/create", api_dep_create),
         *ng.routes(),                     # Number Game API
         *sol.routes(),                    # Solitaire API
+        *qm.routes(),                     # Quick Match API
         *pg.routes(),                     # Pool page (/pool) and live room (/ws/pool)
     ])
     runner = web.AppRunner(app)
@@ -3069,6 +3072,7 @@ async def main():
         await c.execute(SCHEMA)
         await c.execute(ng.SCHEMA)
         await c.execute(sol.SCHEMA)
+        await c.execute(qm.SCHEMA)
         await c.execute(pg.SCHEMA)
     _q = asyncio.Queue()
     asyncio.create_task(db_writer())
@@ -3079,16 +3083,19 @@ async def main():
             edit=lambda uid, mid, text, **kw: BOT.edit_message_text(text, chat_id=uid, message_id=mid, **kw),
             db_mark=lambda: _enq_n[0], db_done=lambda: _done_n[0], pool=pool)
     sol.init(**ng.D)                          # Solitaire uses the same wallet, login and database as the Number Game
+    qm.init(**ng.D)                           # Quick Match: same wallet, login and database
     pg.init(verify=verify, touch=touch, banned=banned, admin_id=ADMIN_ID, enqueue=_enqueue,
             webapp_url=WEBAPP_URL)            # Pool gets login + database only: NO wallets, NO money functions
     await load_state()
     async with pool.acquire() as c:
         await ng.load_state(c)
         await sol.load_state(c)
+        await qm.load_state(c)
         await pg.load_state(c)
     ready = True
     asyncio.create_task(game_loop())
     asyncio.create_task(ng.ticker())          # Number Game: countdown, reveal and prize settlement
+    asyncio.create_task(qm.ticker())          # Quick Match: waiting-room refunds and time-up settlement
     asyncio.create_task(pg.ticker())          # Pool: start countdown, shot and match timers
     asyncio.create_task(reaper())
     asyncio.create_task(pregen_audio())
