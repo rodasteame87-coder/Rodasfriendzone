@@ -376,6 +376,17 @@
   #solBet .go{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   #solBet input{height:48px;border:0;border-radius:10px;background:#3a0d05;color:#fff;text-align:center;font-size:18px;font-weight:700;width:100%}
   #solBet .hm-play{background:linear-gradient(#7be34a,#2e9e19);border:3px solid #e8b887;border-radius:14px;font-size:20px;color:#fff}
+  #solLim{text-align:center;font-size:12px;font-weight:700;color:#ffe9b0;margin:4px 2px 0}
+  #solLim.hard{color:#ff9a8a}
+  #solHint{font-size:12px;font-weight:700;color:#ffe9b0;text-align:center;margin-bottom:8px;line-height:1.4}
+  #solWinBoard{position:fixed;inset:0;z-index:99999;background:rgba(10,0,20,.88);display:flex;align-items:center;justify-content:center;padding:20px}
+  #solWinBoard[hidden]{display:none}
+  #solWinBoard .wb{width:100%;max-width:340px;text-align:center;background:linear-gradient(#5a1a86,#2d0a47);border:3px solid #ffd35a;border-radius:20px;padding:26px 18px;color:#fff;box-shadow:0 0 40px rgba(255,211,90,.45)}
+  #solWinBoard .wb h2{margin:0 0 6px;font-size:24px;color:#ffd35a}
+  #solWinBoard .wb .amt{font-size:38px;font-weight:900;color:#7be34a;margin:10px 0}
+  #solWinBoard .wb .cd10{font-size:15px;opacity:.9}
+  #solWinBoard .wb .cd10 b{display:block;font-size:46px;color:#ffd35a;line-height:1.1}
+  #solWinBoard .wb button{margin-top:14px;width:auto;padding:0 22px;height:40px;border-radius:12px;background:linear-gradient(#7be34a,#2e9e19);color:#fff;font-weight:800;border:2px solid #e8b887}
   #solMsg{text-align:center;font-weight:800;font-size:15px;margin:6px 8px;padding:6px;background:linear-gradient(#f7ecc6,#e6d39b);color:#4a1560;border-radius:4px}
 
   #dep,#pay{background:#000;color:#fff;margin:-8px -10px -76px;min-height:100vh;padding-bottom:200px;font-size:15px}
@@ -519,16 +530,19 @@
     <div id="solMsg" hidden></div>
     <div id="solBoard"></div>
     <div id="solNet" hidden></div>
-    <div id="solBar" hidden><span id="solT">10:00</span><span id="solWin"></span><button id="solQuit">Give up</button></div>
+    <div id="solBar" hidden><span id="solT">6:00</span><span id="solWin"></span><button id="solQuit">Give up</button></div>
+    <div id="solLim" hidden></div>
     <div id="solBet">
+      <div id="solHint"></div>
       <div class="q"><button data-q="min">MIN</button><button data-q="x2">X2</button><button data-q="half">X/2</button><button data-q="max">MAX</button></div>
       <div class="go"><input id="solAmt" type="text" inputmode="numeric" value="30"><button class="hm-play" id="solPlay">▶ Play</button></div>
     </div>
+    <div id="solWinBoard" hidden><div class="wb"><h2>🎉 Congratulations! 🎉</h2><div>You have won</div><div class="amt"><span id="solWinAmt">0</span> ETB</div><div class="cd10">Back to Solitaire in<b id="solWinCd">10</b></div><button id="solWinNow">Play again now</button></div></div>
     <div id="solRules" hidden><button id="solX">✕</button><div class="sc">
       <h3>RULES</h3><h4>HOW TO WIN</h4><p>Move all 52 cards onto the 4 piles (by suit) from Ace to King.</p>
       <h4>GETTING STARTED</h4><p>1. Choose your bet (minimum 30 ETB) and press ▶.</p><p>2. Cards are dealt face down in 7 columns (1 to 7 cards); the top card of each is face up. The rest is the deck (draw 3).</p>
       <h4>HOW TO PLAY</h4><p>1. Build the 4 piles in ascending order, Ace to King, same suit.</p><p>2. In the columns build downward with alternating colors (a red 7 on a black 8).</p><p>3. Drag one card or a group to another column.</p><p>4. Only a King (or a group starting with a King) can go on an empty column.</p><p>5. If you cannot move any more, press "Give up".</p><p>6. Win = your bet x2.</p><p>7. Playing on two tables at once is not allowed.</p>
-      <p><i>A game must be finished within 10 minutes, otherwise the bet is lost. Problems? Contact support within 3 days.</i></p></div></div>
+      <p id="solRuleLim"></p><p><i>Problems? Contact support within 3 days.</i></p></div></div>
   </div>
 </div>
 
@@ -2045,6 +2059,7 @@ function solRender(s){
   $("solWallet").textContent=s.balance!=null?s.balance:$("solWallet").textContent;
   $("solBar").hidden=!act; $("solBet").hidden=act;
   if(act){ SOL.left=s.left; $("solWin").textContent="Bet "+s.bet+" → Win "+s.win_amount; solTick(); }
+  const lm=$("solLim"); if(lm){ lm.hidden=!(act&&s.moves_max); if(act&&s.moves_max){ lm.textContent="Moves "+(s.moves||0)+"/"+s.moves_max+" · Pass "+(s.passes||1)+"/"+s.passes_max+(s.hard?" · 🔥 High stakes":""); lm.className=s.hard?"hard":""; } }
 }
 function solIdle(){ if($("solMsg").hidden) solMsg("Please place your bet / ውርርድዎን ያስቀምጡ"); solRender({status:"idle",stock:1,waste:[],found:[0,0,0,0],tab:[[],[],[],[],[],[],[]]}); }
 function solTick(){ const m=Math.max(0,SOL.left); $("solT").textContent="⏱ "+Math.floor(m/60)+":"+String(m%60).padStart(2,"0"); }
@@ -2052,11 +2067,22 @@ setInterval(()=>{ if(screen!=="sol"||!SOL.s||SOL.s.status!=="active") return; SO
 function solMsg(t){ const m=$("solMsg"); m.textContent=t; m.hidden=!t; }
 function solEnd(r){
   SOL.sel=null;
-  if(r.status==="won") solMsg("🎉 You won "+r.payout+" ETB!"); else solMsg("Game over. Bet lost / ጨዋታው አልቋል");
+  if(r.status==="won") solMsg(""); else solMsg(r.reason==="moves"?"Move limit reached. Bet lost / የእንቅስቃሴ ገደብ አልቋል":"Game over. Bet lost / ጨዋታው አልቋል");
   if(r.tab) solRender(r); else solIdle();
-  $("solBar").hidden=true; $("solBet").hidden=false;
+  $("solBar").hidden=true; $("solBet").hidden=false; $("solLim").hidden=true;
   if(r.balance!=null) $("solWallet").textContent=r.balance;
+  if(r.status==="won") solWinShow(r.payout);
 }
+function solWinShow(amount){
+  let n=10; clearInterval(SOL.wt);
+  $("solWinAmt").textContent=amount; $("solWinCd").textContent=n; $("solWinBoard").hidden=false;
+  SOL.wt=setInterval(()=>{ n--; $("solWinCd").textContent=Math.max(0,n); if(n<=0) solWinClose(); },1000);
+}
+function solWinClose(){
+  clearInterval(SOL.wt); $("solWinBoard").hidden=true;
+  SOL.sel=null; solReset(); solMsg(""); solIdle();
+}
+$("solWinNow").addEventListener("click",solWinClose);
 // ---- fast play: moves show instantly, the server is told in the background (safe retries) ----
 const SQ={q:[],run:false,gen:0};
 const sRk=c=>c%13, sSt=c=>Math.floor(c/13), sRd=c=>c>=26;
@@ -2227,6 +2253,8 @@ async function solOpen(){
   if(!r.ok) return toast(r.msg||("Solitaire is not available now ("+(r.error||"no reply")+")"));
   SOL.cfg=r; SOL.sel=null; solReset(); solMsg(""); $("solRules").hidden=true; $("solWallet").textContent=r.balance;
   $("solInfo").textContent="Bet "+r.min+"–"+r.max+" · "+r.minutes+" min";
+  $("solHint").innerHTML="⏱ "+r.minutes+" min · Bets up to "+r.hard_from+": "+r.passes+" passes, "+r.moves+" moves<br>🔥 Bets above "+r.hard_from+": harder — "+r.passes_hard+" passes, "+r.moves_hard+" moves";
+  $("solRuleLim").textContent="A game must be finished within "+r.minutes+" minutes, otherwise the bet is lost. Limits: the deck can be gone through "+r.passes+" times and you have "+r.moves+" moves (draws + card moves). Bets above "+r.hard_from+" ETB are harder: "+r.passes_hard+" passes and "+r.moves_hard+" moves. When a limit is reached the game is lost.";
   $("solAmt").value=Math.max(r.min,Math.min(r.max,parseInt($("solAmt").value)||r.min));
   show("sol"); r.active?solSrv(r):solIdle();
 }
