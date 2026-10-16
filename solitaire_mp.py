@@ -61,7 +61,6 @@ WAIT_SECONDS = int(os.getenv("QM_WAIT_SECONDS", "60"))          # not 4 players 
 TIME_LIMIT = int(os.getenv("QM_MINUTES", "6")) * 60             # play time of a match
 REQUIRE_SEQ = os.getenv("QM_REQUIRE_SEQ", "1") == "1"           # move/auto must carry the move counter (retry-safe)
 RESULT_KEEP = 60                                                # seconds the result stays available for a phone that reconnects
-NOTIFY = os.getenv("QM_NOTIFY", "1") == "1"                     # Telegram message when a match starts / ends
 
 D = {}                      # filled by init()
 matches = {}                # match id -> match that is waiting or playing
@@ -165,8 +164,9 @@ def _save_player(m, p):
 
 
 def _notify(uid, text):
-    if NOTIFY and D.get("send"):
-        _outbox.append((uid, text))
+    """Quick Match sends NO Telegram messages to players (the app shows everything). Kept as a no-op so the calls
+    below stay harmless."""
+    return
 
 
 # ---------- helpers ----------
