@@ -33,7 +33,19 @@ MIN_BET = int(os.getenv("SOLITAIRE_MIN_BET", "30"))
 MAX_BET = int(os.getenv("SOLITAIRE_MAX_BET", "1000"))
 PAYOUT_MULT = 2                                            # a win pays bet x 2 (stake included)
 DRAW = int(os.getenv("SOLITAIRE_DRAW", "3"))               # 1 = easier, 3 = harder
-TIME_LIMIT = int(os.getenv("SOLITAIRE_MINUTES", "10")) * 60
+TIME_LIMIT = int(os.getenv("SOLITAIRE_MINUTES", "6")) * 60
+# --- difficulty (same rules for everybody, shown on the screen) ---
+# Bets up to HARD_FROM use the NORMAL limits, bets ABOVE HARD_FROM use the HARD limits.
+HARD_FROM = int(os.getenv("SOLITAIRE_HARD_FROM", "50"))
+PASSES_NORMAL = int(os.getenv("SOLITAIRE_PASSES", "3"))        # how many times the stock may be gone through
+MOVES_NORMAL = int(os.getenv("SOLITAIRE_MOVES", "200"))        # draws + card moves allowed
+PASSES_HARD = int(os.getenv("SOLITAIRE_PASSES_HARD", "2"))
+MOVES_HARD = int(os.getenv("SOLITAIRE_MOVES_HARD", "150"))
+
+
+def _lim(g):
+    """(max passes, max moves) of this game. Decided only by the bet, so a restart changes nothing."""
+    return (PASSES_HARD, MOVES_HARD) if g["bet"] > HARD_FROM else (PASSES_NORMAL, MOVES_NORMAL)
 
 SUITS = 4                  # 0 spades, 1 clubs, 2 diamonds, 3 hearts (same order as the screen)
 D = {}                     # filled by init()
@@ -98,7 +110,7 @@ def new_deal():
         col = [[deck.pop(), 0] for _ in range(i + 1)]
         col[-1][1] = 1
         tab.append(col)
-    return {"stock": deck, "waste": [], "found": [0, 0, 0, 0], "tab": tab, "moves": 0}
+    return {"stock": deck, "waste": [], "found": [0, 0, 0, 0], "tab": tab, "moves": 0, "pass": 1}
 
 
 def _can_stack(card, onto):
@@ -188,6 +200,10 @@ def draw(g):
         for _ in range(min(DRAW, len(s["stock"]))):
             s["waste"].append(s["stock"].pop())
     elif s["waste"]:                                       # stock empty: turn the waste over again
+        pmax = _lim(g)[0]
+        if s.get("pass", 1) >= pmax:
+            return f"No more passes ({pmax} max) / ካርዶችን እንደገና ማለፍ አይቻልም"
+        s["pass"] = s.get("pass", 1) + 1
         s["stock"] = s["waste"][::-1]
         s["waste"] = []
     else:
@@ -277,6 +293,9 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
     g["s"]["moves"] += 1
     if _won(g):
         _finish(g, True)
+    elif g["s"]["moves"] >= _lim(g)[1]:                      # move limit reached = lost
+        _finish(g, False)
+        return {"ok": True, "reason": "moves", **view(g)}
     else:
         _save(g)
     return {"ok": True, **view(g)}
@@ -294,7 +313,8 @@ def view(g):
         "waste_n": len(s["waste"]),
         "found": s["found"],
         "tab": [[[c if up else -1, up] for c, up in col] for col in s["tab"]],
-        "moves": s["moves"],
+        "moves": s["moves"], "moves_max": _lim(g)[1],
+        "passes": s.get("pass", 1), "passes_max": _lim(g)[0], "hard": g["bet"] > HARD_FROM,
         "balance": D["wallets"].get(g["uid"], 0),
     }
 
@@ -317,7 +337,9 @@ async def handle_state(query):
     if err:
         return err
     base = {"min": MIN_BET, "max": MAX_BET, "mult": PAYOUT_MULT, "draw": DRAW,
-            "minutes": TIME_LIMIT // 60, "balance": D["wallets"].get(uid, 0)}
+            "minutes": TIME_LIMIT // 60, "hard_from": HARD_FROM,
+            "passes": PASSES_NORMAL, "moves": MOVES_NORMAL,
+            "passes_hard": PASSES_HARD, "moves_hard": MOVES_HARD, "balance": D["wallets"].get(uid, 0)}
     g = games.get(uid)
     if g is not None and not _expire(g):
         return {"ok": True, "active": True, **base, **view(g)}
@@ -396,4 +418,6 @@ def register(dp):
                        f"Games played: {stats['games']} · won {stats['wins']} ({rate}%)\n"
                        f"Bets taken: {stats['bets']} ETB · paid out: {stats['paid']} ETB\n"
                        f"Your profit: {profit} ETB\n"
-                       f"Bet {MIN_BET}-{MAX_BET} · draw {DRAW} · {TIME_LIMIT // 60} min · win x{PAYOUT_MULT}")
+                       f"Bet {MIN_BET}-{MAX_BET} · draw {DRAW} · {TIME_LIMIT // 60} min · win x{PAYOUT_MULT}\n"
+                       f"Bets up to {HARD_FROM}: {PASSES_NORMAL} passes, {MOVES_NORMAL} moves\n"
+                       f"Bets above {HARD_FROM}: {PASSES_HARD} passes, {MOVES_HARD} moves")
