@@ -266,6 +266,25 @@ def move(g, src, dst, n):
     return None
 
 
+def _auto(g):
+    """Auto complete: only allowed when nothing is face down and stock + waste are empty (a sure win).
+    The server moves every card to the foundations itself, so the phone can not fake it."""
+    s = g["s"]
+    if s["stock"] or s["waste"] or any(not up for col in s["tab"] for _, up in col):
+        return "Auto complete is not ready yet"
+    moved = True
+    while moved:
+        moved = False
+        for col in s["tab"]:
+            if col:
+                c = col[-1][0]
+                if rank(c) == s["found"][suit(c)]:
+                    col.pop()
+                    s["found"][suit(c)] += 1
+                    moved = True
+    return None if _won(g) else "Auto complete failed"
+
+
 def act(uid, action, src=None, dst=None, n=1, seq=None):
     g = games.get(uid)
     if g is None:
@@ -276,7 +295,7 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
     if action == "quit":
         _finish(g, False)
         return {"ok": True, "ended": True, "status": "lost", "balance": D["wallets"].get(uid, 0)}
-    if action in ("draw", "move") and seq is not None:      # retry-safe: a repeated request never acts twice
+    if action in ("draw", "move", "auto") and seq is not None:      # retry-safe: a repeated request never acts twice
         sq, cur = _int(seq), g["s"]["moves"]
         if sq == cur:                                        # that move was already done (answer got lost)
             return {"ok": True, "dup": True, **view(g)}
@@ -286,6 +305,8 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
         err = draw(g)
     elif action == "move":
         err = move(g, src, dst, n)
+    elif action == "auto":
+        err = _auto(g)
     else:
         err = "Bad move"
     if err:
@@ -346,6 +367,38 @@ async def handle_state(query):
     return {"ok": True, "active": False, **base}
 
 
+async def handle_history(query):
+    """Last 30 finished games of this player + the open game (if any) + totals."""
+    uid, err = await _gate(query)
+    if err:
+        return err
+    rows = []
+    g = games.get(uid)
+    if g is not None and not _expire(g):
+        rows.append({"id": g["id"], "bet": g["bet"], "status": "active", "payout": 0,
+                     "created": g["created"], "ended": None, "moves": g["s"].get("moves", 0)})
+    total = {"games": 0, "won": 0, "bets": 0, "paid": 0}
+    pool = D.get("pool")
+    if pool is not None:
+        try:
+            async with pool.acquire() as c:
+                for r in await c.fetch("SELECT id, bet, status, payout, created, ended, state FROM sol_games "
+                                       "WHERE uid = $1 AND status <> 'active' ORDER BY id DESC LIMIT 30", uid):
+                    try:
+                        mv = json.loads(r["state"]).get("moves", 0)
+                    except Exception:
+                        mv = 0
+                    rows.append({"id": r["id"], "bet": int(r["bet"]), "status": r["status"], "payout": int(r["payout"]),
+                                 "created": int(r["created"]), "ended": r["ended"], "moves": mv})
+                t = await c.fetchrow("SELECT COUNT(*) n, COUNT(*) FILTER (WHERE status = 'won') w, "
+                                     "COALESCE(SUM(bet),0) b, COALESCE(SUM(payout),0) p "
+                                     "FROM sol_games WHERE uid = $1 AND status <> 'active'", uid)
+                total = {"games": t["n"], "won": t["w"], "bets": int(t["b"]), "paid": int(t["p"])}
+        except Exception:
+            return {"ok": False, "error": "History is not available now"}
+    return {"ok": True, "rows": rows, "total": total}
+
+
 async def handle_start(body):
     uid, err = await _gate(body)
     if err:
@@ -376,6 +429,9 @@ def routes():
     async def api_state(req):
         return web.json_response(await handle_state(dict(req.query)))
 
+    async def api_history(req):
+        return web.json_response(await handle_history(dict(req.query)))
+
     async def api_start(req):
         return web.json_response(await handle_start(await _json(req)))
 
@@ -383,6 +439,7 @@ def routes():
         return web.json_response(await handle_move(await _json(req)))
 
     return [web.get("/api/sol/state", api_state),
+            web.get("/api/sol/history", api_history),
             web.post("/api/sol/start", api_start),
             web.post("/api/sol/move", api_move)]
 
