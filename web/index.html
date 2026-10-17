@@ -2209,6 +2209,11 @@ async function solRun(){
 }
 async function solAct(b){
   const s=SOL.s; if(!s||s.status!=="active") return false;
+  if(b.action==="quit"&&SOL.qm){                          // Quick Match: the board is finished, the match goes on (or ends at once)
+    solReset(); solNet("⏳ …"); const r=await solSend("/qm/move",{action:"quit"}); solNet("");
+    if(r.ended||r.none) qmLeave(null); else if(r.ok) solSrv(r); else { toast(r.error||"Error"); if(r.tab) solSrv(r); }
+    return !!r.ok;
+  }
   if(b.action==="quit"){ solReset(); solNet("⏳ …"); const r=await solSend("/sol/move",{action:"quit"}); solNet(""); if(r.ok||r.ended) solEnd(r); else if(r.none) solIdle(); else toast(r.error||"Error"); return !!r.ok; }
   if(b.action==="draw"){
     if(SOL.busy) return false;
@@ -2344,7 +2349,7 @@ async function solHistOpen(){
 }
 $("solHistBtn").onclick=solHistOpen; $("solHX").onclick=()=>{$("solHist").hidden=true;};
 $("solHelp").onclick=()=>{$("solRules").hidden=false;}; $("solX").onclick=()=>{$("solRules").hidden=true;};
-$("solQuit").onclick=()=>{ if(confirm("Give up? Your bet will be lost.")) solAct({action:"quit"}); };
+$("solQuit").onclick=()=>{ if(confirm(SOL.qm?"Give up? Your board is finished. You only win if nobody gets more cards than you.":"Give up? Your bet will be lost.")) solAct({action:"quit"}); };
 $("solHome").onclick=()=>show("home");
 async function solOpen(){
   SOL.qm=false; $("solQuit").hidden=false; $("qmScore").hidden=true; $("qmLost").hidden=true; $("solSign").firstElementChild.textContent="SOLITAIRE";
@@ -2409,7 +2414,7 @@ setInterval(()=>{ const e=$("qmWaitT"); if(e&&screen==="qm") e.textContent=Math.
 function qmPlay(r){
   SOL.qm=true; SOL.sel=null; solReset(); solMsg(""); clearInterval(SOL.wt);
   $("solRules").hidden=true; $("solHist").hidden=true; $("solWinBoard").hidden=true;
-  $("solQuit").hidden=true; $("solSign").firstElementChild.textContent="⚡ QUICK MATCH";
+  $("solQuit").hidden=false; $("solSign").firstElementChild.textContent="⚡ QUICK MATCH";
   $("solWallet").textContent=r.balance; $("solInfo").textContent="Prize "+r.m.prize+" ETB";
   show("sol"); solSrv(r.m);
 }
@@ -2417,7 +2422,7 @@ function qmLostShow(s){
   const b=$("qmLost");
   if(!(s&&s.done&&s.status==="active")){ b.hidden=true; return; }
   const me=(s.players||[]).find(p=>p.me)||{cards:0};
-  b.innerHTML='<h3>😔 You are out of moves</h3>'
+  b.innerHTML='<h3>'+(s.reason==="quit"?"🏳️ You gave up":"😔 You are out of moves")+'</h3>'
     +'<div class="st">You used <b>'+(s.moves||0)+'</b> moves</div>'
     +'<div class="st">and put <b>'+me.cards+'</b> cards on the piles</div>'
     +'<small>If nobody gets more cards than you, you still win.<br>The result comes when the match ends.</small>'
