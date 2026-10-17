@@ -410,6 +410,7 @@
   #solBet .hm-play{background:linear-gradient(#7be34a,#2e9e19);border:3px solid #e8b887;border-radius:14px;font-size:20px;color:#fff}
   #solAuto{width:100%;margin-top:8px;height:42px;border-radius:12px;background:linear-gradient(#7be34a,#2e9e19);color:#fff;font-size:16px;font-weight:800;border:3px solid #e8b887}
   #solAuto[hidden]{display:none}
+  #solAuto.off{opacity:.45;filter:grayscale(.7)}
   #solHistBtn{width:100%;margin-top:8px;height:38px;background:linear-gradient(#5fa0ee,#1c5fc8);font-size:14px;border:2px solid #cfe0ff;color:#fff;border-radius:10px;font-weight:700}
   #solHist{position:absolute;inset:0;z-index:21;background:rgba(10,0,20,.78);padding:46px 14px 14px}
   #solHist[hidden]{display:none}
@@ -545,6 +546,7 @@
         <li>2 to 4 players get the same Solitaire deal. Each plays alone on his own board.</li>
         <li>Pick a bet. The match starts at once with 4 players, or after the wait time with 2 or 3 players. The prize is a share of the bets of the players who play.</li>
         <li>You can turn the deck over as many times as you want, but every board has a move limit.</li>
+        <li>If you touch Give up you lose the match and your bet. The last player who did not give up wins at once.</li>
         <li>Win: first to put all 52 cards on the piles, or the most cards on the piles when the time ends.</li>
         <li>The match ends at once when a player puts all 52 cards on the piles, or when nobody can win any more.</li>
         <li>Tie: the player who reached that number of cards first wins.</li>
@@ -2130,7 +2132,7 @@ function solRender(s){
   if(act){ SOL.left=s.left; $("solWin").textContent=SOL.qm?("🏆 Prize "+s.prize+" ETB"):("Bet "+s.bet+" → Win "+s.win_amount); solTick(); }
   if(SOL.qm&&s.players) qmScoreDraw(s.players);
   if(SOL.qm) qmLostShow(s);
-  const au=$("solAuto"); if(au) au.hidden=!solCanAuto(s);
+  const au=$("solAuto"); if(au){ const ready=solCanAuto(s); au.hidden=SOL.qm?!(s.status==="active"&&!s.done):!ready; au.classList.toggle("off",SOL.qm&&!ready); }
   const lm=$("solLim"); if(lm){ lm.hidden=!(act&&s.moves_max&&!SOL.qm); if(act&&s.moves_max){ lm.textContent="Moves "+(s.moves||0)+"/"+s.moves_max+" · Pass "+(s.passes||1)+"/"+s.passes_max+(s.hard?" · 🔥 High stakes":""); lm.className=s.hard?"hard":""; } }
 }
 function solCanAuto(s){
@@ -2329,7 +2331,9 @@ $("solPlay").onclick=async()=>{
   SOL.busy=false;
 };
 $("solAuto").onclick=()=>{
-  const s=SOL.s; if(!solCanAuto(s)||SOL.busy) return;
+  const s=SOL.s;
+  if(!solCanAuto(s)){ if(SOL.qm) toast("Auto complete works when all cards are face up and the deck is empty"); return; }
+  if(SOL.busy) return;
   SOL.busy=true; SOL.sel=null; s.left=SOL.left; solRender(s);
   SQ.q.push({b:{action:"auto"},seq:++SOL.seq}); solRun();
 };
@@ -2349,7 +2353,7 @@ async function solHistOpen(){
 }
 $("solHistBtn").onclick=solHistOpen; $("solHX").onclick=()=>{$("solHist").hidden=true;};
 $("solHelp").onclick=()=>{$("solRules").hidden=false;}; $("solX").onclick=()=>{$("solRules").hidden=true;};
-$("solQuit").onclick=()=>{ if(confirm(SOL.qm?"Give up? Your board is finished. You only win if nobody gets more cards than you.":"Give up? Your bet will be lost.")) solAct({action:"quit"}); };
+$("solQuit").onclick=()=>{ if(confirm(SOL.qm?"Give up? You will LOSE this match and your bet.":"Give up? Your bet will be lost.")) solAct({action:"quit"}); };
 $("solHome").onclick=()=>show("home");
 async function solOpen(){
   SOL.qm=false; $("solQuit").hidden=false; $("qmScore").hidden=true; $("qmLost").hidden=true; $("solSign").firstElementChild.textContent="SOLITAIRE";
@@ -2368,7 +2372,7 @@ const QM={cfg:null,busy:false,dismissed:0,waitEnd:0};
 function qmMsg(t){ const m=$("qmMsg"); m.textContent=t||""; m.hidden=!t; }
 function qmScoreDraw(pl){
   const e=$("qmScore"); if(!SOL.qm||!pl){ e.hidden=true; return; }
-  e.innerHTML=pl.map(p=>'<span class="'+(p.me?"me":"")+'">'+p.rank+'. '+esc(p.name)+' <b>'+p.cards+'</b>/52'+(p.done?" ✔":"")+'</span>').join("");
+  e.innerHTML=pl.map(p=>'<span class="'+(p.me?"me":"")+'">'+p.rank+'. '+esc(p.name)+' <b>'+p.cards+'</b>/52'+(p.quit?" 🏳️":(p.done?" ✔":""))+'</span>').join("");
   e.hidden=false;
 }
 function qmResultHTML(res){
@@ -2381,7 +2385,7 @@ function qmResultHTML(res){
   } else {
     t='<h3>Match over</h3><div>Winner: <b>'+esc(res.winner||"-")+'</b> · your cards: '+(res.mine?res.mine.cards:0)+'</div>';
   }
-  t+='<div class="rb">'+(res.board||[]).map(p=>'<div class="'+(p.me?"me":"")+'"><span>'+p.rank+'. '+esc(p.name)+'</span><span>'+p.cards+' cards</span></div>').join("")+'</div>';
+  t+='<div class="rb">'+(res.board||[]).map(p=>'<div class="'+(p.me?"me":"")+'"><span>'+p.rank+'. '+esc(p.name)+'</span><span>'+(p.quit?"🏳️ gave up":p.cards+" cards")+'</span></div>').join("")+'</div>';
   return t+'<button class="qmb" data-ok="'+res.id+'">OK</button>';
 }
 function qmDraw(r){
@@ -2392,10 +2396,10 @@ function qmDraw(r){
   $("qmWait").hidden=!(wait||fin); $("qmQueues").hidden=wait||fin;
   if(fin){
     const m=r.m, me=(m.players||[]).find(p=>p.me)||{cards:0}; QM.waitEnd=Date.now()+m.left*1000;
-    $("qmWait").innerHTML='<div>Your board is finished</div><div class="big">'+me.cards+' cards</div>'
+    $("qmWait").innerHTML='<div>'+(me.quit?"🏳️ You gave up – you lost this match":"Your board is finished")+'</div><div class="big">'+me.cards+' cards</div>'
       +'<div>You used '+m.moves+' moves.</div>'
-      +'<div class="nm">'+(m.players||[]).map(p=>p.rank+". "+esc(p.name)+" "+p.cards).join(" · ")+'</div>'
-      +'<div>The result comes when the match ends (at most <b id="qmWaitT">'+m.left+'</b> s)</div>';
+      +'<div class="nm">'+(m.players||[]).map(p=>p.rank+". "+esc(p.name)+" "+p.cards+(p.quit?" 🏳️":"")).join(" · ")+'</div>'
+      +'<div>'+(me.quit?"The others are still playing. The result comes when the match ends":"The result comes when the match ends")+' (at most <b id="qmWaitT">'+m.left+'</b> s)</div>';
   } else if(wait){
     const m=r.m; QM.waitEnd=Date.now()+m.left*1000;
     $("qmWait").innerHTML='<div>Waiting for players…</div><div class="big">'+m.n+'/'+m.need+'</div>'
@@ -2422,10 +2426,11 @@ function qmLostShow(s){
   const b=$("qmLost");
   if(!(s&&s.done&&s.status==="active")){ b.hidden=true; return; }
   const me=(s.players||[]).find(p=>p.me)||{cards:0};
-  b.innerHTML='<h3>'+(s.reason==="quit"?"🏳️ You gave up":"😔 You are out of moves")+'</h3>'
+  b.innerHTML='<h3>'+(s.quit?"🏳️ You gave up":"😔 You are out of moves")+'</h3>'
+    +(s.quit?'<div class="st"><b>You lost this match</b></div>':'')
     +'<div class="st">You used <b>'+(s.moves||0)+'</b> moves</div>'
     +'<div class="st">and put <b>'+me.cards+'</b> cards on the piles</div>'
-    +'<small>If nobody gets more cards than you, you still win.<br>The result comes when the match ends.</small>'
+    +'<small>'+(s.quit?"The match goes on for the other players.":"If nobody gets more cards than you, you still win.<br>The result comes when the match ends.")+'</small>'
     +'<button class="qmb" data-close="1">Close</button>';
   b.hidden=false;
 }
