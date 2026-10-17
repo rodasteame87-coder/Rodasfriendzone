@@ -158,7 +158,7 @@ def _save_match(m):
 def _save_player(m, p):
     board = None
     if p["s"] is not None:
-        board = json.dumps({"s": p["s"], "first": p["first"], "done": p["done"]})
+        board = json.dumps({"s": p["s"], "first": p["first"], "done": p["done"], "quit": p["quit"]})
     D["enqueue"](_UP_PLAYER, p["eid"], m["id"], p["uid"], p["bet"], p["used"], board, p["result"],
                  p["payout"], p["cards"], p["joined"], p["ended"])
 
@@ -179,7 +179,7 @@ def _new_match(bet):
 
 def _new_player(uid, bet, used):
     return {"eid": _new_id(), "uid": uid, "bet": bet, "used": used, "joined": int(_now()), "s": None,
-            "first": None, "done": False, "result": "pending", "payout": 0, "cards": 0, "ended": None}
+            "first": None, "done": False, "quit": False, "result": "pending", "payout": 0, "cards": 0, "ended": None}
 
 
 def _mine(m, uid):
@@ -194,10 +194,11 @@ def _cards(p):
 
 
 def _rank_key(p, seat):
-    """Best first: most cards, then the one who reached that count first, then the one who joined first."""
+    """Best first: players who gave up are always LAST (they can not win); then most cards, then the one who reached
+    that count first, then the one who joined first."""
     c = p["cards"]
     t = (p["first"][c - 1] if c and p["first"] else 0) or float("inf")
-    return (-c, t, seat)
+    return (p["quit"], -c, t, seat)
 
 
 def _ranked(m):
@@ -457,9 +458,16 @@ def _decided(m):
 
 
 def _finish_board(m, p, uid, why):
-    """This player's board is finished. If nothing can change any more the match ends at once."""
+    """This player's board is finished. If nothing can change any more the match ends at once.
+    A player who gave up (why == "quit") has LOST: he can not win any more. If only ONE player is left who did not give
+    up, that player wins at once."""
     p["done"] = True
     _save_player(m, p)
+    alive = [q for q in m["players"] if not q["quit"]]
+    if len(alive) == 1:
+        _settle(m, "quit", alive[0])
+        if m["status"] != "active":
+            return {"ok": True, "ended": True, "result": _result(m, uid), **_view(m, p)}
     everybody = all(q["done"] for q in m["players"])
     if everybody or _decided(m):
         _settle(m, "moves" if everybody else "decided")
@@ -481,7 +489,8 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
         return {"ok": False, "error": "Bad move", **_view(m, p)}
     if p["done"]:
         return {"ok": False, "error": "Your board is finished. Wait for the match to end", **_view(m, p)}
-    if action == "quit":                                         # "Give up": the board is finished, the cards stay, the bet stays in the match
+    if action == "quit":                                         # "Give up" = this player has LOST; his bet stays in the match
+        p["quit"] = True
         return _finish_board(m, p, uid, "quit")
     if seq is None and REQUIRE_SEQ and action in ("move", "auto"):
         return {"ok": False, "sync": True, "error": "Board refreshed", **_view(m, p)}
@@ -519,7 +528,7 @@ def _scoreboard(m, uid):
     out = []
     for i, p in enumerate(_ranked(m)):
         out.append({"rank": i + 1, "name": _name(p["uid"]), "cards": p["cards"], "me": p["uid"] == uid,
-                    "done": p["done"]})
+                    "done": p["done"], "quit": p["quit"]})
     return out
 
 
@@ -531,7 +540,7 @@ def _view(m, p, light=False):
     for k in ("mult", "win_amount", "payout", "game", "hard", "passes", "passes_max"):
         v.pop(k, None)
     v.update(match=m["id"], bet=m["bet"], status=m["status"], left=_left(m), prize=m["prize"], pot=m["pot"],
-             done=p["done"], players=_scoreboard(m, p["uid"]))
+             done=p["done"], quit=p["quit"], players=_scoreboard(m, p["uid"]))
     if light:
         for k in ("stock", "waste", "waste_n", "found", "tab"):
             v.pop(k, None)
@@ -547,7 +556,7 @@ def _result(m, uid):
             "winner_me": bool(win and win["uid"] == uid),
             "mine": {"result": mine["result"], "payout": mine["payout"], "cards": mine["cards"]} if mine else None,
             "board": [{"rank": i + 1, "name": _name(p["uid"]), "cards": p["cards"], "me": p["uid"] == uid,
-                       "result": p["result"]} for i, p in enumerate(_ranked(m))]}
+                       "result": p["result"], "quit": p["quit"]} for i, p in enumerate(_ranked(m))]}
 
 
 def _queues():
@@ -752,6 +761,7 @@ async def load_state(conn):
             if r["board"]:
                 b = json.loads(r["board"])
                 p["s"], p["first"], p["done"] = b["s"], b.get("first") or [0.0] * 52, bool(b.get("done"))
+                p["quit"] = bool(b.get("quit"))
                 p["cards"] = _cards(p)
             m["players"].append(p)
             by_uid[p["uid"]] = m
