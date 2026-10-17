@@ -175,7 +175,7 @@ def test_four_players_same_deal_hidden_cards():
     assert all(c == -1 for col in v["tab"] for c, up in col if not up), "face-down cards must be -1"
     assert "stock" in v and isinstance(v["stock"], int), "the phone only gets the NUMBER of stock cards"
     for row in v["players"]:
-        assert set(row) == {"rank", "name", "cards", "me", "done"}, "others: name and count only"
+        assert set(row) == {"rank", "name", "cards", "me", "done", "quit"}, "others: name and count only"
     assert sum(1 for row in v["players"] if row["me"]) == 1
     assert qm.state(2, light=True)["m"].get("tab") is None
     assert escrow() == 200 and len(qm.waiting) == 0
@@ -672,31 +672,50 @@ def test_match_ends_at_once_when_decided():
     print("PASS  match ends at once only when nobody can beat the leader (100% sure); otherwise it goes on")
 
 
-def test_give_up_button():
+def test_give_up_means_lost():
+    # 1) the leader gives up: his cards do not count any more, another player wins
     env = fresh()
     sol.new_deal = deal_aces
     fill(env, 50)
-    put(2, "t0")                                                  # player 2 has 1 card
-    r = qm.act(1, "quit")                                         # player 1 gives up with 0 cards
-    assert r["ok"] and r["reason"] == "quit" and r["done"] is True and not r.get("ended")
-    assert qm.act(1, "draw")["ok"] is False and qm.by_uid[1]["players"][0]["done"]
-    assert qm.act(1, "quit")["ok"] is False, "a second quit does nothing"
-    for u in (3, 4):                                              # 3 and 4 give up too: player 2 still plays, so the match goes on
-        r = qm.act(u, "quit")
-        assert r["ok"] and r["reason"] == "quit" and not r.get("ended")
-    assert qm.by_uid, "player 2 is still playing"
-    qm.act(2, "quit")
-    assert not qm.by_uid and env.wallets[2] == START_MONEY - 50 + 150
+    put(1, "t0")                                                  # player 1 leads with 1 card
+    r = qm.act(1, "quit")
+    assert r["ok"] and r["reason"] == "quit" and r["quit"] and r["done"] and not r.get("ended")
+    sb = qm.state(2)["m"]["players"]
+    assert sb[-1]["quit"] and not sb[-1]["me"], "a player who gave up is shown last"
+    assert not qm.act(1, "draw")["ok"] and not qm.act(1, "quit")["ok"]
+    put(3, "t0")
+    env.t += 360; qm.tick()
+    assert env.wallets[3] == START_MONEY - 50 + 150 and env.wallets[1] == START_MONEY - 50
+    assert qm.state(1)["result"]["mine"]["result"] == "lost"
     assert_money(env)
-    # everybody gives up with 0 cards: nobody lost anything
+    # 2) only one player is left who did not give up: he wins at once, even with 0 cards
     env = fresh()
     fill(env, 50)
-    for u in (1, 2, 3, 4):
-        r = qm.act(u, "quit")
-    assert r.get("ended") and r["result"]["reason"] == "nocards"
-    assert [env.wallets[u] for u in (1, 2, 3, 4)] == [START_MONEY] * 4
+    qm.act(1, "quit"); qm.act(2, "quit")
+    assert qm.by_uid, "two players are still in"
+    r = qm.act(3, "quit")
+    assert r.get("ended") and r["result"]["reason"] == "quit" and not r["result"]["winner_me"]
+    assert env.wallets[4] == START_MONEY - 50 + 150 and all(env.wallets[u] == START_MONEY - 50 for u in (1, 2, 3))
+    assert not qm.by_uid and qm.state(4)["result"]["winner_me"]
     assert_money(env)
-    print("PASS  give up: board finished, bet stays in the match; all gave up = settled at once (0 cards = refund)")
+    # 3) two players: one gives up, the other wins at once from the pot of the two
+    env = fresh()
+    qm.join(1, 100); qm.join(2, 100)
+    env.t += 60; qm.tick()
+    r = qm.act(2, "quit")
+    assert r.get("ended") and env.wallets[1] == START_MONEY - 100 + 150 and env.wallets[2] == START_MONEY - 100
+    assert_money(env)
+    # 4) "gave up" survives a restart
+    env = fresh()
+    fill(env, 50)
+    qm.act(1, "quit")
+    for d in (qm.matches, qm.by_uid, qm.waiting, qm.recent):
+        d.clear()
+    asyncio.run(qm.load_state(FakeConn(env.db)))
+    q1 = qm._mine(qm.by_uid[1], 1)
+    assert q1["quit"] is True and q1["done"] is True
+    assert qm._ranked(qm.by_uid[1])[-1] is q1
+    print("PASS  give up = lost: can not win, last one standing wins at once, money exact, survives restart")
 
 
 if __name__ == "__main__":
