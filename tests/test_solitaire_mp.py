@@ -384,7 +384,7 @@ def test_illegal_and_repeated_moves():
     for bad in (("move", "t5", "f", 1),                           # 2♣ is not an ace
                 ("move", "t0", "t0", 1), ("move", "zz", "f", 1), ("move", "t0", "t9", 1),
                 ("move", "t0", "t1", 5), ("move", "w", "f", 1), ("move", "f0", "f", 1),
-                ("move", {"x": 1}, "f", 1), ("fly", None, None, 1), ("quit", None, None, 1)):
+                ("move", {"x": 1}, "f", 1), ("fly", None, None, 1)):
         r = qm.act(1, bad[0], bad[1], bad[2], bad[3])
         assert not r["ok"], bad
     assert json.dumps(qm.by_uid[1]["players"][0]["s"], sort_keys=True) == before, "bad moves must change nothing"
@@ -670,6 +670,33 @@ def test_match_ends_at_once_when_decided():
     r = qm.act(3, "draw")
     assert r.get("reason") == "moves" and not r.get("ended") and qm.by_uid, "player 2 has 10 moves and could auto-complete"
     print("PASS  match ends at once only when nobody can beat the leader (100% sure); otherwise it goes on")
+
+
+def test_give_up_button():
+    env = fresh()
+    sol.new_deal = deal_aces
+    fill(env, 50)
+    put(2, "t0")                                                  # player 2 has 1 card
+    r = qm.act(1, "quit")                                         # player 1 gives up with 0 cards
+    assert r["ok"] and r["reason"] == "quit" and r["done"] is True and not r.get("ended")
+    assert qm.act(1, "draw")["ok"] is False and qm.by_uid[1]["players"][0]["done"]
+    assert qm.act(1, "quit")["ok"] is False, "a second quit does nothing"
+    for u in (3, 4):                                              # 3 and 4 give up too: player 2 still plays, so the match goes on
+        r = qm.act(u, "quit")
+        assert r["ok"] and r["reason"] == "quit" and not r.get("ended")
+    assert qm.by_uid, "player 2 is still playing"
+    qm.act(2, "quit")
+    assert not qm.by_uid and env.wallets[2] == START_MONEY - 50 + 150
+    assert_money(env)
+    # everybody gives up with 0 cards: nobody lost anything
+    env = fresh()
+    fill(env, 50)
+    for u in (1, 2, 3, 4):
+        r = qm.act(u, "quit")
+    assert r.get("ended") and r["result"]["reason"] == "nocards"
+    assert [env.wallets[u] for u in (1, 2, 3, 4)] == [START_MONEY] * 4
+    assert_money(env)
+    print("PASS  give up: board finished, bet stays in the match; all gave up = settled at once (0 cards = refund)")
 
 
 if __name__ == "__main__":
