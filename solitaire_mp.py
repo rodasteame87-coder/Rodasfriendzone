@@ -410,6 +410,52 @@ def _late(uid):
     return {"ended": True, "result": r["view"]} if r and r["until"] >= _now() else {"none": True}
 
 
+def _has_move(p):
+    """True if this player still has ANY legal action. Quick Match has unlimited passes, so while the stock or the waste
+    has a card a draw is always possible. Only when both are empty the card moves are tried on a COPY of the board
+    (sol.move changes the board only when the move is legal, and the copy is thrown away)."""
+    s = p["s"]
+    if s["stock"] or s["waste"]:
+        return True
+    g = {"s": copy.deepcopy(s), "bet": FAIR_BET}
+    srcs = []
+    for i, col in enumerate(s["tab"]):
+        k = 0
+        while k < len(col) and col[len(col) - 1 - k][1]:
+            k += 1
+        srcs += [(f"t{i}", n) for n in range(1, k + 1)]
+    srcs += [(f"f{j}", 1) for j in range(4) if s["found"][j] > 0]
+    for src, n in srcs:
+        for dst in [f"t{i}" for i in range(7)] + ["f"]:
+            if sol.move(g, src, dst, n) is None:
+                return True
+    return False
+
+
+def _decided(m):
+    """True only when NOBODY can beat the leader any more (100% sure, otherwise False):
+    the leader's board is finished (so his cards can not change), and every player who still plays can not reach the
+    leader's number of cards with the moves he has left (one move puts at most ONE card on the piles) and can not
+    auto-complete the deck either (that needs at least one move for every face-down card, every stock/waste card and
+    the auto move itself). A tie goes to the leader, who reached that number first."""
+    ranked = _ranked(m)
+    lead = ranked[0]
+    if not lead["done"]:
+        return False
+    lim = sol._lim(_shim(m, lead))[1]
+    for q in ranked[1:]:
+        if q["done"]:
+            continue
+        s = q["s"]
+        left = lim - s["moves"]
+        down = sum(1 for col in s["tab"] for _, up in col if not up)
+        if left >= down + len(s["stock"]) + len(s["waste"]) + 1:
+            return False
+        if _cards(q) + left > _cards(lead):
+            return False
+    return True
+
+
 def act(uid, action, src=None, dst=None, n=1, seq=None):
     m = by_uid.get(uid)
     if m is None:
@@ -433,6 +479,7 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
             return {"ok": False, "sync": True, "error": "Board refreshed", **_view(m, p)}
     g = _shim(m, p)
     if action == "draw":
+        p["s"]["pass"] = 0                                       # unlimited passes: the stock can be turned over again and again
         err = sol.draw(g)
     elif action == "move":
         err = sol.move(g, src, dst, n)
@@ -446,14 +493,16 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
         p["done"] = True
         _settle(m, "all", p)
         return {"ok": True, "ended": True, "result": _result(m, uid), **_view(m, p)}
-    if p["s"]["moves"] >= sol._lim(g)[1]:                        # move limit reached: this board is finished
+    why = "moves" if p["s"]["moves"] >= sol._lim(g)[1] else (None if _has_move(p) else "stuck")
+    if why:                                                      # this board is finished (move limit, or no legal move left)
         p["done"] = True
         _save_player(m, p)
-        if all(q["done"] for q in m["players"]):
-            _settle(m, "moves")
+        everybody = all(q["done"] for q in m["players"])
+        if everybody or _decided(m):                             # nothing can change any more: end the match at once
+            _settle(m, "moves" if everybody else "decided")
             if m["status"] != "active":
                 return {"ok": True, "ended": True, "result": _result(m, uid), **_view(m, p)}
-        return {"ok": True, "reason": "moves", **_view(m, p)}
+        return {"ok": True, "reason": why, **_view(m, p)}
     _save_player(m, p)
     return {"ok": True, **_view(m, p)}
 
@@ -472,7 +521,7 @@ def _view(m, p, light=False):
     g = {"id": m["id"], "uid": p["uid"], "bet": FAIR_BET, "s": p["s"], "status": "active", "payout": 0,
          "created": m["started"] or m["created"]}
     v = sol.view(g)
-    for k in ("mult", "win_amount", "payout", "game", "hard"):
+    for k in ("mult", "win_amount", "payout", "game", "hard", "passes", "passes_max"):
         v.pop(k, None)
     v.update(match=m["id"], bet=m["bet"], status=m["status"], left=_left(m), prize=m["prize"], pot=m["pot"],
              done=p["done"], players=_scoreboard(m, p["uid"]))
@@ -507,7 +556,7 @@ def _queues():
 def _cfg():
     pct = prize_for(BETS[0])[2]
     return {"bets": list(BETS), "players": PLAYERS, "min_players": MIN_PLAYERS, "wait": WAIT_SECONDS, "minutes": TIME_LIMIT // 60,
-            "pct": pct, "draw": sol.DRAW, "passes": sol.PASSES_NORMAL, "moves": sol.MOVES_NORMAL}
+            "pct": pct, "draw": sol.DRAW, "moves": sol.MOVES_NORMAL}
 
 
 def state(uid, light=False):
