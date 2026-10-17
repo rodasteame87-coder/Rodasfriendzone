@@ -247,7 +247,7 @@ def test_refund_waiting_room_not_full():
     r = qm.join(4, 50)                                            # the next player opens a NEW waiting room
     assert r["m"]["n"] == 1
     asyncio.run(qm._flush_outbox())
-    assert any("refunded" in t for _, t in env.sent)
+    assert env.sent == [], "players get no Telegram message from Quick Match"
     print("PASS  refund: only 1 player after 60 s -> refunded, play-through undone")
 
 
@@ -570,16 +570,106 @@ def test_same_limits_for_every_bet():
     for bet, users in ((50, (1, 2, 3, 4)), (100, (5, 6, 7, 8))):
         fill(env, bet, users)
         v = qm.state(users[0])["m"]
-        assert "hard" not in v and v["bet"] == bet
-        seen.add((v["moves_max"], v["passes_max"]))
+        assert "hard" not in v and v["bet"] == bet and "passes" not in v and "passes_max" not in v
+        seen.add(v["moves_max"])
     env = fresh(players=4)
     fill(env, 200)
     v = qm.state(1)["m"]
-    seen.add((v["moves_max"], v["passes_max"]))
-    assert seen == {(200, 3)}, seen
+    seen.add(v["moves_max"])
+    assert seen == {200}, seen
     cfg = qm.state(1)["cfg"]
-    assert "hard_from" not in cfg and "moves_hard" not in cfg
-    print("PASS  fair: 50 / 100 / 200 ETB matches all get the same moves and passes (no hard rule)")
+    assert "hard_from" not in cfg and "moves_hard" not in cfg and "passes" not in cfg
+    print("PASS  fair: 50 / 100 / 200 ETB matches all get the same move limit (no hard rule, no pass limit)")
+
+
+def _craft(p, stock, waste, found, tab, moves=0):
+    p["s"] = {"stock": stock, "waste": waste, "found": found, "tab": tab, "moves": moves, "pass": 1}
+    qm._progress(p)
+
+
+def test_unlimited_passes():
+    env = fresh()
+    sol.new_deal = deal_aces
+    fill(env, 50)
+    for i in range(70):                                           # 45 stock cards / 3 = 15 draws per pass: 70 draws = 4+ passes
+        r = qm.act(1, "draw")
+        assert r["ok"], (i, r)
+        assert "passes" not in r and "passes_max" not in r
+    assert qm.by_uid[1]["players"][0]["s"]["moves"] == 70 and not qm.by_uid[1]["players"][0]["done"]
+    sol.MOVES_NORMAL = 75                                         # the move limit still ends the board
+    r = None
+    for i in range(10):
+        r = qm.act(1, "draw")
+        if r.get("reason") == "moves":
+            break
+    assert r.get("reason") == "moves" and r["done"] is True and r["moves"] == 75
+    r = qm.act(1, "draw")
+    assert not r["ok"] and "finished" in r["error"]
+    print("PASS  unlimited passes in Quick Match; the move limit still finishes the board")
+
+
+def test_no_legal_move_finishes_board():
+    env = fresh()
+    fill(env, 50)
+    m = qm.by_uid[1]
+    p = qm._mine(m, 1)
+    stuck_tab = lambda last: [[[6, 1]], [[9, 1]], [[22, 1]], [[35, 1]], [[48, 1]], [[11, 1]], last]
+    # the waste card 6 of hearts (44) goes on the 7 of spades (6); after that NO move exists
+    _craft(p, [], [44], [0, 0, 0, 0], stuck_tab([[24, 1]]))
+    assert qm._has_move(p) is True
+    r = qm.act(1, "move", "w", "t0", 1)
+    assert r["ok"] and r["reason"] == "stuck" and r["done"] is True, r
+    assert qm.by_uid[1]["players"][0]["done"] is True
+    assert qm._has_move(qm._mine(m, 1)) is False
+    r = qm.act(1, "draw")
+    assert not r["ok"] and "finished" in r["error"]
+    # the same board, but an ace is free to go up: a legal move exists, so the board must NOT be finished
+    env2 = fresh()
+    fill(env2, 50)
+    p2 = qm._mine(qm.by_uid[1], 1)
+    _craft(p2, [], [44], [0, 0, 0, 0], stuck_tab([[0, 1]]))
+    r = qm.act(1, "move", "w", "t0", 1)
+    assert r["ok"] and not r.get("reason") and r["done"] is False, r
+    assert qm._has_move(qm._mine(qm.by_uid[1], 1)) is True
+    assert qm.act(1, "move", "t6", "f", 1)["ok"]
+    print("PASS  no legal move left -> board finished; a free move means NOT finished")
+
+
+def test_match_ends_at_once_when_decided():
+    env = fresh()
+    fill(env, 50)
+    m = qm.by_uid[1]
+    P = {u: qm._mine(m, u) for u in (1, 2, 3, 4)}
+    P[1]["s"]["found"] = [5, 0, 0, 0]; qm._progress(P[1]); P[1]["done"] = True     # leader, finished, 5 cards
+    P[2]["s"]["moves"] = 198                                       # 2 moves left: can reach 2 cards at most
+    P[4]["s"]["moves"] = 198
+    P[3]["s"]["moves"] = 199
+    r = qm.act(3, "draw")                                          # player 3 reaches the move limit
+    assert r.get("ended") and r["result"]["reason"] == "decided", r
+    assert not qm.by_uid and env.wallets[1] == START_MONEY - 50 + 150
+    assert_money(env)
+    # NOT sure: a player who still has many moves can catch up -> the match goes on
+    env = fresh()
+    fill(env, 50)
+    m = qm.by_uid[1]
+    P = {u: qm._mine(m, u) for u in (1, 2, 3, 4)}
+    P[1]["s"]["found"] = [5, 0, 0, 0]; qm._progress(P[1]); P[1]["done"] = True
+    P[3]["s"]["moves"] = 199
+    r = qm.act(3, "draw")
+    assert r.get("reason") == "moves" and not r.get("ended") and qm.by_uid, "players 2 and 4 can still win"
+    # NOT sure: a player who could still auto-complete the deck (few face-down cards, empty stock/waste) keeps the match open
+    env = fresh()
+    fill(env, 50)
+    m = qm.by_uid[1]
+    P = {u: qm._mine(m, u) for u in (1, 2, 3, 4)}
+    P[1]["s"]["found"] = [13, 2, 0, 0]; qm._progress(P[1]); P[1]["done"] = True       # 15 cards: 10 moves alone could not catch up
+    _craft(P[2], [], [], [0, 0, 0, 0], [[[12 + 13 * i, 1]] for i in range(4)] + [[], [], []], moves=190)
+    P[2]["s"]["moves"] = 190
+    P[4]["done"] = True
+    P[3]["s"]["moves"] = 199
+    r = qm.act(3, "draw")
+    assert r.get("reason") == "moves" and not r.get("ended") and qm.by_uid, "player 2 has 10 moves and could auto-complete"
+    print("PASS  match ends at once only when nobody can beat the leader (100% sure); otherwise it goes on")
 
 
 if __name__ == "__main__":
