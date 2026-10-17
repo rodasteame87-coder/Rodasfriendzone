@@ -456,6 +456,18 @@ def _decided(m):
     return True
 
 
+def _finish_board(m, p, uid, why):
+    """This player's board is finished. If nothing can change any more the match ends at once."""
+    p["done"] = True
+    _save_player(m, p)
+    everybody = all(q["done"] for q in m["players"])
+    if everybody or _decided(m):
+        _settle(m, "moves" if everybody else "decided")
+        if m["status"] != "active":
+            return {"ok": True, "ended": True, "result": _result(m, uid), **_view(m, p)}
+    return {"ok": True, "reason": why, **_view(m, p)}
+
+
 def act(uid, action, src=None, dst=None, n=1, seq=None):
     m = by_uid.get(uid)
     if m is None:
@@ -465,10 +477,12 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
     if m["status"] != "active":
         return {"ok": False, "error": "The match has not started yet", "wait": True}
     p = _mine(m, uid)
-    if action not in ("draw", "move", "auto"):
+    if action not in ("draw", "move", "auto", "quit"):
         return {"ok": False, "error": "Bad move", **_view(m, p)}
     if p["done"]:
         return {"ok": False, "error": "Your board is finished. Wait for the match to end", **_view(m, p)}
+    if action == "quit":                                         # "Give up": the board is finished, the cards stay, the bet stays in the match
+        return _finish_board(m, p, uid, "quit")
     if seq is None and REQUIRE_SEQ and action in ("move", "auto"):
         return {"ok": False, "sync": True, "error": "Board refreshed", **_view(m, p)}
     if seq is not None:                                          # retry-safe: a repeated request never acts twice
@@ -495,14 +509,7 @@ def act(uid, action, src=None, dst=None, n=1, seq=None):
         return {"ok": True, "ended": True, "result": _result(m, uid), **_view(m, p)}
     why = "moves" if p["s"]["moves"] >= sol._lim(g)[1] else (None if _has_move(p) else "stuck")
     if why:                                                      # this board is finished (move limit, or no legal move left)
-        p["done"] = True
-        _save_player(m, p)
-        everybody = all(q["done"] for q in m["players"])
-        if everybody or _decided(m):                             # nothing can change any more: end the match at once
-            _settle(m, "moves" if everybody else "decided")
-            if m["status"] != "active":
-                return {"ok": True, "ended": True, "result": _result(m, uid), **_view(m, p)}
-        return {"ok": True, "reason": why, **_view(m, p)}
+        return _finish_board(m, p, uid, why)
     _save_player(m, p)
     return {"ok": True, **_view(m, p)}
 
