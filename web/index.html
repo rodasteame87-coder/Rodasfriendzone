@@ -354,6 +354,11 @@
   #qmResult .rb{margin:8px 0;font-size:13px;text-align:left}
   #qmResult .rb div{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.15)}
   #qmResult .rb .me{color:#7be34a;font-weight:800}
+  #qmLost{position:absolute;inset:0;z-index:30;background:rgba(15,0,30,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:22px;color:#fff;border-radius:14px}
+  #qmLost[hidden]{display:none}
+  #qmLost h3{color:#ffd35a;font-size:24px;margin:0 0 10px}
+  #qmLost .st{font-size:17px;margin:3px 0}#qmLost .st b{color:#ffd35a}
+  #qmLost small{display:block;opacity:.85;margin:12px 0 16px;font-size:13px;line-height:1.4}
   #qmHint{font-size:12px;font-weight:700;color:#ffe9b0;text-align:center;margin-top:10px;line-height:1.4}
   #qmScore{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:center;font-size:12px;color:#ffe9b0;margin:2px 0 8px}
   #qmScore .me{color:#7be34a;font-weight:800}
@@ -539,7 +544,9 @@
       <ul class="hm-rules">
         <li>2 to 4 players get the same Solitaire deal. Each plays alone on his own board.</li>
         <li>Pick a bet. The match starts at once with 4 players, or after the wait time with 2 or 3 players. The prize is a share of the bets of the players who play.</li>
+        <li>You can turn the deck over as many times as you want, but every board has a move limit.</li>
         <li>Win: first to put all 52 cards on the piles, or the most cards on the piles when the time ends.</li>
+        <li>The match ends at once when a player puts all 52 cards on the piles, or when nobody can win any more.</li>
         <li>Tie: the player who reached that number of cards first wins.</li>
         <li>Fewer than 2 players in time, or nobody put a card on the piles: everybody gets the bet back.</li>
         <li>The cards are dealt and checked by the server.</li>
@@ -569,6 +576,7 @@
     <button id="solHelp">?</button>
     <div id="solSign"><b>SOLITAIRE</b></div>
     <div id="qmScore" hidden></div>
+    <div id="qmLost" hidden></div>
     <div id="solMsg" hidden></div>
     <div id="solBoard"></div>
     <div id="solNet" hidden></div>
@@ -2121,8 +2129,9 @@ function solRender(s){
   $("solBar").hidden=!act; $("solBet").hidden=act;
   if(act){ SOL.left=s.left; $("solWin").textContent=SOL.qm?("🏆 Prize "+s.prize+" ETB"):("Bet "+s.bet+" → Win "+s.win_amount); solTick(); }
   if(SOL.qm&&s.players) qmScoreDraw(s.players);
+  if(SOL.qm) qmLostShow(s);
   const au=$("solAuto"); if(au) au.hidden=!solCanAuto(s);
-  const lm=$("solLim"); if(lm){ lm.hidden=!(act&&s.moves_max); if(act&&s.moves_max){ lm.textContent="Moves "+(s.moves||0)+"/"+s.moves_max+" · Pass "+(s.passes||1)+"/"+s.passes_max+(s.hard?" · 🔥 High stakes":""); lm.className=s.hard?"hard":""; } }
+  const lm=$("solLim"); if(lm){ lm.hidden=!(act&&s.moves_max&&!SOL.qm); if(act&&s.moves_max){ lm.textContent="Moves "+(s.moves||0)+"/"+s.moves_max+" · Pass "+(s.passes||1)+"/"+s.passes_max+(s.hard?" · 🔥 High stakes":""); lm.className=s.hard?"hard":""; } }
 }
 function solCanAuto(s){
   if(!s||s.status!=="active"||!s.tab||s.stock) return false;
@@ -2338,7 +2347,7 @@ $("solHelp").onclick=()=>{$("solRules").hidden=false;}; $("solX").onclick=()=>{$
 $("solQuit").onclick=()=>{ if(confirm("Give up? Your bet will be lost.")) solAct({action:"quit"}); };
 $("solHome").onclick=()=>show("home");
 async function solOpen(){
-  SOL.qm=false; $("solQuit").hidden=false; $("qmScore").hidden=true; $("solSign").firstElementChild.textContent="SOLITAIRE";
+  SOL.qm=false; $("solQuit").hidden=false; $("qmScore").hidden=true; $("qmLost").hidden=true; $("solSign").firstElementChild.textContent="SOLITAIRE";
   const r=await get("/sol/state");
   if(!r.ok) return toast(r.msg||("Solitaire is not available now ("+(r.error||"no reply")+")"));
   SOL.cfg=r; SOL.sel=null; solReset(); solMsg(""); $("solRules").hidden=true; $("solHist").hidden=true; $("solWallet").textContent=r.balance;
@@ -2374,9 +2383,15 @@ function qmDraw(r){
   if(r.balance!=null) $("qmWallet").textContent=r.balance;
   const c=r.cfg||QM.cfg||{}; QM.cfg=c;
   $("qmInfo").textContent=c.players?((c.min_players||2)+"-"+c.players+" players · "+c.minutes+" min"):"";
-  const wait=r.phase==="waiting";
-  $("qmWait").hidden=!wait; $("qmQueues").hidden=wait;
-  if(wait){
+  const wait=r.phase==="waiting", fin=r.phase==="active";
+  $("qmWait").hidden=!(wait||fin); $("qmQueues").hidden=wait||fin;
+  if(fin){
+    const m=r.m, me=(m.players||[]).find(p=>p.me)||{cards:0}; QM.waitEnd=Date.now()+m.left*1000;
+    $("qmWait").innerHTML='<div>Your board is finished</div><div class="big">'+me.cards+' cards</div>'
+      +'<div>You used '+m.moves+' moves.</div>'
+      +'<div class="nm">'+(m.players||[]).map(p=>p.rank+". "+esc(p.name)+" "+p.cards).join(" · ")+'</div>'
+      +'<div>The result comes when the match ends (at most <b id="qmWaitT">'+m.left+'</b> s)</div>';
+  } else if(wait){
     const m=r.m; QM.waitEnd=Date.now()+m.left*1000;
     $("qmWait").innerHTML='<div>Waiting for players…</div><div class="big">'+m.n+'/'+m.need+'</div>'
       +'<div class="nm">'+m.names.map(esc).join(" · ")+'</div>'
@@ -2388,7 +2403,7 @@ function qmDraw(r){
     $("qmQueues").innerHTML=(r.queues||[]).map(x=>'<div class="qq"><div><b>'+x.bet+' ETB</b><small>Prize up to '+x.prize+' ETB · '+x.n+' waiting</small></div><button class="qmb" data-bet="'+x.bet+'">▶ Play</button></div>').join("");
   }
   const res=r.result, box=$("qmResult");
-  if(res&&res.id!==QM.dismissed&&r.phase!=="waiting"){ box.innerHTML=qmResultHTML(res); box.hidden=false; } else box.hidden=true;
+  if(res&&res.id!==QM.dismissed&&r.phase==="idle"){ box.innerHTML=qmResultHTML(res); box.hidden=false; } else box.hidden=true;
 }
 setInterval(()=>{ const e=$("qmWaitT"); if(e&&screen==="qm") e.textContent=Math.max(0,Math.ceil((QM.waitEnd-Date.now())/1000)); },500);
 function qmPlay(r){
@@ -2398,16 +2413,28 @@ function qmPlay(r){
   $("solWallet").textContent=r.balance; $("solInfo").textContent="Prize "+r.m.prize+" ETB";
   show("sol"); solSrv(r.m);
 }
+function qmLostShow(s){
+  const b=$("qmLost");
+  if(!(s&&s.done&&s.status==="active")){ b.hidden=true; return; }
+  const me=(s.players||[]).find(p=>p.me)||{cards:0};
+  b.innerHTML='<h3>😔 You are out of moves</h3>'
+    +'<div class="st">You used <b>'+(s.moves||0)+'</b> moves</div>'
+    +'<div class="st">and put <b>'+me.cards+'</b> cards on the piles</div>'
+    +'<small>If nobody gets more cards than you, you still win.<br>The result comes when the match ends.</small>'
+    +'<button class="qmb" data-close="1">Close</button>';
+  b.hidden=false;
+}
+$("qmLost").onclick=e=>{ if(e.target.closest("[data-close]")) qmLeave(null); };
 function qmLeave(r){
   SOL.qm=false; SOL.sel=null; solReset();
-  $("solQuit").hidden=false; $("qmScore").hidden=true; $("solSign").firstElementChild.textContent="SOLITAIRE";
+  $("solQuit").hidden=false; $("qmScore").hidden=true; $("qmLost").hidden=true; $("solSign").firstElementChild.textContent="SOLITAIRE";
   if(r){ show("qm"); qmDraw(r); } else qmOpen();
 }
 async function qmOpen(){
   let r; try{ r=await get("/qm/state"); }catch(e){ r=null; }
   if(!r||!r.ok) return toast((r&&(r.msg||r.error))?(r.msg||("Quick Match is not available now ("+r.error+")")):"Quick Match is not available now");
   SOL.qm=false; qmMsg(""); $("qmHist").hidden=true;
-  if(r.phase==="active") return qmPlay(r);
+  if(r.phase==="active"&&!r.m.done) return qmPlay(r);
   show("qm"); qmDraw(r);
 }
 async function qmPoll(){
@@ -2421,13 +2448,13 @@ async function qmPoll(){
     if(playing){
       if(r.phase==="active"){ SOL.left=r.m.left; solTick(); qmScoreDraw(r.m.players); if(r.balance!=null) $("solWallet").textContent=r.balance; }
       else qmLeave(r);
-    } else if(r.phase==="active"){
-      const f=await get("/qm/state"); if(f.ok&&f.phase==="active") qmPlay(f);
+    } else if(r.phase==="active"&&!r.m.done){
+      const f=await get("/qm/state"); if(f.ok&&f.phase==="active"&&!f.m.done) qmPlay(f);
     } else qmDraw(r);
   }catch(e){}
   QM.busy=false;
 }
-setInterval(qmPoll,2500);
+setInterval(qmPoll,1000);
 $("qmQueues").onclick=async e=>{
   const b=e.target.closest("[data-bet]"); if(!b||QM.busy) return;
   QM.busy=true; qmMsg("");
