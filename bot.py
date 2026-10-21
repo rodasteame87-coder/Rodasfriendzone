@@ -3243,6 +3243,7 @@ async def main():
                     BotCommand(command="post", description="📣 Send post to players"),
                     BotCommand(command="nophone", description="📱 Ask for phone numbers"),
                     BotCommand(command="phonelink", description="🔗 Phone number link"),
+                    BotCommand(command="removenophone", description="🗑 Remove players without phone"),
                     BotCommand(command="addbalance", description="➕ Add / remove balance"),
                     BotCommand(command="addbonus", description="🎁 Add / remove play-only bonus"),
                     BotCommand(command="bonusmany", description="🎁 Bonus for many players"),
