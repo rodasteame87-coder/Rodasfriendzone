@@ -63,7 +63,7 @@ MAX_PER_PLAYER = 5       # per player, per room, per round
 ROOMS = {
     50:    {"price": 50,  "size": 100, "early": True,  "prizes": (3000, 1000, 500)},
     100:   {"price": 100, "size": 100, "early": True,  "prizes": (7000, 1000, 500)},
-    5050:  {"price": 50,  "size": 50,  "early": False, "prizes": (1500, 500)},   # gold + silver only (no bronze)
+    5050:  {"price": 50,  "size": 50,  "early": False, "prizes": (1500,)},      # ONE winner only: gold 1500 (no silver, no bronze)
     10050: {"price": 100, "size": 50,  "early": False, "prizes": (3000, 700, 300)},
 }
 PRICES = tuple(ROOMS)    # the list of room keys
@@ -346,7 +346,7 @@ def draw_winners(sold_numbers, k=3):
 
 
 def places_of(d):
-    """How many prize places a saved draw has (3 normally, 2 in the 50-number 50 birr room)."""
+    """How many prize places a saved draw has (3 normally, 1 in the 50-number 50 birr room)."""
     return len(d["prizes"])
 
 
