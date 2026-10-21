@@ -1982,6 +1982,7 @@ async def cmd_admin(m: Message):
         "/backup\nDownload a backup of all data (zip file) to your chat\n\n"
         "/phonelink\nGet a link to send to players so they can share their phone number\n\n"
         "/nophone\nAsk players who have no phone number to share it (Amharic + English)\n\n"
+        "/removenophone\nDelete players who joined but never shared a phone number (asks you to confirm first)\n\n"
         "/post\nSend a picture or text with a ተጫወት button to all players (you see a preview first)\n\n"
         "/addbalance <phone> <amount>\nAdd real money to a player. Use a minus to remove: -50\n\n"
         "/addbonus <phone> <amount>\nAdd PLAY-ONLY bonus (cannot be withdrawn). Minus removes: -20\n\n"
@@ -2365,6 +2366,90 @@ async def nophone_buttons(cb: CallbackQuery):
     t = asyncio.create_task(run_nophone_send(cb.bot, uids, cb.from_user.id))
     bg_tasks.add(t)
     t.add_done_callback(bg_tasks.discard)
+
+
+# ---------- /removenophone: delete players who joined but never shared a phone number (admin only) ----------
+rmnp_pending = {}                    # admin id -> players shown in the preview, waiting for Confirm
+
+
+def removable_nophone():
+    """(remove, keep): players without a phone number. Anyone who has money, any play or
+    invite history, an open deposit/withdraw request, or is in a game is KEPT. Blocked
+    players are kept too (removing them would unblock them)."""
+    busy = {r.get("uid") for r in pending.values()} | set(wd_state)
+    remove, keep = [], []
+    for u in list(wallets):
+        if u in phones or u in banned or u == ADMIN_ID:
+            continue
+        used = (wallets.get(u, 0) or bonus.get(u, 0) or deposited.get(u, 0) or wagered.get(u, 0)
+                or won.get(u, 0) or wins.get(u, 0) or history.get(u) or winlog.get(u)
+                or invited.get(u, 0) or ref_earn.get(u, 0) or u in ref_paid
+                or u in busy or room_of(u))
+        (keep if used else remove).append(u)
+    return remove, keep
+
+
+def delete_player(uid):
+    for d in (wallets, bonus, names, usernames, seen, last_active, joined, wins, won,
+              history, winlog, deposited, wagered, required, dep_count, stake_used,
+              stake_bonus, referrer, invited, ref_earn, wd_state, auto_pref):
+        d.pop(uid, None)
+    ref_paid.discard(uid)
+    banned.discard(uid)
+    _enqueue("DELETE FROM users WHERE uid = $1", uid)
+
+
+@dp.message(Command("removenophone"))
+async def cmd_removenophone(m: Message):
+    if not is_admin(m):
+        return
+    remove, keep = removable_nophone()
+    if not remove:
+        extra = (f"\n{len(keep)} players without a phone were kept (they have money, history "
+                 "or an open request).") if keep else ""
+        await m.answer("✅ No players to remove." + extra)
+        return
+    rmnp_pending[m.from_user.id] = remove
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"🗑 Remove {len(remove)} players", callback_data="rn:go"),
+        InlineKeyboardButton(text="❌ Cancel", callback_data="rn:no")]])
+    await m.answer(f"🗑 Players without a phone number who will be removed: <b>{len(remove)}</b>\n"
+                   f"Kept: <b>{len(keep)}</b> (they have money, history, an open request, "
+                   "or are in a game)\n\n"
+                   "<b>This cannot be undone.</b> A removed player can press Start again and "
+                   "register as a new player.",
+                   parse_mode="HTML", reply_markup=kb)
+
+
+@dp.callback_query(F.data.startswith("rn:"))
+async def removenophone_buttons(cb: CallbackQuery):
+    if not ADMIN_ID or cb.from_user.id != ADMIN_ID:
+        await cb.answer("Not allowed", show_alert=True)
+        return
+    action = (cb.data or "").split(":", 1)[1]
+    uids = rmnp_pending.pop(cb.from_user.id, None)
+    if action != "go" or not uids:
+        text = "❌ Cancelled." if action != "go" else "This request expired. Send /removenophone again."
+        try:
+            await cb.message.edit_text(text)
+        except Exception:
+            pass
+        await cb.answer()
+        return
+    allowed = set(removable_nophone()[0])          # check again: someone may have shared a phone since
+    n = 0
+    for u in uids:
+        if u in allowed:
+            delete_player(u)
+            n += 1
+    skipped = len(uids) - n
+    try:
+        await cb.message.edit_text(f"✅ Removed {n} players."
+                                   + (f"\n{skipped} were kept (they shared a phone or became active)."
+                                      if skipped else ""))
+    except Exception:
+        pass
+    await cb.answer()
 
 
 # ---------- /players: see all players and their balances (admin only) ----------
